@@ -42,7 +42,6 @@ enum sharedDefs =
         void* addr;
     }
 
-
     struct ReplContext
     {
         string filename = "replDll";
@@ -133,7 +132,7 @@ bool eval(string code, ref ReplContext repl, ref string error)
         return 1;
 
     //resolveTypes(repl);
-    fixupVtbls(repl);
+    //fixupVtbls(repl);
 
     return 0;
 }
@@ -168,16 +167,201 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
         return true;
     }
 
-    void* makeNew(T)()
+
+
+    struct Ref(T)
     {
-        void* ptr;
-        T t = T.init;
-        ptr = GC.calloc(T.sizeof);
+        import core.memory, std.c.string, std.traits;
+
+        enum { Value, Array, Class, Mutable, Immutable }
+
+        template isClass(T)
+        {
+            enum isClass =  __traits(compiles, __traits(classInstanceSize, T));
+        }
+
+        template _type(T)
+        {
+            static if (isClass!T)
+                enum _type = Class;
+            else static if (isArray!T)
+                enum _type = Array;
+            else
+                enum _type = Value;
+        }
+
+        template _qual(T)
+        {
+            static if (isMutable!T)
+                enum _qual = Mutable;
+            else
+                enum _qual = Immutable;
+        }
+
+        alias _type!T _Type;
+        alias _qual!T _Qual;
+
+        static if (_Qual == Immutable)
+        {
+            private T v;
+        }
+        else
+        {
+            static if (_Type == Class)
+                private T v;
+            else
+                private T* v;
+        }
+
+
+        this(this)
+        {
+            static if (_Qual == Mutable)
+            {
+                static if (_Type == Array)
+                {
+                    static if (isMutable!(ForeachType!T))
+                        auto temp = (*v).dup;
+                    else
+                        auto temp = (*v).idup;
+
+                    _heapNew();
+                    *v = temp;
+                }
+                else static if (_Type != Class)
+                {
+                    auto temp = *v;
+                    _heapNew();
+                    *v = temp;
+                }
+            }
+        }
+
+        static Ref!T opCall(T init = T.init)
+        {
+            Ref!T r;
+
+            static if (_Qual == Mutable)
+            {
+                static if (isClass!T)
+                    r.v = init;
+                else static if (isArray!T)
+                {
+                    r._heapNew();
+                    *r.v = init;
+                }
+                else static if (!isClass!T)
+                {
+                    r.v = new T;
+                    *r.v = init;
+                }
+            }
+            else
+            {
+                memcpy(cast(void*)(&(r.v)), &init, init.sizeof);
+            }
+            return r;
+        }
+
+        void _heapNew()
+        {
+            static if (_Type != Class && _Qual == Mutable)
+            {
+                T var;
+                v = cast(T*)GC.calloc((T).sizeof);
+                GC.disable();
+                memcpy(v, &var, (T).sizeof);
+                GC.enable();
+            }
+        }
+
+        Ref!T _handle()
+        {
+            static if (_Qual == Mutable)
+            {
+                static if (_Type != Class)
+                {
+                    Ref!T hnd;
+                    hnd.v = v;
+                    return hnd;
+                }
+                else
+                    return this;
+                }
+            else
+            {
+                return this;
+            }
+        }
+
+        void opAssign()(T t)
+        {
+            static if (_Qual == Mutable)
+            {
+                static if (_Type == Class)
+                    v = t;
+                else
+                    *v = t;
+            }
+            else
+            {
+                static assert(false, "Cannot assign to " ~ T.stringof);
+            }
+        }
+
+        string toString()
+        {
+            static if (_Type == Class || _Qual == Immutable)
+            {
+                if (v !is null)
+                    return v.to!string;
+                else
+                    return "null";
+            }
+            else
+            {
+                if (v !is null)
+                    return (*v).to!string;
+                else
+                    return "null";
+            }
+        }
+
+        @property ref inout(T) _get() inout pure nothrow @safe
+        {
+            static if (_Type == Class || _Qual == Immutable)
+                return v;
+            else
+                return *v;
+        }
+
+        alias T _typeof;
+        alias _get this;
+    }
+
+    void* heapRef(T)(T init = T.init)
+    {
+        import core.memory, std.c.string;
+
+        auto var = Ref!T(init);
+        auto ptr = GC.calloc((Ref!T).sizeof);
         GC.disable();
-        memcpy(ptr, &t, T.sizeof);
+        memcpy(ptr, &var, (Ref!T).sizeof);
         GC.enable();
         return ptr;
     }
+
+    auto _Init(T)(T t)
+    {
+        static if (is(T _ : Ref!U, U))
+            return U.init;
+        static if (is(T _ : Ref!U[], U))
+            return U.init;
+        else
+            return T.init;
+    }
+
+
 
     ` ~ sharedDefs;
 

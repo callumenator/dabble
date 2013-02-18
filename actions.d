@@ -39,9 +39,9 @@ struct ParseState
         int stop = newVars == -1 ? repl.symbols.length : newVars;
         foreach(idx, sym; repl.symbols[0..stop])
         {
-            prefix ~= sym.type ~ "* " ~ sym.name ~ " = cast("
-                    ~ sym.type ~ "*)(_repl_.symbols["
-                    ~ idx.to!string ~ "].addr);\n";
+            prefix ~= "auto " ~ sym.name ~ " = (*cast(Ref!(" ~ sym.type ~ ")*)"
+                        ~ "_repl_.symbols[" ~ idx.to!string ~ "].addr)._handle();\n";
+
 
             if (sym.isClass)
                 prefix ~= "memcpy(_repl_.vtbl[" ~ sym.vtblIndex.to!string ~ "].ptr, "
@@ -49,15 +49,18 @@ struct ParseState
                         ~ "typeid(" ~ sym.type ~ ").vtbl.length * (void*).sizeof);\n";
 
             suffix ~= "_repl_.symbols[" ~ idx.to!string
-                    ~ "].current = to!string((*" ~ sym.name ~ ")).idup;\n";
+                    ~ "].current = to!string(" ~ sym.name ~ ").idup;\n";
         }
 
         if (newVars != -1)
         {
             foreach(idx, sym; repl.symbols[newVars..$])
             {
-                prefix ~= sym.type ~ "* " ~ sym.name ~ " = cast("
-                        ~ sym.type ~ "*)makeNew!(" ~ sym.type ~ ");\n";
+                prefix ~= "_repl_.symbols[" ~ (idx+newVars).to!string
+                        ~ "].addr = heapRef!(" ~ sym.type ~ ");\n";
+
+                prefix ~= "auto " ~ sym.name ~ " = (*cast(Ref!(" ~ sym.type ~ ")*)"
+                        ~ "_repl_.symbols[" ~ (idx+newVars).to!string ~ "].addr)._handle();\n";
 
                 prefix ~= checkForClass(sym, idx+newVars);
                 prefix ~= dupVtbl(sym, idx+newVars);
@@ -65,16 +68,11 @@ struct ParseState
                 if (sym.type.length > 6 && sym.type[0..6] == "typeof")
                 {
                     prefix ~= "_repl_.symbols[" ~ (idx+newVars).to!string ~ "].type = "
-                            ~ sym.type ~ ".stringof.idup;\n";
-                            //~ "_repl_.symbols[" ~ (idx+newVars).to!string ~ "].type = q\"#"
-                            //~ sym.type ~ "#\".idup;\n"
-                            //~
+                            ~ sym.name ~ "._typeof.stringof.idup;\n";
                 }
 
-                prefix ~= "_repl_.symbols[" ~ (idx+newVars).to!string
-                        ~ "].addr = cast(void*)" ~ sym.name ~ ";\n";
                 suffix ~= "_repl_.symbols[" ~ (idx+newVars).to!string
-                        ~ "].current = to!string((*" ~ sym.name ~ ")).idup;\n";
+                        ~ "].current = to!string(" ~ sym.name ~ ").idup;\n";
             }
         }
 
@@ -144,9 +142,7 @@ struct Parser
 
     static T redirect(T)(T t)
     {
-        if (t.successful && t.matches.length > 0)
-            t.matches = [redirectStub(t.matches[0], s)];
-
+        // now a stub
         return t;
     }
 
@@ -215,8 +211,8 @@ struct Parser
             auto name = strip(p.children[1].matches[0]);
 
             // Typeof expressions may reference defined vars, so redirect them...
-            if (type.length > 6 && type[0..6] == "typeof")
-                type = redirectStub(type, s);
+            //if (type.length > 6 && type[0..6] == "typeof")
+            //    type = redirectStub(type, s);
 
             if (s.blockDepth == 0) // We only make new vars at top level scope
             {
@@ -228,7 +224,7 @@ struct Parser
                     if (type == "auto")
                     {
                         auto rhs = strip(p.children[2].matches[0]);
-                        newSymbol.type = "typeof(" ~ rhs ~ ")";
+                        newSymbol.type = "typeof(_Init(" ~ rhs ~ "))";
                     }
 
                     s.repl.symbols ~= newSymbol;
@@ -241,7 +237,7 @@ struct Parser
                     if (p.name == "ReplParse.VarDeclInit")
                     {
                         p.matches = p.matches[2..$]; // Remove the type declaration
-                        p.matches[0] = "(*" ~ name ~ ")"; // Rewrite the identifier
+                        //p.matches[0] = name ~ ")"; // Rewrite the identifier
                     }
                     else if (p.name == "ReplParse.VarDecl")
                     {
