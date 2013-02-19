@@ -209,7 +209,7 @@ struct Parser
         if (t.successful)
         {
             t = ReplParse.decimateTree(t);
-            t.matches[0] = "_addressOf(" ~ join(t.children[0].matches) ~ ")";
+            t.matches[0] = "_AddressOf(" ~ join(t.children[0].matches) ~ ")";
         }
 
         return t;
@@ -218,7 +218,22 @@ struct Parser
     static T typeOf(T)(T t)
     {
         if (t.successful)
-            t.matches[0] = "_typeOf";
+        {
+            t = ReplParse.decimateTree(t);
+            t.matches[0] = "typeof(_Init(" ~ t.children[0].matches[0] ~ "))";
+            t.matches = t.matches[0..1];
+        }
+
+        return t;
+    }
+
+    static T varRewrite(T)(T t)
+    {
+        if (t.successful)
+        {
+            if (t.matches[0] in s.repl.symbolSet)
+                t.matches[0] ~= "._get";
+        }
 
         return t;
     }
@@ -259,14 +274,17 @@ struct Parser
 
                     s.repl.symbolSet[name] = s.repl.symbols.length - 1;
 
-                    auto index = (s.repl.symbols.length - 1).to!string;
+                    auto idx = s.repl.symbols.length - 1;
+                    auto idxStr = idx.to!string;
 
-                    auto initString = "_repl_.symbols[" ~ index ~ "].addr = heapRef!(" ~ type ~ ");\n"
-                                 ~ "auto " ~ name ~ " = (*cast(Ref!(" ~ type ~ ")*)"
-                                 ~ "_repl_.symbols[" ~ index ~ "].addr)._handle();\n";
+                    auto initString = "_repl_.symbols[" ~ idxStr~ "].addr = heapRef!(" ~ type ~ ");\n"
+                                    ~ "auto " ~ name ~ " = " ~ castSymbolToRef(newSymbol, idx) ~ "._handle();\n";
 
-                    initString ~= checkForClass(newSymbol, s.repl.symbols.length-1);
-                    initString ~= dupVtbl(newSymbol, s.repl.symbols.length-1);
+                    initString ~= checkForClass(newSymbol, idx);
+                    initString ~= dupVtbl(newSymbol, idx);
+
+                    if (type.length > 6 && type[0..6] == "typeof")
+                        initString ~= "_repl_.symbols["~idxStr~"].type = "~name~"._typeof.stringof.idup;\n";
 
                     if (p.name == "ReplParse.VarDeclInit")
                         initString ~= join(p.matches[2..$]);
@@ -380,19 +398,21 @@ void resolveTypes(ref ReplContext repl)
 string dupVtbl(Symbol sym, uint index)
 {
     return
-    `static if (__traits(compiles, __traits(classInstanceSize, `~sym.type~`)))
-     {
-        _repl_.vtbl ~= typeid(`~sym.type~`).vtbl.dup;
-        _repl_.symbols[`~index.to!string~`].vtblIndex = _repl_.vtbl.length - 1;
-     }
-     `;
+    "\nstatic if (__traits(compiles, __traits(classInstanceSize, "~sym.type~")))\n" ~
+    "{\n" ~
+    "    _repl_.vtbl ~= typeid("~sym.type~").vtbl.dup;\n" ~
+    "    _repl_.symbols["~index.to!string~"].vtblIndex = _repl_.vtbl.length - 1;\n" ~
+    "}\n\n";
 }
 
 string checkForClass(Symbol sym, uint index)
 {
-    return
-    `_repl_.symbols[`~index.to!string~`].isClass = __traits(compiles, __traits(classInstanceSize, `~sym.type~`));
-    `;
+    return "_repl_.symbols["~index.to!string~"].isClass = "~sym.name~"._Type == Class;\n";
+}
+
+string castSymbolToRef(Symbol sym, uint index)
+{
+    return "(*cast(Ref!("~sym.type~")*)_repl_.symbols["~index.to!string~"].addr)";
 }
 
 void fixupVtbls(ref ReplContext repl)

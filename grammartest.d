@@ -36,7 +36,8 @@ void runTests()
 
     //auto res = ReplParse.decimateTree(ReplParse.Expr!(literal!(";"))("(a.(b.(c.d)).foo!a(typeof(a)/* comment */).map!(i=>2*i)());"));
     //auto res = ReplParse.decimateTree(ReplParse.Lambda("(typeof(i) i)=>2*i, "));
-    verbose("");
+    ReplParse("auto a = [1,2,3];");
+    verbose("auto j = map!(a=>a).array();");
 
 
     writeln("######## End Grammar Test ########");
@@ -44,7 +45,7 @@ void runTests()
 
 void verbose(string test)
 {
-    auto res = (ReplParse(test));
+    auto res = ReplParse.decimateTree(ReplParse.VarDeclInit(test));
     writeln(join(res.matches));
     writeln("\n", res);
 }

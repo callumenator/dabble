@@ -90,14 +90,30 @@ string[] classRefs(T)()
     return refs.sort.uniq.array;
 }
 
+T too(T)(T t)
+{
+    return t;
+}
+
+struct SS
+{
+    int[] arr;
+    alias arr this;
+}
 
 void main()
 {
     ReplContext repl;
     repl.gc = gc_getProxy();
 
+/++
+auto a = SS([1,2,3]);
+auto b = a.sort();
+pragma(msg, typeof(b));
+++/
 
-loop(repl, true);
+loop(repl, Debug.times);
+//runTests();
 return;
 
 

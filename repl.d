@@ -26,6 +26,13 @@ extern(C) void* gc_getProxy();
 
 enum LOADER = "MEMORYMOD";
 
+enum Debug
+{
+    none        = 0x00,
+    times       = 0x01,
+    parseOnly   = 0x02
+}
+
 /**
 * Defs that are shared between this module and the compiled dll
 */
@@ -79,10 +86,11 @@ struct ReplContext
 }
 
 
-void loop(ref ReplContext repl, bool parseOnly = false)
+void loop(ref ReplContext repl,
+          Debug flag = Debug.none)
 {
-    if (exists(repl.filename ~ ".dll"))
-        remove(repl.filename ~ ".dll");
+    //if (exists(repl.filename ~ ".dll"))
+    //    remove(repl.filename ~ ".dll");
 
     string error;
     char[] lineBuffer;
@@ -102,7 +110,7 @@ void loop(ref ReplContext repl, bool parseOnly = false)
             default:
             {
                 string result;
-                if (eval(lineBuffer.to!string, repl, error, parseOnly))
+                if (eval(lineBuffer.to!string, repl, error, flag))
                     writeln(error);
             }
         }
@@ -112,11 +120,21 @@ void loop(ref ReplContext repl, bool parseOnly = false)
     return;
 }
 
-bool eval(string code, ref ReplContext repl, ref string error, bool parseOnly = false)
+bool eval(string code,
+          ref ReplContext repl,
+          ref string error,
+          Debug flag = Debug.none)
 {
-    auto text = Parser.go(code, repl);
+    StopWatch sw;
+    sw.start();
 
-    if (parseOnly)
+    auto text = Parser.go(code, repl);
+    auto parseTime = sw.peek().msecs();
+
+    if (flag & Debug.times)
+        writeln("PARSE: ", parseTime);
+
+    if (flag & Debug.parseOnly)
     {
         writeln(text);
         return true;
@@ -128,14 +146,31 @@ bool eval(string code, ref ReplContext repl, ref string error, bool parseOnly = 
     if (repl.verbose)
         writeln("Building...");
 
-    if (buildCode(text, repl, error))
+    sw.reset();
+    auto build = buildCode(text, repl, error);
+    auto buildTime = sw.peek().msecs();
+
+    if (flag & Debug.times)
+        writeln("BUILD: ", buildTime);
+
+    if (build)
         return 1;
 
     if (repl.verbose)
         writeln("Calling...");
 
-    if (callCode(loadCode(repl.filename), repl, error))
+    sw.reset();
+    auto call = callCode(loadCode(repl.filename), repl, error);
+    auto callTime = sw.peek().msecs();
+
+    if (flag & Debug.times)
+        writeln("CALL: ", callTime);
+
+    if (call)
         return 1;
+
+    if (flag & Debug.times)
+        writeln("TOTAL: ", parseTime + buildTime + callTime);
 
     //resolveTypes(repl);
     //fixupVtbls(repl);
@@ -147,7 +182,7 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
 {
     enum dllHeader =
     `
-    import std.stdio, std.conv;
+    import std.stdio, std.conv, std.range, std.algorithm;
     import std.c.stdio, std.c.string, std.c.stdlib, std.c.windows.windows;
     import core.sys.windows.dll, core.runtime, core.memory;
 
@@ -173,13 +208,11 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
         return true;
     }
 
-
+    enum { Value, Array, Class, Mutable, Immutable }
 
     struct Ref(T)
     {
         import core.memory, std.c.string, std.traits;
-
-        enum { Value, Array, Class, Mutable, Immutable }
 
         template isClass(T)
         {
@@ -258,8 +291,12 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
                 }
                 else static if (!isClass!T)
                 {
-                    r.v = new T;
+                    r.v = cast(T*)GC.calloc(T.sizeof);
+                    memcpy(r.v, &init, T.sizeof);
                     *r.v = init;
+
+                    //r.v = new T;
+                    //*r.v = init;
                 }
             }
             else
@@ -341,6 +378,23 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
                 return *v;
         }
 
+        T* _addressOf()
+        {
+            static if (_Type == Class || _Qual == Immutable)
+                return &v;
+            else
+                return v;
+        }
+
+        static if (_Type == Array)
+        {
+            @property bool empty() { return _get.empty; }
+            @property auto front() { return _get.front; }
+            @property auto save() { return _get.save; }
+            void popFront() { _get.popFront(); }
+            void popBack() { _get.popBack(); }
+        }
+
         alias T _typeof;
         alias _get this;
     }
@@ -367,43 +421,57 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
             return T.init;
     }
 
+    auto _AddressOf(T)(ref T t)
+    {
+        static if (is(T _ : Ref!U, U))
+            return t._addressOf;
+        else
+            return &t;
+    }
+
+
 
 
     ` ~ sharedDefs;
 
-    // The code
     auto file = File(repl.filename ~ ".d", "w");
     file.write(dllHeader ~ code);
     file.close();
 
-    // The .def
-    file = File(repl.filename ~ ".def", "w");
+    if (!exists(repl.filename ~ ".d"))
+    {
+        // The .def
+        file = File(repl.filename ~ ".def", "w");
 
-    enum def = "LIBRARY replDll\n" ~
-               "DESCRIPTION 'replDll'\n" ~
-               "EXETYPE	 NT\n" ~
-               "CODE PRELOAD DISCARDABLE\n" ~
-               "DATA PRELOAD MULTIPLE";
+        enum def = "LIBRARY replDll\n" ~
+                   "DESCRIPTION 'replDll'\n" ~
+                   "EXETYPE	 NT\n" ~
+                   "CODE PRELOAD DISCARDABLE\n" ~
+                   "DATA PRELOAD MULTIPLE";
 
-    file.write(def);
-    file.close();
+        file.write(def);
+        file.close();
+    }
 
     //-Ic:/cal/d/dmd2/src/druntime/src
     //auto include = "-Ic:/cal/d/dmd2/src/druntime/src ";
-    auto cmd1 = "dmd -c -g " ~ repl.filename ~ ".d";
-    auto cmd2 = "dmd -g " ~ repl.filename ~ ".obj " ~ repl.filename ~ ".def";
+    //auto cmd2 = "dmd " ~ repl.filename ~ ".obj " ~ repl.filename ~ ".def";
     //auto cmd2 = "link /CODEVIEW /DEBUG " ~ filename ~ ".obj,,,phobos.lib+kernel32.lib," ~ filename ~ ".def";
+
+    auto cmd1 = "dmd -c " ~ repl.filename ~ ".d & " ~
+                "dmd " ~ repl.filename ~ ".obj " ~ repl.filename ~ ".def";
 
     try{
         error = shell(cmd1);
-		writeln(error);
-        error = shell(cmd2);
-		writeln(error);
+		if (error.length)
+            writeln(error);
         return 0;
     }
     catch(Exception e) {
         return 1;
     }
+
+    return 0;
 }
 
 
