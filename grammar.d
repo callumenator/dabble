@@ -2,24 +2,14 @@ module grammar;
 
 import pegged.peg, pegged.grammar;
 
-enum grammar = `
+
+enum grammarOLD = `
 ReplParse:
 
     Input <- (w* Statement w*)*
 
     Statement <- StatementBlock
                / Comment
-               / ForeachStatement
-               / WhileStatement
-               / DoStatement
-               / IfStatement
-               / SwitchStatement
-               / CaseStatement
-               / WithStatement
-               / SynchronizedStatement
-               / TryStatement
-               / ScopeGuardStatement
-               / AsmStatement
                / ImportStatement
                / DeclStatement
                / ExprStatement
@@ -27,58 +17,7 @@ ReplParse:
 
     StatementBlock <- '{'{Parser.incDepth} (!'}' (wn Statement wn))* '}'{Parser.decDepth}
 
-    OtherStatement <- (~(Until(';') ';')){Parser.redirect}
-
-    ### foreach(){}
-        ForeachStatement    <- ~ForeachIntro ~ForeachRange wx (StatementBlock / Statement)
-        ForeachIntro        <- ( wx ^"foreach" wx ^'(' wx (~Type ;ws)? Ident wx (',' wx (~Type ;ws)? Ident wx)? ';' )
-        ForeachRange        <- wx ~Expression(')') ')'
-
-    ### while(){}...
-        WhileStatement  <- wx "while" wx '(' (~Expression(')')){Parser.redirect} ')'
-                           wx ( StatementBlock / Statement )
-
-    ### do{}whle();
-        DoStatement     <- wx "do"      wx ( StatementBlock / Statement )
-                           wx "while"   wx '(' (~Expression(')')){Parser.redirect} ')' wx ';'
-
-    ### if() else if() else ...
-        IfStatement <- IfIf
-
-        IfIf        <- "if" wx '(' (~Expression(')')){Parser.redirect} ')'
-                        wx ( StatementBlock / Statement ) wx IfElse?
-
-        IfElse      <- "else" w* ( IfIf / StatementBlock / Statement )
-
-    ### switch()...
-        SwitchStatement <- "final"? wx "switch" wx '(' (~Expression(')')){Parser.redirect} ')'
-                           wn ( WithStatement / StatementBlock )
-
-    ### case: ...
-        CaseStatement       <- ("case" / ("default" wx ':')) wx ( CaseRangeExpression / CaseExpression )
-                               wn ( StatementBlock / (Statement*) )
-        CaseRangeExpression <- CaseExpression wx ".." wx CaseExpression
-        CaseExpression      <- (~Expression(':')){Parser.redirect} wx ':'
-
-    ### with()...
-        WithStatement <- "with" wx '(' (~Expression(')')){Parser.redirect} ')'
-                         wx ( StatementBlock / Statement )
-
-    ### synchronized()
-        SynchronizedStatement <- "synchronized" ('(' (~Expression(')')){Parser.redirect} ')')?
-                                 wx ( StatementBlock / Statement )
-
-    ### try/catch/finally...
-        TryStatement        <- "try" wn ( StatementBlock / Statement ) CatchStatement* FinallyStatement?
-        CatchStatement      <- wn "catch" wx '(' ~Expression(')')')' wn ( StatementBlock / Statement )
-        FinallyStatement    <- wn "finally" wn ( StatementBlock / Statement )
-
-    ### scope()
-        ScopeGuardStatement <- "scope" wx ( "exit" / "success" / "failure" )
-                               wn ( StatementBlock / Statement )
-
-    ### asm {}
-        AsmStatement <- "asm" wn StatementBlock
+    OtherStatement <- ~(Until(';') ';')
 
     ### import std.c.stdlib...
         ImportStatement <- (wx "import" wx Seq( (~Seq(Ident, '.')){Parser.addImport}, ',') ';'){Parser.clear}
@@ -122,7 +61,6 @@ ReplParse:
 
     ### template constraint
         Constraint      <- wx "if" wx '(' Expression(')') ')'
-
 
 
     TemplateInstance <- IdentList wx '!' wx ( (~Type){Parser.wrapInstanceType} # wrap the type in parenthesis
@@ -283,7 +221,184 @@ ReplParse:
                                                     )* ( !(L/R) . )* ^R
 `;
 
+
+enum grammar = `
+ReplParse:
+
+    Search <- (Match)*
+
+    Match <- Comment
+           / String
+           / TypeOf
+           / AddressOf
+           / Import
+           / UserType
+           / Var
+           / BwBraces(Import/AddressOf/UserType/.)
+           / eoi
+           / .
+
+    BwBraces(T) <- Nested('{', Comment / String / T, '}')
+    BwParens(T) <- Nested('(', Comment / String / T, ')')
+    Nested(L,Items,R) <- ^L (!R (Nested(L,Items,R) / blank / Items))* ^R
+
+    Import <- (wx "import" wx Seq( (~Seq(Ident, '.')), ',') ';')
+
+    UserType <- EnumDecl
+              / StructDecl
+              / UnionDecl
+              / ClassDecl
+              / FunctionDecl
+
+    Var <- VarDeclInit  {Parser.varDecl}
+         / VarDecl      {Parser.varDecl}
+
+
+    EnumDecl        <- wx ~("enum" ;ws ( ~Type ;ws Ident wx '=' AllUntil(';') ';'
+                                       / Ident wx '=' AllUntil(';') ';'
+                                       / Ident wx ':' wx ~Type wx EnumBody
+                                       / Ident wx EnumBody
+                                       / Ident wx ';'
+                                       / EnumBody
+                                       / ':' wx ~Type wx EnumBody ))
+
+    EnumBody        <- wx AllBetween(LBrace,RBrace)
+
+    StructDecl      <- wx ~("struct" ws Ident wx ( ParameterList? wx Constraint? wx AllBetween(LBrace,RBrace) / ';' ) )
+
+    UnionDecl       <- wx ~("union" ws Ident wx ( ParameterList? wx Constraint? wx AllBetween(LBrace,RBrace) / ';' ) )
+
+    ClassDecl       <- wx ~("class" ws Ident wx ParameterList? wx Constraint? wx (':' BaseClassList)?
+                       wx AllBetween(LBrace,RBrace))
+
+    Constraint      <- wx "if" wx AllBetween(LBracket,RBracket)
+
+    TemplateInstance <- IdentList wx '!' wx ( ~Type / AllBetween(LBracket,RBracket) )
+
+    BaseClassList   <- Seq(~Seq(TemplateInstance / Ident, '.'), ',')
+
+    FunctionDecl    <- wx ~Type ws Ident wx ( ~ParameterList wx ~ParameterList
+                                            / ~ParameterList ) wx ~Constraint? wx AllBetween(LBrace,RBrace)
+
+    ParameterList   <- BwParens(TypeOf/.)
+
+    VarDecl         <- ~Type ;ws Ident wx ;';'
+    VarDeclInit     <- ~Type ;ws Ident wx ;'=' AllUntil(';') ';'
+
+    Type <- Storage wx '(' wx Type wx ')' Seq(TypeSuffix)?
+          / Storage ws Type Seq(TypeSuffix)?
+          / BasicType Seq(TypeSuffix)?
+          / Typeof wx AllBetween(LBracket,RBracket) Seq(TypeSuffix)?
+          / Auto
+          / TemplateInstance Seq(TypeSuffix)?
+          / Ident Seq(TypeSuffix)?
+
+    Ident       <- identifier
+    IdentList   <- Seq( NestedIdent / Ident, '.')
+    NestedIdent <- :'(' wx (NestedIdent / Ident) wx :')'
+
+    Auto        <- "auto"
+    Typeof      <- "typeof"
+    Storage     <- "const" / "shared" / "immutable" / "inout"
+
+    TypeSuffix <- '*' / AllBetween('[',']')
+
+    BasicType <- "void"  / "bool"
+               / "byte"  / "ubyte"
+               / "short" / "ushort"
+               / "int"   / "uint"
+               / "long"  / "ulong"
+               / "float" / "double" / "real"
+               / "char"  / "wchar"  / "dchar" / "string"
+
+    Intercept <- (:AllUntil(AddressOf/TypeOf) (AddressOf/TypeOf))*
+
+    AddressOfSearch <- (:AllUntil(AddressOf) AddressOf)*
+    AddressOf <- ((:'&' (:w / LBracket)* Ident)(!('['/'.'/'('))) {Parser.addressOf}
+
+    TypeOfSearch <- (:AllUntil(TypeOf) TypeOf)*
+    TypeOf <- 'typeof'{Parser.typeOf}
+
+
+    ### Helpers
+
+        w   <- ' ' / '\t' / endOfLine
+        wx  <- :(w*)
+        ws  <- w :(w*)
+        wn  <- (:' ' / :'\t' / endOfLine)*
+
+        LBracket    <- '('
+        RBracket    <- ')'
+        LBrace      <- '{'
+        RBrace      <- '}'
+
+        Seq(T)      <- (wx T)+
+        Seq(T, Sep) <- wx T wx (Sep wx T wx)*
+
+        Until(T) <- (!(T/eoi) .)*
+
+        AllUntil(T)     <~ (!(T/eoi) ( Comment
+                                     / String
+                                     / AllBetween(LBracket,RBracket)
+                                     / AllBetween(LBrace,RBrace)
+                                     / .) )*
+
+        AllBetween(L,R) <~ NestedList(L, Comment / String, R)
+
+        NestItems   <- Comment / String
+        String      <- (WYSString / DBQString / TKNString / DLMString / StringOf)
+        StringNoDup <- (WYSString / DBQString / TKNString / DLMString)
+
+        WYSString   <~ 'r' doublequote (!doublequote .)* doublequote /
+                       backquote (!backquote .)* backquote
+
+        DBQString   <~ doublequote (!doublequote Char)* doublequote
+
+        TKNString   <~ (&'q{' ('q' NestedList('{',String,'}')))
+
+        DLMString   <~ ('q' doublequote) ( (&'{' NestedList('{',String,'}'))
+                                         / (&'[' NestedList('[',String,']'))
+                                         / (&'(' NestedList('(',String,')'))
+                                         / (&'<' NestedList('<',String,'>'))
+                                         ) doublequote
+
+        StringOf    <- (~(wx ;'.' wx 'stringof'))
+
+        Char <~ backslash ( quote
+                          / doublequote
+                          / backquote
+                          / backslash
+                          / '-'
+                          / '['
+                          / ']'
+                          / [nrt]
+                          / [0-2][0-7][0-7]
+                          / [0-7][0-7]?
+                          / 'x' hexDigit hexDigit
+                          / 'u' hexDigit hexDigit hexDigit hexDigit
+                          / 'U' hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit
+                          )
+              / . # or anything else
+
+        Comment             <~ (LineComment / BlockComment / NestingBlockComment)
+
+        LineComment         <- "//" (!(endOfLine/eoi) .)* (endOfLine/eoi)
+        BlockComment        <- "/*" (!"*/" .)* "*/"
+        NestingBlockComment <- NestedList("/+","+/")
+
+        # Linear nested lists with and without special items
+        NestedList(L,Items,R)   <- ^L ( !(L/R/Items) . )* ( Items
+                                                          / NestedList(L,Items,R)
+                                                          / ( !(L/R/Items) . )*
+                                                          )* ( !(L/R/Items) . )* ^R
+
+        NestedList(L,R)         <- ^L ( !(L/R) . )* (NestedList(L,R)
+                                                    / ( !(L/R) . )*
+                                                    )* ( !(L/R) . )* ^R
+`;
+
+
 void main()
 {
-    asModule!(Memoization.no)("parser", "parser", grammar, "import actions, std.stdio;");
+    asModule!(Memoization.yes)("parser", "parser", grammar, "import actions, std.stdio;");
 }

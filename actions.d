@@ -56,11 +56,14 @@ struct ParseState
         {
             foreach(idx, sym; repl.symbols[newVars..$])
             {
+
+                /++
                 prefix ~= "_repl_.symbols[" ~ (idx+newVars).to!string
                         ~ "].addr = heapRef!(" ~ sym.type ~ ");\n";
 
                 prefix ~= "auto " ~ sym.name ~ " = (*cast(Ref!(" ~ sym.type ~ ")*)"
                         ~ "_repl_.symbols[" ~ (idx+newVars).to!string ~ "].addr)._handle();\n";
+
 
                 prefix ~= checkForClass(sym, idx+newVars);
                 prefix ~= dupVtbl(sym, idx+newVars);
@@ -70,6 +73,7 @@ struct ParseState
                     prefix ~= "_repl_.symbols[" ~ (idx+newVars).to!string ~ "].type = "
                             ~ sym.name ~ "._typeof.stringof.idup;\n";
                 }
+                ++/
 
                 suffix ~= "_repl_.symbols[" ~ (idx+newVars).to!string
                         ~ "].current = to!string(" ~ sym.name ~ ").idup;\n";
@@ -96,7 +100,7 @@ struct Parser
         if (verbose)
             writeln("Calling ReplParse...");
 
-        auto p = ReplParse.Input(input);
+        auto p = ReplParse.Search(input);
 
         if (verbose)
         {
@@ -200,6 +204,25 @@ struct Parser
         return t;
     }
 
+    static T addressOf(T)(T t)
+    {
+        if (t.successful)
+        {
+            t = ReplParse.decimateTree(t);
+            t.matches[0] = "_addressOf(" ~ join(t.children[0].matches) ~ ")";
+        }
+
+        return t;
+    }
+
+    static T typeOf(T)(T t)
+    {
+        if (t.successful)
+            t.matches[0] = "_typeOf";
+
+        return t;
+    }
+
     static T varDecl(T)(T p)
     {
         if (p.successful)
@@ -217,15 +240,17 @@ struct Parser
             if (s.blockDepth == 0) // We only make new vars at top level scope
             {
                 if (name in s.repl.symbolSet)
-                    assert(false, "Redefinition of " ~ name);
+                {} // redifinition, pegged calling actions more than once
                 else
                 {
-                    auto newSymbol = Symbol(name, type);
+
                     if (type == "auto")
                     {
                         auto rhs = strip(p.children[2].matches[0]);
-                        newSymbol.type = "typeof(_Init(" ~ rhs ~ "))";
+                        type = "typeof(_Init(" ~ rhs ~ "))";
                     }
+
+                    auto newSymbol = Symbol(name, type);
 
                     s.repl.symbols ~= newSymbol;
 
@@ -234,27 +259,41 @@ struct Parser
 
                     s.repl.symbolSet[name] = s.repl.symbols.length - 1;
 
+                    auto index = (s.repl.symbols.length - 1).to!string;
+
+                    auto initString = "_repl_.symbols[" ~ index ~ "].addr = heapRef!(" ~ type ~ ");\n"
+                                 ~ "auto " ~ name ~ " = (*cast(Ref!(" ~ type ~ ")*)"
+                                 ~ "_repl_.symbols[" ~ index ~ "].addr)._handle();\n";
+
+                    initString ~= checkForClass(newSymbol, s.repl.symbols.length-1);
+                    initString ~= dupVtbl(newSymbol, s.repl.symbols.length-1);
+
                     if (p.name == "ReplParse.VarDeclInit")
-                    {
-                        p.matches = p.matches[2..$]; // Remove the type declaration
-                        //p.matches[0] = name ~ ")"; // Rewrite the identifier
-                    }
-                    else if (p.name == "ReplParse.VarDecl")
-                    {
-                        p.matches.clear;
-                    }
-                    else assert("Decl is neither VarDecl nor VarDeclInit it is " ~ p.name);
+                        initString ~= join(p.matches[2..$]);
+
+                    p.matches[0] = initString;
+                    p.matches = p.matches[0..1];
                 }
             }
             else // else, just update the type (in case this is a typeof())
             {
-                p.matches[0] = type;
+
+                //p.matches[0] = type;
             }
+
         }
         return p;
     }
 }
 
+T varDecl(T)(T p)
+{
+    if (p.successful)
+        writeln("VARDECL");
+    return p;
+}
+
+/++
 string redirectStub(string input, ref ParseState s)
 {
     //writeln("Redirect: ", input);
@@ -287,7 +326,7 @@ string redirectStub(string input, ref ParseState s)
     }
     return input;
 }
-
+++/
 
 /**
 * If a symbol with the given name is defined, return

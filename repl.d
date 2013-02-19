@@ -79,7 +79,7 @@ struct ReplContext
 }
 
 
-void loop(ref ReplContext repl)
+void loop(ref ReplContext repl, bool parseOnly = false)
 {
     if (exists(repl.filename ~ ".dll"))
         remove(repl.filename ~ ".dll");
@@ -102,7 +102,7 @@ void loop(ref ReplContext repl)
             default:
             {
                 string result;
-                if (eval(lineBuffer.to!string, repl, error))
+                if (eval(lineBuffer.to!string, repl, error, parseOnly))
                     writeln(error);
             }
         }
@@ -112,9 +112,15 @@ void loop(ref ReplContext repl)
     return;
 }
 
-bool eval(string code, ref ReplContext repl, ref string error)
+bool eval(string code, ref ReplContext repl, ref string error, bool parseOnly = false)
 {
     auto text = Parser.go(code, repl);
+
+    if (parseOnly)
+    {
+        writeln(text);
+        return true;
+    }
 
     if (text.length == 0)
         return 0;
