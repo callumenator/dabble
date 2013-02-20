@@ -69,9 +69,13 @@ struct Parser
 {
     static ParseState s;
     static bool verbose = false;
+    static string prefix;
+    static string suffix;
 
     static string go(string input, ref ReplContext repl)
     {
+        prefix = "string _finalType;\n";
+        suffix = "";
         verbose = repl.verbose;
         s = ParseState();
         s.repl = &repl;
@@ -88,7 +92,6 @@ struct Parser
         }
 
         p = ReplParse.decimateTree(p);
-        auto code = std.array.join(p.matches);
         auto wrap = s.genWrapper();
         return s.genImports() ~
                s.genTypes() ~
@@ -102,9 +105,22 @@ struct Parser
                "}\n\n" ~
                "void _main2(ref ReplContext _repl_) {\n" ~
                wrap[0] ~ //"writeln(`A`);\n" ~
-               code ~ //"writeln(`B`);\n" ~
+               prefix ~
+               makeCode(p) ~ //"writeln(`B`);\n" ~
                wrap[1] ~ //"writeln(`C`);\n" ~
+               "if (_finalType.length != 0) writeln(_finalType);\n" ~
                "}\n";
+    }
+
+    static string makeCode(T)(T t)
+    {
+        auto code = std.array.join(t.matches);
+        auto lines = splitter(code, ";");
+        auto result = "";
+        foreach(line; lines)
+            if (strip(line).length != 0)
+                result ~= "_finalType = _showType("~line~");\n";
+        return result;
     }
 
     static T incDepth(T)(T t)
@@ -247,17 +263,12 @@ struct Parser
             auto type = strip(p.children[0].matches[0]);
             auto name = strip(p.children[1].matches[0]);
 
-            // Typeof expressions may reference defined vars, so redirect them...
-            //if (type.length > 6 && type[0..6] == "typeof")
-            //    type = redirectStub(type, s);
-
             if (s.blockDepth == 0) // We only make new vars at top level scope
             {
                 if (name in s.repl.symbolSet)
                 {} // redifinition, pegged calling actions more than once
                 else
                 {
-
                     if (type == "auto")
                     {
                         auto rhs = strip(p.children[2].matches[0]);
@@ -276,15 +287,14 @@ struct Parser
                     auto idx = s.repl.symbols.length - 1;
                     auto idxStr = idx.to!string;
 
-                    auto initString = "auto "~name~" = _makeNew!("~type~")(_repl_,"~idxStr~");\n";
+                    prefix ~= "auto "~name~" = _makeNew!("~type~")(_repl_,"~idxStr~");\n";
 
                     if (p.name == "ReplParse.VarDeclInit")
                     {
                         p.matches[2] = "(*" ~ p.matches[2] ~ ")";
-                        initString ~= join(p.matches[2..$]);
+                        p.matches[0] = join(p.matches[2..$]);
                     }
 
-                    p.matches[0] = initString;
                     p.matches = p.matches[0..1];
                 }
             }

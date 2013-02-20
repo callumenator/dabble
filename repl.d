@@ -247,6 +247,20 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
         enum _isClass = __traits(compiles, __traits(classInstanceSize, T));
     }
 
+    string _showType(E)(lazy E expr)
+    {
+        static if (__traits(compiles, typeof(expr)))
+        {
+            static if (is(typeof(expr) == void))
+            {
+                expr();
+                return "";
+            }
+            else
+                return expr().to!string;
+        }
+    }
+
     ` ~ sharedDefs;
 
     auto file = File(repl.filename ~ ".d", "w");

@@ -80,23 +80,14 @@ string[] classRefs(T)()
 }
 
 
+
+
 void main()
 {
 
 
     ReplContext repl;
     repl.gc = gc_getProxy();
-
-/++
-import std.exception;
-auto a = [1,2,3];
-void func(){a[1] = a[2]; a[1]=a[9];}
-Error e = collectException!Error({a[1] = a[2]; a[1]=a[9];}());
-
-if (e) {assert(false, e.msg);}
-++/
-
-
 
 loop(repl, Debug.times);
 //runTests();
