@@ -13,8 +13,6 @@ ReplParse:
            / NoVar
            / Var
            / VarRewrite
-           / TypeOf
-           / AddressOf
            / BwBraces(VarRewrite/Import/AddressOf/UserType/.)
            / eoi
            / .
@@ -22,7 +20,7 @@ ReplParse:
     GrabToColon <~ (!(';'/eoi) (String/Comment/FuncBlock/.))* ';'
     GrabToComma <~ (!(','/eoi) (String/Comment/FuncBlock/ArrayLit/.))* ','
 
-    AlwaysLookFor <- Import / UserType / TypeOf / AddressOf
+    AlwaysLookFor <- Import / UserType
 
     NoVar <- FuncBlock / Foreach / For / While
 
@@ -83,11 +81,11 @@ ReplParse:
     FunctionDecl    <- wx ~(~Type ws Ident wx ( ~ParameterList wx ~ParameterList
                                             / ~ParameterList ) wx ~Constraint? wx AllBetween(LBrace,RBrace))
 
-    ParameterList   <- BwParens(TypeOf/.)
+    ParameterList   <- BwParens(.)
 
     VarDecl         <- ~Type ;ws Ident wx ;';'
-    VarDeclInit     <- ~Type ;ws Ident wx ;'=' ~Until(';', AddressOf/TypeOf/VarRewrite/.) ';'
-    AutoVarDeclInit <- Ident wx ;'=' ~Until(';', AddressOf/TypeOf/VarRewrite/.) ';'
+    VarDeclInit     <- ~Type ;ws Ident wx ;'=' ~Until(';', VarRewrite/.) ';'
+    AutoVarDeclInit <- Ident wx ;'=' ~Until(';', VarRewrite/.) ';'
 
     Type <- Storage wx '(' wx Type wx ')' Seq(TypeSuffix)?
           / Storage ws Type Seq(TypeSuffix)?
@@ -114,15 +112,15 @@ ReplParse:
                / "float" / "double" / "real"
                / "char"  / "wchar"  / "dchar" / "string"
 
-    TypeOf <- ('typeof' wx ~BwParens(TypeOfInner))  {Parser.typeOf}
-    TypeOfInner <- TypeOf / AddressOf / .
+    TypeOf <- ('typeof' wx ~BwParens(TypeOfInner))
+    TypeOfInner <- TypeOf / VarRewrite / .
 
-    AddressOf <- ((:'&' (:w / LBracket)* Ident)(!('['/'.'/'('))) {Parser.addressOf}
+    AddressOf <- ((:'&' (:w / LBracket)* Ident)(!('['/'.'/'(')))
 
     VarRewrite <- Skip / Ident {Parser.varRewrite}
 
     Skip <- TemplateArg
-    TemplateArg <- wx '!' wx BwParens(TypeOf/.)
+    TemplateArg <- wx '!' wx BwParens(.)
     UntilColon(LookFor) <- (!(';'/eoi) (LookFor/.))*
 
     ### Helpers
@@ -312,11 +310,11 @@ struct GenericReplParse(TParseTree)
 
     static TParseTree Match(TParseTree p)
     {
-         return pegged.peg.named!(pegged.peg.or!(Comment, String, Import, UserType, NoVar, Var, VarRewrite, TypeOf, AddressOf, BwBraces!(pegged.peg.or!(VarRewrite, Import, AddressOf, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match")(p);
+         return pegged.peg.named!(pegged.peg.or!(Comment, String, Import, UserType, NoVar, Var, VarRewrite, BwBraces!(pegged.peg.or!(VarRewrite, Import, AddressOf, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match")(p);
     }
     static TParseTree Match(string s)
     {
-        return pegged.peg.named!(pegged.peg.or!(Comment, String, Import, UserType, NoVar, Var, VarRewrite, TypeOf, AddressOf, BwBraces!(pegged.peg.or!(VarRewrite, Import, AddressOf, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match")(TParseTree("", false,[], s));
+        return pegged.peg.named!(pegged.peg.or!(Comment, String, Import, UserType, NoVar, Var, VarRewrite, BwBraces!(pegged.peg.or!(VarRewrite, Import, AddressOf, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match")(TParseTree("", false,[], s));
     }
     static string Match(GetName g)
     {
@@ -351,11 +349,11 @@ struct GenericReplParse(TParseTree)
 
     static TParseTree AlwaysLookFor(TParseTree p)
     {
-         return pegged.peg.named!(pegged.peg.or!(Import, UserType, TypeOf, AddressOf), "ReplParse.AlwaysLookFor")(p);
+         return pegged.peg.named!(pegged.peg.or!(Import, UserType), "ReplParse.AlwaysLookFor")(p);
     }
     static TParseTree AlwaysLookFor(string s)
     {
-        return pegged.peg.named!(pegged.peg.or!(Import, UserType, TypeOf, AddressOf), "ReplParse.AlwaysLookFor")(TParseTree("", false,[], s));
+        return pegged.peg.named!(pegged.peg.or!(Import, UserType), "ReplParse.AlwaysLookFor")(TParseTree("", false,[], s));
     }
     static string AlwaysLookFor(GetName g)
     {
@@ -662,11 +660,11 @@ struct GenericReplParse(TParseTree)
 
     static TParseTree ParameterList(TParseTree p)
     {
-         return pegged.peg.named!(BwParens!(pegged.peg.or!(TypeOf, pegged.peg.any)), "ReplParse.ParameterList")(p);
+         return pegged.peg.named!(BwParens!(pegged.peg.any), "ReplParse.ParameterList")(p);
     }
     static TParseTree ParameterList(string s)
     {
-        return pegged.peg.named!(BwParens!(pegged.peg.or!(TypeOf, pegged.peg.any)), "ReplParse.ParameterList")(TParseTree("", false,[], s));
+        return pegged.peg.named!(BwParens!(pegged.peg.any), "ReplParse.ParameterList")(TParseTree("", false,[], s));
     }
     static string ParameterList(GetName g)
     {
@@ -688,11 +686,11 @@ struct GenericReplParse(TParseTree)
 
     static TParseTree VarDeclInit(TParseTree p)
     {
-         return pegged.peg.named!(pegged.peg.and!(pegged.peg.fuse!(Type), pegged.peg.drop!(ws), Ident, wx, pegged.peg.drop!(pegged.peg.literal!("=")), pegged.peg.fuse!(Until!(pegged.peg.literal!(";"), pegged.peg.or!(AddressOf, TypeOf, VarRewrite, pegged.peg.any))), pegged.peg.literal!(";")), "ReplParse.VarDeclInit")(p);
+         return pegged.peg.named!(pegged.peg.and!(pegged.peg.fuse!(Type), pegged.peg.drop!(ws), Ident, wx, pegged.peg.drop!(pegged.peg.literal!("=")), pegged.peg.fuse!(Until!(pegged.peg.literal!(";"), pegged.peg.or!(VarRewrite, pegged.peg.any))), pegged.peg.literal!(";")), "ReplParse.VarDeclInit")(p);
     }
     static TParseTree VarDeclInit(string s)
     {
-        return pegged.peg.named!(pegged.peg.and!(pegged.peg.fuse!(Type), pegged.peg.drop!(ws), Ident, wx, pegged.peg.drop!(pegged.peg.literal!("=")), pegged.peg.fuse!(Until!(pegged.peg.literal!(";"), pegged.peg.or!(AddressOf, TypeOf, VarRewrite, pegged.peg.any))), pegged.peg.literal!(";")), "ReplParse.VarDeclInit")(TParseTree("", false,[], s));
+        return pegged.peg.named!(pegged.peg.and!(pegged.peg.fuse!(Type), pegged.peg.drop!(ws), Ident, wx, pegged.peg.drop!(pegged.peg.literal!("=")), pegged.peg.fuse!(Until!(pegged.peg.literal!(";"), pegged.peg.or!(VarRewrite, pegged.peg.any))), pegged.peg.literal!(";")), "ReplParse.VarDeclInit")(TParseTree("", false,[], s));
     }
     static string VarDeclInit(GetName g)
     {
@@ -701,11 +699,11 @@ struct GenericReplParse(TParseTree)
 
     static TParseTree AutoVarDeclInit(TParseTree p)
     {
-         return pegged.peg.named!(pegged.peg.and!(Ident, wx, pegged.peg.drop!(pegged.peg.literal!("=")), pegged.peg.fuse!(Until!(pegged.peg.literal!(";"), pegged.peg.or!(AddressOf, TypeOf, VarRewrite, pegged.peg.any))), pegged.peg.literal!(";")), "ReplParse.AutoVarDeclInit")(p);
+         return pegged.peg.named!(pegged.peg.and!(Ident, wx, pegged.peg.drop!(pegged.peg.literal!("=")), pegged.peg.fuse!(Until!(pegged.peg.literal!(";"), pegged.peg.or!(VarRewrite, pegged.peg.any))), pegged.peg.literal!(";")), "ReplParse.AutoVarDeclInit")(p);
     }
     static TParseTree AutoVarDeclInit(string s)
     {
-        return pegged.peg.named!(pegged.peg.and!(Ident, wx, pegged.peg.drop!(pegged.peg.literal!("=")), pegged.peg.fuse!(Until!(pegged.peg.literal!(";"), pegged.peg.or!(AddressOf, TypeOf, VarRewrite, pegged.peg.any))), pegged.peg.literal!(";")), "ReplParse.AutoVarDeclInit")(TParseTree("", false,[], s));
+        return pegged.peg.named!(pegged.peg.and!(Ident, wx, pegged.peg.drop!(pegged.peg.literal!("=")), pegged.peg.fuse!(Until!(pegged.peg.literal!(";"), pegged.peg.or!(VarRewrite, pegged.peg.any))), pegged.peg.literal!(";")), "ReplParse.AutoVarDeclInit")(TParseTree("", false,[], s));
     }
     static string AutoVarDeclInit(GetName g)
     {
@@ -818,11 +816,11 @@ struct GenericReplParse(TParseTree)
 
     static TParseTree TypeOf(TParseTree p)
     {
-         return pegged.peg.named!(pegged.peg.action!(pegged.peg.and!(pegged.peg.literal!("typeof"), wx, pegged.peg.fuse!(BwParens!(TypeOfInner))), Parser.typeOf), "ReplParse.TypeOf")(p);
+         return pegged.peg.named!(pegged.peg.and!(pegged.peg.literal!("typeof"), wx, pegged.peg.fuse!(BwParens!(TypeOfInner))), "ReplParse.TypeOf")(p);
     }
     static TParseTree TypeOf(string s)
     {
-        return pegged.peg.named!(pegged.peg.action!(pegged.peg.and!(pegged.peg.literal!("typeof"), wx, pegged.peg.fuse!(BwParens!(TypeOfInner))), Parser.typeOf), "ReplParse.TypeOf")(TParseTree("", false,[], s));
+        return pegged.peg.named!(pegged.peg.and!(pegged.peg.literal!("typeof"), wx, pegged.peg.fuse!(BwParens!(TypeOfInner))), "ReplParse.TypeOf")(TParseTree("", false,[], s));
     }
     static string TypeOf(GetName g)
     {
@@ -831,11 +829,11 @@ struct GenericReplParse(TParseTree)
 
     static TParseTree TypeOfInner(TParseTree p)
     {
-         return pegged.peg.named!(pegged.peg.or!(TypeOf, AddressOf, pegged.peg.any), "ReplParse.TypeOfInner")(p);
+         return pegged.peg.named!(pegged.peg.or!(TypeOf, VarRewrite, pegged.peg.any), "ReplParse.TypeOfInner")(p);
     }
     static TParseTree TypeOfInner(string s)
     {
-        return pegged.peg.named!(pegged.peg.or!(TypeOf, AddressOf, pegged.peg.any), "ReplParse.TypeOfInner")(TParseTree("", false,[], s));
+        return pegged.peg.named!(pegged.peg.or!(TypeOf, VarRewrite, pegged.peg.any), "ReplParse.TypeOfInner")(TParseTree("", false,[], s));
     }
     static string TypeOfInner(GetName g)
     {
@@ -844,11 +842,11 @@ struct GenericReplParse(TParseTree)
 
     static TParseTree AddressOf(TParseTree p)
     {
-         return pegged.peg.named!(pegged.peg.action!(pegged.peg.and!(pegged.peg.and!(pegged.peg.discard!(pegged.peg.literal!("&")), pegged.peg.zeroOrMore!(pegged.peg.or!(pegged.peg.discard!(w), LBracket)), Ident), pegged.peg.negLookahead!(pegged.peg.keywords!("[", ".", "("))), Parser.addressOf), "ReplParse.AddressOf")(p);
+         return pegged.peg.named!(pegged.peg.and!(pegged.peg.and!(pegged.peg.discard!(pegged.peg.literal!("&")), pegged.peg.zeroOrMore!(pegged.peg.or!(pegged.peg.discard!(w), LBracket)), Ident), pegged.peg.negLookahead!(pegged.peg.keywords!("[", ".", "("))), "ReplParse.AddressOf")(p);
     }
     static TParseTree AddressOf(string s)
     {
-        return pegged.peg.named!(pegged.peg.action!(pegged.peg.and!(pegged.peg.and!(pegged.peg.discard!(pegged.peg.literal!("&")), pegged.peg.zeroOrMore!(pegged.peg.or!(pegged.peg.discard!(w), LBracket)), Ident), pegged.peg.negLookahead!(pegged.peg.keywords!("[", ".", "("))), Parser.addressOf), "ReplParse.AddressOf")(TParseTree("", false,[], s));
+        return pegged.peg.named!(pegged.peg.and!(pegged.peg.and!(pegged.peg.discard!(pegged.peg.literal!("&")), pegged.peg.zeroOrMore!(pegged.peg.or!(pegged.peg.discard!(w), LBracket)), Ident), pegged.peg.negLookahead!(pegged.peg.keywords!("[", ".", "("))), "ReplParse.AddressOf")(TParseTree("", false,[], s));
     }
     static string AddressOf(GetName g)
     {
@@ -883,11 +881,11 @@ struct GenericReplParse(TParseTree)
 
     static TParseTree TemplateArg(TParseTree p)
     {
-         return pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.literal!("!"), wx, BwParens!(pegged.peg.or!(TypeOf, pegged.peg.any))), "ReplParse.TemplateArg")(p);
+         return pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.literal!("!"), wx, BwParens!(pegged.peg.any)), "ReplParse.TemplateArg")(p);
     }
     static TParseTree TemplateArg(string s)
     {
-        return pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.literal!("!"), wx, BwParens!(pegged.peg.or!(TypeOf, pegged.peg.any))), "ReplParse.TemplateArg")(TParseTree("", false,[], s));
+        return pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.literal!("!"), wx, BwParens!(pegged.peg.any)), "ReplParse.TemplateArg")(TParseTree("", false,[], s));
     }
     static string TemplateArg(GetName g)
     {

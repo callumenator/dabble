@@ -39,9 +39,7 @@ struct ParseState
         int stop = newVars == -1 ? repl.symbols.length : newVars;
         foreach(idx, sym; repl.symbols[0..stop])
         {
-            prefix ~= "auto " ~ sym.name ~ " = (*cast(Ref!(" ~ sym.type ~ ")*)"
-                        ~ "_repl_.symbols[" ~ idx.to!string ~ "].addr)._handle();\n";
-
+            prefix ~= "auto "~sym.name~" = _getVar!("~sym.type~")(_repl_,"~idx.to!string~");\n";
 
             if (sym.isClass)
                 prefix ~= "memcpy(_repl_.vtbl[" ~ sym.vtblIndex.to!string ~ "].ptr, "
@@ -49,34 +47,15 @@ struct ParseState
                         ~ "typeid(" ~ sym.type ~ ").vtbl.length * (void*).sizeof);\n";
 
             suffix ~= "_repl_.symbols[" ~ idx.to!string
-                    ~ "].current = to!string(" ~ sym.name ~ ").idup;\n";
+                    ~ "].current = to!string(*" ~ sym.name ~ ").idup;\n";
         }
 
         if (newVars != -1)
         {
             foreach(idx, sym; repl.symbols[newVars..$])
             {
-
-                /++
-                prefix ~= "_repl_.symbols[" ~ (idx+newVars).to!string
-                        ~ "].addr = heapRef!(" ~ sym.type ~ ");\n";
-
-                prefix ~= "auto " ~ sym.name ~ " = (*cast(Ref!(" ~ sym.type ~ ")*)"
-                        ~ "_repl_.symbols[" ~ (idx+newVars).to!string ~ "].addr)._handle();\n";
-
-
-                prefix ~= checkForClass(sym, idx+newVars);
-                prefix ~= dupVtbl(sym, idx+newVars);
-
-                if (sym.type.length > 6 && sym.type[0..6] == "typeof")
-                {
-                    prefix ~= "_repl_.symbols[" ~ (idx+newVars).to!string ~ "].type = "
-                            ~ sym.name ~ "._typeof.stringof.idup;\n";
-                }
-                ++/
-
                 suffix ~= "_repl_.symbols[" ~ (idx+newVars).to!string
-                        ~ "].current = to!string(" ~ sym.name ~ ").idup;\n";
+                        ~ "].current = to!string(*" ~ sym.name ~ ").idup;\n";
             }
         }
 
@@ -239,7 +218,7 @@ struct Parser
         if (t.successful)
         {
             if (t.matches[0] in s.repl.symbolSet)
-                t.matches[0] ~= "._get";
+                t.matches[0] = "(*" ~ t.matches[0] ~ ")";
         }
 
         return t;
@@ -282,7 +261,7 @@ struct Parser
                     if (type == "auto")
                     {
                         auto rhs = strip(p.children[2].matches[0]);
-                        type = "typeof(_Init(" ~ rhs ~ "))";
+                        type = "typeof(" ~ rhs ~ ")";
                     }
 
                     auto newSymbol = Symbol(name, type);
@@ -297,17 +276,13 @@ struct Parser
                     auto idx = s.repl.symbols.length - 1;
                     auto idxStr = idx.to!string;
 
-                    auto initString = "_repl_.symbols[" ~ idxStr~ "].addr = heapRef!(" ~ type ~ ");\n"
-                                    ~ "auto " ~ name ~ " = " ~ castSymbolToRef(newSymbol, idx) ~ "._handle();\n";
-
-                    initString ~= checkForClass(newSymbol, idx);
-                    initString ~= dupVtbl(newSymbol, idx);
-
-                    if (type.length > 6 && type[0..6] == "typeof")
-                        initString ~= "_repl_.symbols["~idxStr~"].type = "~name~"._typeof.stringof.idup;\n";
+                    auto initString = "auto "~name~" = _makeNew!("~type~")(_repl_,"~idxStr~");\n";
 
                     if (p.name == "ReplParse.VarDeclInit")
+                    {
+                        p.matches[2] = "(*" ~ p.matches[2] ~ ")";
                         initString ~= join(p.matches[2..$]);
+                    }
 
                     p.matches[0] = initString;
                     p.matches = p.matches[0..1];
@@ -412,7 +387,7 @@ void resolveTypes(ref ReplContext repl)
 string dupVtbl(Symbol sym, uint index)
 {
     return
-    "\nstatic if (__traits(compiles, __traits(classInstanceSize, "~sym.type~")))\n" ~
+    "\nstatic if (isClass!("~sym.type~"))\n" ~
     "{\n" ~
     "    _repl_.vtbl ~= typeid("~sym.type~").vtbl.dup;\n" ~
     "    _repl_.symbols["~index.to!string~"].vtblIndex = _repl_.vtbl.length - 1;\n" ~
@@ -421,7 +396,7 @@ string dupVtbl(Symbol sym, uint index)
 
 string checkForClass(Symbol sym, uint index)
 {
-    return "_repl_.symbols["~index.to!string~"].isClass = "~sym.name~"._Type == Class;\n";
+    return "_repl_.symbols["~index.to!string~"].isClass = isClass!("~sym.type~");\n";
 }
 
 string castSymbolToRef(Symbol sym, uint index)

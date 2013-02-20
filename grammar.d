@@ -9,14 +9,11 @@ ReplParse:
 
     Match <- Comment
            / String
-           / Expr
            / Import
            / UserType
            / NoVar
            / Var
            / VarRewrite
-           / TypeOf
-           / AddressOf
            / BwBraces(VarRewrite/Import/AddressOf/UserType/.)
            / eoi
            / .
@@ -24,7 +21,7 @@ ReplParse:
     GrabToColon <~ (!(';'/eoi) (String/Comment/FuncBlock/.))* ';'
     GrabToComma <~ (!(','/eoi) (String/Comment/FuncBlock/ArrayLit/.))* ','
 
-    AlwaysLookFor <- Import / UserType / TypeOf / AddressOf
+    AlwaysLookFor <- Import / UserType
 
     NoVar <- FuncBlock / Foreach / For / While
 
@@ -85,11 +82,11 @@ ReplParse:
     FunctionDecl    <- wx ~(~Type ws Ident wx ( ~ParameterList wx ~ParameterList
                                             / ~ParameterList ) wx ~Constraint? wx AllBetween(LBrace,RBrace))
 
-    ParameterList   <- BwParens(TypeOf/.)
+    ParameterList   <- BwParens(.)
 
     VarDecl         <- ~Type ;ws Ident wx ;';'
-    VarDeclInit     <- ~Type ;ws Ident wx ;'=' ~Until(';', AddressOf/TypeOf/VarRewrite/.) ';'
-    AutoVarDeclInit <- Ident wx ;'=' ~Until(';', AddressOf/TypeOf/VarRewrite/.) ';'
+    VarDeclInit     <- ~Type ;ws Ident wx ;'=' ~Until(';', VarRewrite/.) ';'
+    AutoVarDeclInit <- Ident wx ;'=' ~Until(';', VarRewrite/.) ';'
 
     Type <- Storage wx '(' wx Type wx ')' Seq(TypeSuffix)?
           / Storage ws Type Seq(TypeSuffix)?
@@ -116,15 +113,15 @@ ReplParse:
                / "float" / "double" / "real"
                / "char"  / "wchar"  / "dchar" / "string"
 
-    TypeOf <- ('typeof' wx ~BwParens(TypeOfInner))  {Parser.typeOf}
-    TypeOfInner <- TypeOf / AddressOf / .
+    TypeOf <- ('typeof' wx ~BwParens(TypeOfInner))
+    TypeOfInner <- TypeOf / VarRewrite / .
 
-    AddressOf <- ((:'&' (:w / LBracket)* Ident)(!('['/'.'/'('))) {Parser.addressOf}
+    AddressOf <- ((:'&' (:w / LBracket)* Ident)(!('['/'.'/'(')))
 
     VarRewrite <- Skip / Ident {Parser.varRewrite}
 
     Skip <- TemplateArg
-    TemplateArg <- wx '!' wx BwParens(TypeOf/.)
+    TemplateArg <- wx '!' wx BwParens(.)
     UntilColon(LookFor) <- (!(';'/eoi) (LookFor/.))*
 
     ### Helpers

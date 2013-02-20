@@ -215,7 +215,37 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
         return true;
     }
 
-    T*
+    T* _makeNew(T)(ref ReplContext repl, size_t index)
+    {
+        void* ptr;
+        T t = T.init;
+        ptr = GC.calloc(T.sizeof);
+        GC.disable();
+        memcpy(ptr, &t, T.sizeof);
+        GC.enable();
+
+        repl.symbols[index].type = T.stringof.idup;
+        repl.symbols[index].addr = ptr;
+        repl.symbols[index].isClass = _isClass!T;
+
+        static if (_isClass!T)
+        {
+            repl.vtbl ~= typeid(T).vtbl.dup;
+            repl.symbols[index].vtblIndex = repl.vtbl.length - 1;
+        }
+
+        return cast(T*)ptr;
+    }
+
+    T* _getVar(T)(ReplContext repl, size_t index)
+    {
+        return cast(T*)repl.symbols[index].addr;
+    }
+
+    template _isClass(T)
+    {
+        enum _isClass = __traits(compiles, __traits(classInstanceSize, T));
+    }
 
     ` ~ sharedDefs;
 
@@ -244,7 +274,6 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
     //auto cmd2 = "link /CODEVIEW /DEBUG " ~ filename ~ ".obj,,,phobos.lib+kernel32.lib," ~ filename ~ ".def";
 
     auto cmd1 = "dmd -g " ~include ~" "~ repl.filename ~ ".d " ~ repl.filename ~ ".def";
-                //"dmd " ~ repl.filename ~ ".obj " ~ repl.filename ~ ".def";
 
     try{
         error = shell(cmd1);

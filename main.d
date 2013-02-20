@@ -36,16 +36,6 @@ class C { int a; private: B[] b; }
 class D { C[B] c; B[int] b; }
 struct S { int a; }
 
-void func(typeof((int a){return 1;})* ptr)
-{
-    *ptr = (int a){return 12345;};
-}
-
-void smash()
-{
-    int[10] arr;
-    writeln(arr);
-}
 
 /**
 Aliases itself to the underlying type of T. E.g.:
@@ -90,10 +80,10 @@ string[] classRefs(T)()
 }
 
 
-
-
 void main()
 {
+
+
     ReplContext repl;
     repl.gc = gc_getProxy();
 
