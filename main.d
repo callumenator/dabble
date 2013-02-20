@@ -86,20 +86,11 @@ string[] classRefs(T)()
                 refs ~= _type.stringof ~ classRefs!_type;
         }
     }
-
     return refs.sort.uniq.array;
 }
 
-T too(T)(T t)
-{
-    return t;
-}
 
-struct SS
-{
-    int[] arr;
-    alias arr this;
-}
+
 
 void main()
 {
@@ -107,10 +98,15 @@ void main()
     repl.gc = gc_getProxy();
 
 /++
-auto a = SS([1,2,3]);
-auto b = a.sort();
-pragma(msg, typeof(b));
+import std.exception;
+auto a = [1,2,3];
+void func(){a[1] = a[2]; a[1]=a[9];}
+Error e = collectException!Error({a[1] = a[2]; a[1]=a[9];}());
+
+if (e) {assert(false, e.msg);}
 ++/
+
+
 
 loop(repl, Debug.times);
 //runTests();
@@ -183,7 +179,7 @@ return;
     //writeln(a.data);
 ++/
 
-
+/++
     string error;
 
     eval("class C { int a; }", repl, error);
@@ -195,7 +191,7 @@ return;
     eval("writeln(d);", repl, error);
     eval("d.c = new C;", repl, error);
     eval("writeln(d.c);", repl, error);
-
+++/
     //eval("int a = 123;", repl, error);
     //eval("printf(1);", repl, error);
 

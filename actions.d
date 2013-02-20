@@ -115,10 +115,15 @@ struct Parser
                s.genTypes() ~
                "export extern(C) void _main(ref ReplContext _repl_) {\n" ~
                "gc_setProxy(_repl_.gc);\n" ~
+               "import std.exception;\n" ~
+               "auto e = collectException!Error(_main2(_repl_));\n" ~
+               "if (e) { writeln(e.msg); }\n" ~
+               "}\n\n" ~
+               "void _main2(ref ReplContext _repl_) {\n" ~
                wrap[0] ~ //"writeln(`A`);\n" ~
                code ~ //"writeln(`B`);\n" ~
                wrap[1] ~ //"writeln(`C`);\n" ~
-               "}";
+               "}\n";
     }
 
     static T incDepth(T)(T t)
@@ -238,6 +243,19 @@ struct Parser
         return t;
     }
 
+    static T autoVarDecl(T)(T p)
+    {
+        if (p.successful)
+        {
+            p.name = "ReplParse.VarDeclInit";
+            p.matches = ["",""] ~ p.matches;
+            p.children = ParseTree("",true,["auto"]) ~ p.children;
+            p = varDecl(p);
+        }
+        return p;
+    }
+
+
     static T varDecl(T)(T p)
     {
         if (p.successful)
@@ -293,12 +311,6 @@ struct Parser
                     p.matches = p.matches[0..1];
                 }
             }
-            else // else, just update the type (in case this is a typeof())
-            {
-
-                //p.matches[0] = type;
-            }
-
         }
         return p;
     }

@@ -9,8 +9,10 @@ ReplParse:
 
     Match <- Comment
            / String
+           / Expr
            / Import
            / UserType
+           / NoVar
            / Var
            / VarRewrite
            / TypeOf
@@ -19,9 +21,30 @@ ReplParse:
            / eoi
            / .
 
+    GrabToColon <~ (!(';'/eoi) (String/Comment/FuncBlock/.))* ';'
+    GrabToComma <~ (!(','/eoi) (String/Comment/FuncBlock/ArrayLit/.))* ','
+
+    AlwaysLookFor <- Import / UserType / TypeOf / AddressOf
+
+    NoVar <- FuncBlock / Foreach / For / While
+
+    FuncBlock <~ blank* BwParens(AlwaysLookFor)
+                 blank* BwBraces(AlwaysLookFor)
+
+    ArrayLit <~ BwBrackets(AlwaysLookFor)
+
+    Foreach <~ blank* 'foreach' blank* '(' GrabToColon
+    For     <~ blank* 'for' blank* '(' GrabToColon
+    While   <~ blank* 'while' blank* BwParens(AlwaysLookFor)
+
+
     BwBraces(T) <- Nested('{', Comment / String / T, '}')
     BwParens(T) <- Nested('(', Comment / String / T, ')')
+    BwBrackets(T) <- Nested('[', Comment / String / T, ']')
     Nested(L,Items,R) <- ^L (!R (Nested(L,Items,R) / blank / Items))* ^R
+
+
+
 
     Import <- (wx "import" wx Seq( (~Seq(Ident, '.')){Parser.addImport}, ',') ';'){Parser.clear}
 
@@ -31,7 +54,8 @@ ReplParse:
               / ClassDecl
               / FunctionDecl) {Parser.userType}
 
-    Var <- VarDeclInit  {Parser.varDecl}
+    Var <- AutoVarDeclInit {Parser.autoVarDecl}
+         / VarDeclInit  {Parser.varDecl}
          / VarDecl      {Parser.varDecl}
 
 
@@ -65,6 +89,7 @@ ReplParse:
 
     VarDecl         <- ~Type ;ws Ident wx ;';'
     VarDeclInit     <- ~Type ;ws Ident wx ;'=' ~Until(';', AddressOf/TypeOf/VarRewrite/.) ';'
+    AutoVarDeclInit <- Ident wx ;'=' ~Until(';', AddressOf/TypeOf/VarRewrite/.) ';'
 
     Type <- Storage wx '(' wx Type wx ')' Seq(TypeSuffix)?
           / Storage ws Type Seq(TypeSuffix)?
@@ -92,7 +117,7 @@ ReplParse:
                / "char"  / "wchar"  / "dchar" / "string"
 
     TypeOf <- ('typeof' wx ~BwParens(TypeOfInner))  {Parser.typeOf}
-    TypeOfInner <- TypeOf / .
+    TypeOfInner <- TypeOf / AddressOf / .
 
     AddressOf <- ((:'&' (:w / LBracket)* Ident)(!('['/'.'/'('))) {Parser.addressOf}
 
@@ -182,5 +207,5 @@ ReplParse:
 
 void main()
 {
-    asModule!(Memoization.yes)("parser", "parser", grammar, "import actions, std.stdio;");
+    asModule!(Memoization.no)("parser", "parser", grammar, "import actions, std.stdio;");
 }

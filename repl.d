@@ -175,6 +175,12 @@ bool eval(string code,
     //resolveTypes(repl);
     //fixupVtbls(repl);
 
+    Symbol[] keep;
+    foreach(sym; repl.symbols)
+        if (sym.current !is null)
+            keep ~= sym;
+    repl.symbols = keep;
+
     return 0;
 }
 
@@ -429,17 +435,14 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
             return &t;
     }
 
-
-
-
     ` ~ sharedDefs;
 
     auto file = File(repl.filename ~ ".d", "w");
     file.write(dllHeader ~ code);
     file.close();
 
-    if (!exists(repl.filename ~ ".d"))
-    {
+    //if (!exists(repl.filename ~ ".d"))
+    //{
         // The .def
         file = File(repl.filename ~ ".def", "w");
 
@@ -451,15 +454,15 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
 
         file.write(def);
         file.close();
-    }
+    //}
 
     //-Ic:/cal/d/dmd2/src/druntime/src
-    //auto include = "-Ic:/cal/d/dmd2/src/druntime/src ";
+    auto include = "-Ic:/d/dmd2/src/druntime/src ";
     //auto cmd2 = "dmd " ~ repl.filename ~ ".obj " ~ repl.filename ~ ".def";
     //auto cmd2 = "link /CODEVIEW /DEBUG " ~ filename ~ ".obj,,,phobos.lib+kernel32.lib," ~ filename ~ ".def";
 
-    auto cmd1 = "dmd -c " ~ repl.filename ~ ".d & " ~
-                "dmd " ~ repl.filename ~ ".obj " ~ repl.filename ~ ".def";
+    auto cmd1 = "dmd -g " ~include ~" "~ repl.filename ~ ".d " ~ repl.filename ~ ".def";
+                //"dmd " ~ repl.filename ~ ".obj " ~ repl.filename ~ ".def";
 
     try{
         error = shell(cmd1);
@@ -479,11 +482,14 @@ static if (LOADER == "MEMORYMOD")
 {
     HMEMORYMODULE loadCode(string filename)
     {
+
         import std.file;
         auto data = read(filename ~ ".dll");
-
+        writeln("__LOAD__1");
         HMEMORYMODULE _module;
         _module = MemoryLoadLibrary(data.ptr);
+        writeln("__LOAD__2");
+
 
         if (_module == null)
         {
@@ -501,13 +507,36 @@ static if (LOADER == "MEMORYMOD")
         auto fp = cast(replCode)MemoryGetProcAddress(_module, cast(char*)("_main".toStringz));
 
         try{
+            writeln("BEFORE");
             fp(repl);
             GC.removeRange(getSectionBase(_module, ".CRT"));
+            writeln("AFTER");
             return 0;
         }
         catch(Exception e) {
             error = e.msg;
             return 1;
+        }
+    }
+
+    import core.thread;
+
+    class CallThread : Thread
+    {
+        alias extern(C) void function(ref ReplContext) replCode;
+
+        replCode fp;
+        ReplContext repl;
+        this(ReplContext _repl, replCode _fp)
+        {
+            fp = _fp;
+            repl = _repl;
+            super(&run);
+        }
+
+        void run()
+        {
+            fp(repl);
         }
     }
 
