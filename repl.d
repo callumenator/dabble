@@ -193,6 +193,7 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
     import core.sys.windows.dll, core.runtime, core.memory;
 
     extern (C) void gc_setProxy(void*);
+    extern (C) void gc_clrProxy();
 
     HINSTANCE g_hInst;
 
@@ -392,15 +393,6 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
                 return v;
         }
 
-        static if (_Type == Array)
-        {
-            @property bool empty() { return _get.empty; }
-            @property auto front() { return _get.front; }
-            @property auto save() { return _get.save; }
-            void popFront() { _get.popFront(); }
-            void popBack() { _get.popBack(); }
-        }
-
         alias T _typeof;
         alias _get this;
     }
@@ -485,11 +477,9 @@ static if (LOADER == "MEMORYMOD")
 
         import std.file;
         auto data = read(filename ~ ".dll");
-        writeln("__LOAD__1");
+
         HMEMORYMODULE _module;
         _module = MemoryLoadLibrary(data.ptr);
-        writeln("__LOAD__2");
-
 
         if (_module == null)
         {
@@ -503,14 +493,15 @@ static if (LOADER == "MEMORYMOD")
     {
         scope(exit) { MemoryFreeLibrary(_module, false); }
 
-        alias extern(C) void function(ref ReplContext) replCode;
+        alias extern(C) int function(ref ReplContext) replCode;
         auto fp = cast(replCode)MemoryGetProcAddress(_module, cast(char*)("_main".toStringz));
 
         try{
-            writeln("BEFORE");
-            fp(repl);
+            auto res = fp(repl);
+            if (res == -1)
+                GC.collect();
+
             GC.removeRange(getSectionBase(_module, ".CRT"));
-            writeln("AFTER");
             return 0;
         }
         catch(Exception e) {

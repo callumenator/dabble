@@ -113,11 +113,13 @@ struct Parser
         auto wrap = s.genWrapper();
         return s.genImports() ~
                s.genTypes() ~
-               "export extern(C) void _main(ref ReplContext _repl_) {\n" ~
+               "export extern(C) int _main(ref ReplContext _repl_) {\n" ~
+               "GC.disable();\n" ~
                "gc_setProxy(_repl_.gc);\n" ~
                "import std.exception;\n" ~
                "auto e = collectException!Error(_main2(_repl_));\n" ~
-               "if (e) { writeln(e.msg); }\n" ~
+               "if (e) { writeln(e.msg); return -1; }\n" ~
+               "return 0;\n" ~
                "}\n\n" ~
                "void _main2(ref ReplContext _repl_) {\n" ~
                wrap[0] ~ //"writeln(`A`);\n" ~
