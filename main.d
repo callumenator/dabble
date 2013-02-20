@@ -101,11 +101,9 @@ void main()
     ReplContext repl;
     repl.gc = gc_getProxy();
 
-runTests();
-return;
-loop(repl);
+    loop(repl, Debug.times);
 
-return;
+    return;
 
 
 

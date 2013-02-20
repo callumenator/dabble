@@ -20,6 +20,7 @@ import
 
 import
     loader,
+    parser,
     actions;
 
 extern(C) void* gc_getProxy();
@@ -175,11 +176,7 @@ bool eval(string code,
     //resolveTypes(repl);
     //fixupVtbls(repl);
 
-    Symbol[] keep;
-    foreach(sym; repl.symbols)
-        if (sym.current !is null)
-            keep ~= sym;
-    repl.symbols = keep;
+    deadSymbols(repl);
 
     return 0;
 }
@@ -215,10 +212,9 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
         return true;
     }
 
-    T* _makeNew(T)(ref ReplContext repl, size_t index)
+    T* _makeNew(T)(ref ReplContext repl, size_t index, T t = T.init)
     {
         void* ptr;
-        T t = T.init;
         ptr = GC.calloc(T.sizeof);
         GC.disable();
         memcpy(ptr, &t, T.sizeof);
@@ -247,7 +243,7 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
         enum _isClass = __traits(compiles, __traits(classInstanceSize, T));
     }
 
-    string _showType(E)(lazy E expr)
+    string _exprResult(E)(lazy E expr)
     {
         static if (__traits(compiles, typeof(expr)))
         {
@@ -313,6 +309,7 @@ static if (LOADER == "MEMORYMOD")
 
         HMEMORYMODULE _module;
         _module = MemoryLoadLibrary(data.ptr);
+        writeln("BEFORE");
 
         if (_module == null)
         {

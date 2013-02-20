@@ -74,7 +74,7 @@ struct Parser
 
     static string go(string input, ref ReplContext repl)
     {
-        prefix = "string _finalType;\n";
+        prefix = "string _finalType = ``;\n";
         suffix = "";
         verbose = repl.verbose;
         s = ParseState();
@@ -96,7 +96,6 @@ struct Parser
         return s.genImports() ~
                s.genTypes() ~
                "export extern(C) int _main(ref ReplContext _repl_) {\n" ~
-               "GC.disable();\n" ~
                "gc_setProxy(_repl_.gc);\n" ~
                "import std.exception;\n" ~
                "auto e = collectException!Error(_main2(_repl_));\n" ~
@@ -115,11 +114,12 @@ struct Parser
     static string makeCode(T)(T t)
     {
         auto code = std.array.join(t.matches);
+        return code;
         auto lines = splitter(code, ";");
         auto result = "";
         foreach(line; lines)
             if (strip(line).length != 0)
-                result ~= "_finalType = _showType("~line~");\n";
+                result ~= "_finalType = _expResult("~line~");\n";
         return result;
     }
 
@@ -206,6 +206,17 @@ struct Parser
         return t;
     }
 
+    static T wrapShowType(T)(T t)
+    {
+        if (t.successful)
+        {
+            t = ReplParse.decimateTree(t);
+            t.matches[0] = "_finalType = _exprResult("~t.matches[0]~");";
+        }
+
+        return t;
+    }
+
     static T addressOf(T)(T t)
     {
         if (t.successful)
@@ -244,10 +255,18 @@ struct Parser
     {
         if (p.successful)
         {
-            p.name = "ReplParse.VarDeclInit";
-            p.matches = ["",""] ~ p.matches;
-            p.children = ParseTree("",true,["auto"]) ~ p.children;
-            p = varDecl(p);
+            if (p.children[0].matches[0] !in s.repl.symbolSet)
+            {
+                p.name = "ReplParse.VarDeclInit";
+                p.matches = ["",""] ~ p.matches;
+                p.children = ParseTree("",true,["auto"]) ~ p.children;
+                p = varDecl(p);
+            }
+            else
+            {
+                // If name was a known symbol, this is a simple assignment, not new declaration
+                p.successful = false;
+            }
         }
         return p;
     }
@@ -269,9 +288,12 @@ struct Parser
                 {} // redifinition, pegged calling actions more than once
                 else
                 {
+                    writeln("DECL ", name);
+
+                    string rhs;
                     if (type == "auto")
                     {
-                        auto rhs = strip(p.children[2].matches[0]);
+                        rhs = strip(p.children[$-1].matches[0]);
                         type = "typeof(" ~ rhs ~ ")";
                     }
 
@@ -287,13 +309,14 @@ struct Parser
                     auto idx = s.repl.symbols.length - 1;
                     auto idxStr = idx.to!string;
 
-                    prefix ~= "auto "~name~" = _makeNew!("~type~")(_repl_,"~idxStr~");\n";
-
                     if (p.name == "ReplParse.VarDeclInit")
                     {
+                        prefix ~= "auto "~name~" = _makeNew!("~type~")(_repl_,"~idxStr~","~rhs~");\n";
                         p.matches[2] = "(*" ~ p.matches[2] ~ ")";
-                        p.matches[0] = join(p.matches[2..$]);
+                        p.matches[0] = p.matches[2];
                     }
+                    else
+                        prefix ~= "auto "~name~" = _makeNew!("~type~")(_repl_,"~idxStr~");\n";
 
                     p.matches = p.matches[0..1];
                 }
@@ -393,6 +416,19 @@ void resolveTypes(ref ReplContext repl)
         sym.checkType = null;
     }
 }
+
+void deadSymbols(ref ReplContext repl)
+{
+    Symbol[] keep;
+    foreach(sym; repl.symbols)
+        if (sym.current !is null)
+            keep ~= sym;
+        else
+            repl.symbolSet.remove(sym.name);
+
+    repl.symbols = keep;
+}
+
 
 string dupVtbl(Symbol sym, uint index)
 {
