@@ -18,8 +18,9 @@ ReplParse:
            / eoi
            / .
 
-    GrabToColon <~ (!(';'/eoi) (String/Comment/FuncBlock/.))* ';'
-    GrabToComma <~ (!(','/eoi) (String/Comment/FuncBlock/ArrayLit/.))* ','
+    GrabToColon(T=.) <~ (!(';'/eoi) (String/Comment/FuncBlock/T))* ';'
+    GrabToComma(T=.) <~ (!(','/eoi) (String/Comment/FuncBlock/ArrayLit/T))* ','
+    GrabToClosingParens(T=.) <~ (!(')'/eoi) (String/Comment/FuncBlock/BwParens(T)/T))* ')'
 
     AlwaysLookFor <- Import / UserType
 
@@ -30,14 +31,16 @@ ReplParse:
 
     ArrayLit <~ BwBrackets(AlwaysLookFor)
 
-    Foreach <~ blank* 'foreach' blank* '(' GrabToColon
-    For     <~ blank* 'for' blank* '(' GrabToColon
-    While   <~ blank* 'while' blank* BwParens(AlwaysLookFor)
+    Foreach <~ wx 'foreach' wx '(' GrabToColon GrabToClosingParens(VarRewrite/.)
+               wx  ( BwBraces(VarRewrite/.) / GrabToColon(VarRewrite) )
+
+    For     <~ wx 'for' wx '(' GrabToClosingParens(VarRewrite/.) wx BwBraces(VarRewrite/.)
+    While   <~ wx 'while' wx BwParens(AlwaysLookFor)
 
 
-    BwBraces(T) <- Nested('{', Comment / String / T, '}')
-    BwParens(T) <- Nested('(', Comment / String / T, ')')
-    BwBrackets(T) <- Nested('[', Comment / String / T, ']')
+    BwBraces(T=.) <- Nested('{', Comment / String / T, '}')
+    BwParens(T=.) <- Nested('(', Comment / String / T, ')')
+    BwBrackets(T=.) <- Nested('[', Comment / String / T, ']')
     Nested(L,Items,R) <- ^L (!R (Nested(L,Items,R) / blank / Items))* ^R
 
 

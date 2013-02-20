@@ -79,7 +79,19 @@ string[] classRefs(T)()
     return refs.sort.uniq.array;
 }
 
-
+    string _showType(E)(lazy E expr)
+    {
+        static if (__traits(compiles, typeof(expr)))
+        {
+            static if (is(typeof(expr) == void))
+            {
+                expr();
+                return "";
+            }
+            else
+                return expr().to!string;
+        }
+    }
 
 
 void main()
@@ -89,8 +101,10 @@ void main()
     ReplContext repl;
     repl.gc = gc_getProxy();
 
-loop(repl, Debug.times);
-//runTests();
+runTests();
+return;
+loop(repl);
+
 return;
 
 

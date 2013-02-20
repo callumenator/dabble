@@ -108,7 +108,7 @@ struct Parser
                prefix ~
                makeCode(p) ~ //"writeln(`B`);\n" ~
                wrap[1] ~ //"writeln(`C`);\n" ~
-               "if (_finalType.length != 0) writeln(_finalType);\n" ~
+               "if (_finalType.length != 0) writeln(`=> `, _finalType);\n" ~
                "}\n";
     }
 
