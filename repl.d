@@ -181,12 +181,17 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
 {
     enum dllHeader =
     `
+    import rt.memory;
     import std.stdio, std.conv, std.range, std.algorithm;
     import std.c.stdio, std.c.string, std.c.stdlib, std.c.windows.windows;
     import core.sys.windows.dll, core.runtime, core.memory;
 
     extern (C) void gc_setProxy(void*);
     extern (C) void gc_clrProxy();
+    extern (C) void gc_init();
+    extern (C) void rt_moduleCtor();
+    extern (C) void rt_moduleTlsCtor();
+
 
     HINSTANCE g_hInst;
 
@@ -195,7 +200,11 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
         final switch (ulReason)
         {
         case DLL_PROCESS_ATTACH:
-            Runtime.initialize();
+            //Runtime.initialize();
+            gc_init();
+            //initStaticDataGC();
+            rt_moduleCtor();
+            //rt_moduleTlsCtor();
             GC.disable();
             break;
         case DLL_PROCESS_DETACH:
@@ -230,6 +239,27 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
         return cast(T*)ptr;
     }
 
+    template _Typeof(alias T)
+    {
+        static if (__traits(compiles, T.init))
+        {
+            pragma(msg, "T.INIT");
+            alias typeof(T) _Typeof;
+        }
+        else static if (__traits(compiles, T().init))
+        {
+            pragma(msg, "T().INIT");
+            alias typeof(T().init) _Typeof;
+        }
+        else
+            static assert(false);
+    }
+
+    template _Typeof(T)
+    {
+        alias T _Typeof;
+    }
+
     T* _getVar(T)(ReplContext repl, size_t index)
     {
         return cast(T*)repl.symbols[index].addr;
@@ -260,8 +290,8 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
     file.write(dllHeader ~ code);
     file.close();
 
-    //if (!exists(repl.filename ~ ".d"))
-    //{
+    if (!exists(repl.filename ~ ".def"))
+    {
         // The .def
         file = File(repl.filename ~ ".def", "w");
 
@@ -273,17 +303,17 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
 
         file.write(def);
         file.close();
-    //}
+    }
 
     //-Ic:/cal/d/dmd2/src/druntime/src
     auto include = "-Ic:/d/dmd2/src/druntime/src ";
     //auto cmd2 = "dmd " ~ repl.filename ~ ".obj " ~ repl.filename ~ ".def";
     //auto cmd2 = "link /CODEVIEW /DEBUG " ~ filename ~ ".obj,,,phobos.lib+kernel32.lib," ~ filename ~ ".def";
 
-    auto cmd1 = "dmd -c "~ repl.filename ~ ".d";
-    auto cmd2 = "link " ~ repl.filename ~ ".obj,,,phobos.lib+kernel32.lib," ~ repl.filename ~ ".def";
+    auto cmd1 = "dmd "~ include ~ " " ~ repl.filename ~ ".d " ~ repl.filename ~ ".def";
+    //auto cmd2 = "link " ~ repl.filename ~ ".obj,,,phobos.lib+kernel32.lib," ~ repl.filename ~ ".def";
 
-    cmd1 ~= " & " ~ cmd2;
+    //cmd1 ~= " & " ~ cmd2;
 
     try{
         error = shell(cmd1);
@@ -309,7 +339,6 @@ static if (LOADER == "MEMORYMOD")
 
         HMEMORYMODULE _module;
         _module = MemoryLoadLibrary(data.ptr);
-        writeln("BEFORE");
 
         if (_module == null)
         {

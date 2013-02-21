@@ -64,15 +64,15 @@ ReplParse:
          /  VarDecl      {Parser.varDecl} ) {Parser.wrapShowType}
 
 
-    EnumDecl        <- wx ~("enum" ;ws ( ~Type ;ws Ident wx '=' AllUntil(';') ';'
-                                       / Ident wx '=' AllUntil(';') ';'
+    EnumDecl        <- wx ~("enum" ;ws ( ~Type ;ws Ident wx '=' GrabToColon ';'
+                                       / Ident wx '=' GrabToColon ';'
                                        / Ident wx ':' wx ~Type wx EnumBody
                                        / Ident wx EnumBody
                                        / Ident wx ';'
                                        / EnumBody
                                        / ':' wx ~Type wx EnumBody ))
 
-    EnumBody        <- wx AllBetween(LBrace,RBrace)
+    EnumBody        <- wx AllBetween(LBrace,RBrace) ';'?
 
     StructDecl      <- wx ~("struct" ws Ident wx ( ParameterList? wx Constraint? wx AllBetween(LBrace,RBrace) / ';' ) )
 

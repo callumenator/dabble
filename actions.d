@@ -218,29 +218,6 @@ struct Parser
         return t;
     }
 
-    static T addressOf(T)(T t)
-    {
-        if (t.successful)
-        {
-            t = ReplParse.decimateTree(t);
-            t.matches[0] = "_AddressOf(" ~ join(t.children[0].matches) ~ ")";
-        }
-
-        return t;
-    }
-
-    static T typeOf(T)(T t)
-    {
-        if (t.successful)
-        {
-            t = ReplParse.decimateTree(t);
-            t.matches[0] = "typeof(_Init(" ~ t.children[0].matches[0] ~ "))";
-            t.matches = t.matches[0..1];
-        }
-
-        return t;
-    }
-
     static T varRewrite(T)(T t)
     {
         if (t.successful)
@@ -289,13 +266,11 @@ struct Parser
                 {} // redifinition, pegged calling actions more than once
                 else
                 {
-                    writeln("DECL ", name);
-
                     string rhs;
-                    if (type == "auto")
+                    if (type == "auto" || p.name == "ReplParse.VarDeclInit")
                     {
                         rhs = strip(p.children[$-1].matches[0]);
-                        type = "typeof(" ~ rhs ~ ")";
+                        type = "_Typeof!(" ~ rhs ~ ")";
                     }
 
                     auto newSymbol = Symbol(name, type);
@@ -310,16 +285,14 @@ struct Parser
                     auto idx = s.repl.symbols.length - 1;
                     auto idxStr = idx.to!string;
 
+                    p.matches[2] = "(*" ~ p.matches[2] ~ ")";
+                    p.matches[0] = p.matches[2];
+                    p.matches = p.matches[0..1];
+
                     if (p.name == "ReplParse.VarDeclInit")
-                    {
-                        prefix ~= "auto "~name~" = _makeNew!("~type~")(_repl_,"~idxStr~","~rhs~");\n";
-                        p.matches[2] = "(*" ~ p.matches[2] ~ ")";
-                        p.matches[0] = p.matches[2];
-                    }
+                        prefix ~= "auto "~name~" = _makeNew(_repl_,"~idxStr~","~rhs~");\n";
                     else
                         prefix ~= "auto "~name~" = _makeNew!("~type~")(_repl_,"~idxStr~");\n";
-
-                    p.matches = p.matches[0..1];
                 }
             }
         }

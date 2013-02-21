@@ -79,30 +79,97 @@ string[] classRefs(T)()
     return refs.sort.uniq.array;
 }
 
-    string _showType(E)(lazy E expr)
+
+void stress(ReplContext repl)
+{
+    auto code =
+    ["struct S {int x, y = 5; }",
+     "a = [1,2,3,4];",
+     "b = a.sort;",
+     "c = b;",
+     "c.reverse;",
+     "foreach(ref i; c) i++;",
+     "s = `hello there`;",
+     "foreach(i; iota(150)) { s ~= `x`;}",
+     "writeln(s);",
+     "s = s[0..$-20];"
+     "writeln(s);",
+     "aa = [`one`:1, `two`:2, `three`:3, `four`:4];",
+     "writeln(aa[`two`]);",
+     "writeln(aa);",
+     "writeln(a);",
+     "enum Enum { one, two = 5, three = 7 }",
+     "ee = Enum.two;",
+     "write(ee, \"\n\");",
+     "ii = 0;",
+     "for(auto i=0; i<50; i++) ii++;",
+     "import std.array;",
+     "app = appender!string;",
+     "for(auto i=0; i<50; i++) app.put(`blah`);",
+     "writeln(app.data);"
+    ];
+
+    string err;
+    foreach(i, c; code)
     {
-        static if (__traits(compiles, typeof(expr)))
-        {
-            static if (is(typeof(expr) == void))
-            {
-                expr();
-                return "";
-            }
-            else
-                return expr().to!string;
-        }
+        writeln("Line: ", i, " -> ", c);
+        eval(c, repl, err);
     }
+}
+
+
+
+    template _Typeof(alias T)
+    {
+        static if (__traits(compiles, T.init))
+        {
+            pragma(msg, "T.INIT");
+            alias typeof(T) _Typeof;
+        }
+        else static if (__traits(compiles, T().init))
+        {
+            pragma(msg, "T().INIT");
+            alias typeof(T().init) _Typeof;
+        }
+        else
+            static assert(false);
+    }
+
+    template _Typeof(T)
+    {
+        alias T _Typeof;
+    }
+
+
+    T* _makeNew(T)(ref ReplContext repl, size_t index, T t = T.init)
+    {
+        void* ptr;
+        ptr = GC.calloc(T.sizeof);
+        GC.disable();
+        memcpy(ptr, &t, T.sizeof);
+        GC.enable();
+
+        return cast(T*)ptr;
+    }
+
+    //auto _makeNew(T)(ReplContext repl, size_t index, T t)
+    //{
+     //   return _makeNew!T(repl, index, t);
+    //}
 
 
 void main()
 {
 
-
     ReplContext repl;
     repl.gc = gc_getProxy();
 
-//string err;
-//eval("enum TEST { ONE, TWO, THREE }", repl, err);
+    //auto a = [1,2,3,4];
+    //pragma(msg, typeof(_makeNew(repl, 0, a.sort)).stringof);
+
+
+    //stress(repl);
+
     loop(repl, Debug.times);
 
     return;

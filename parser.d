@@ -63,15 +63,15 @@ ReplParse:
          /  VarDecl      {Parser.varDecl} ) {Parser.wrapShowType}
 
 
-    EnumDecl        <- wx ~("enum" ;ws ( ~Type ;ws Ident wx '=' AllUntil(';') ';'
-                                       / Ident wx '=' AllUntil(';') ';'
+    EnumDecl        <- wx ~("enum" ;ws ( ~Type ;ws Ident wx '=' GrabToColon ';'
+                                       / Ident wx '=' GrabToColon ';'
                                        / Ident wx ':' wx ~Type wx EnumBody
                                        / Ident wx EnumBody
                                        / Ident wx ';'
                                        / EnumBody
                                        / ':' wx ~Type wx EnumBody ))
 
-    EnumBody        <- wx AllBetween(LBrace,RBrace)
+    EnumBody        <- wx AllBetween(LBrace,RBrace) ';'?
 
     StructDecl      <- wx ~("struct" ws Ident wx ( ParameterList? wx Constraint? wx AllBetween(LBrace,RBrace) / ';' ) )
 
@@ -568,11 +568,11 @@ struct GenericReplParse(TParseTree)
 
     static TParseTree EnumDecl(TParseTree p)
     {
-         return pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("enum"), pegged.peg.drop!(ws), pegged.peg.or!(pegged.peg.and!(pegged.peg.fuse!(Type), pegged.peg.drop!(ws), Ident, wx, pegged.peg.literal!("="), AllUntil!(pegged.peg.literal!(";")), pegged.peg.literal!(";")), pegged.peg.and!(Ident, wx, pegged.peg.literal!("="), AllUntil!(pegged.peg.literal!(";")), pegged.peg.literal!(";")), pegged.peg.and!(Ident, wx, pegged.peg.literal!(":"), wx, pegged.peg.fuse!(Type), wx, EnumBody), pegged.peg.and!(Ident, wx, EnumBody), pegged.peg.and!(Ident, wx, pegged.peg.literal!(";")), EnumBody, pegged.peg.and!(pegged.peg.literal!(":"), wx, pegged.peg.fuse!(Type), wx, EnumBody))))), "ReplParse.EnumDecl")(p);
+         return pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("enum"), pegged.peg.drop!(ws), pegged.peg.or!(pegged.peg.and!(pegged.peg.fuse!(Type), pegged.peg.drop!(ws), Ident, wx, pegged.peg.literal!("="), GrabToColon, pegged.peg.literal!(";")), pegged.peg.and!(Ident, wx, pegged.peg.literal!("="), GrabToColon, pegged.peg.literal!(";")), pegged.peg.and!(Ident, wx, pegged.peg.literal!(":"), wx, pegged.peg.fuse!(Type), wx, EnumBody), pegged.peg.and!(Ident, wx, EnumBody), pegged.peg.and!(Ident, wx, pegged.peg.literal!(";")), EnumBody, pegged.peg.and!(pegged.peg.literal!(":"), wx, pegged.peg.fuse!(Type), wx, EnumBody))))), "ReplParse.EnumDecl")(p);
     }
     static TParseTree EnumDecl(string s)
     {
-        return pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("enum"), pegged.peg.drop!(ws), pegged.peg.or!(pegged.peg.and!(pegged.peg.fuse!(Type), pegged.peg.drop!(ws), Ident, wx, pegged.peg.literal!("="), AllUntil!(pegged.peg.literal!(";")), pegged.peg.literal!(";")), pegged.peg.and!(Ident, wx, pegged.peg.literal!("="), AllUntil!(pegged.peg.literal!(";")), pegged.peg.literal!(";")), pegged.peg.and!(Ident, wx, pegged.peg.literal!(":"), wx, pegged.peg.fuse!(Type), wx, EnumBody), pegged.peg.and!(Ident, wx, EnumBody), pegged.peg.and!(Ident, wx, pegged.peg.literal!(";")), EnumBody, pegged.peg.and!(pegged.peg.literal!(":"), wx, pegged.peg.fuse!(Type), wx, EnumBody))))), "ReplParse.EnumDecl")(TParseTree("", false,[], s));
+        return pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("enum"), pegged.peg.drop!(ws), pegged.peg.or!(pegged.peg.and!(pegged.peg.fuse!(Type), pegged.peg.drop!(ws), Ident, wx, pegged.peg.literal!("="), GrabToColon, pegged.peg.literal!(";")), pegged.peg.and!(Ident, wx, pegged.peg.literal!("="), GrabToColon, pegged.peg.literal!(";")), pegged.peg.and!(Ident, wx, pegged.peg.literal!(":"), wx, pegged.peg.fuse!(Type), wx, EnumBody), pegged.peg.and!(Ident, wx, EnumBody), pegged.peg.and!(Ident, wx, pegged.peg.literal!(";")), EnumBody, pegged.peg.and!(pegged.peg.literal!(":"), wx, pegged.peg.fuse!(Type), wx, EnumBody))))), "ReplParse.EnumDecl")(TParseTree("", false,[], s));
     }
     static string EnumDecl(GetName g)
     {
@@ -581,11 +581,11 @@ struct GenericReplParse(TParseTree)
 
     static TParseTree EnumBody(TParseTree p)
     {
-         return pegged.peg.named!(pegged.peg.and!(wx, AllBetween!(LBrace, RBrace)), "ReplParse.EnumBody")(p);
+         return pegged.peg.named!(pegged.peg.and!(wx, AllBetween!(LBrace, RBrace), pegged.peg.option!(pegged.peg.literal!(";"))), "ReplParse.EnumBody")(p);
     }
     static TParseTree EnumBody(string s)
     {
-        return pegged.peg.named!(pegged.peg.and!(wx, AllBetween!(LBrace, RBrace)), "ReplParse.EnumBody")(TParseTree("", false,[], s));
+        return pegged.peg.named!(pegged.peg.and!(wx, AllBetween!(LBrace, RBrace), pegged.peg.option!(pegged.peg.literal!(";"))), "ReplParse.EnumBody")(TParseTree("", false,[], s));
     }
     static string EnumBody(GetName g)
     {
