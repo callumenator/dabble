@@ -74,6 +74,12 @@ struct Symbol
     void* addr;
 }
 
+struct Vtbl
+{
+    string name;
+    void*[] vtbl;
+}
+
 struct ReplContext
 {
     string filename = "replDll";
@@ -179,6 +185,8 @@ bool eval(string code,
 
 bool buildCode(string code, ref ReplContext repl, ref string error)
 {
+    import util;
+
     enum dllHeader =
     `
     import rt.memory;
@@ -186,105 +194,7 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
     import std.c.stdio, std.c.string, std.c.stdlib, std.c.windows.windows;
     import core.sys.windows.dll, core.runtime, core.memory;
 
-    extern (C) void gc_setProxy(void*);
-    extern (C) void gc_clrProxy();
-    extern (C) void gc_init();
-    extern (C) void rt_moduleCtor();
-    extern (C) void rt_moduleTlsCtor();
-
-
-    HINSTANCE g_hInst;
-
-    extern(Windows) BOOL DllMain(HINSTANCE hInstance,DWORD ulReason,LPVOID lpvReserved)
-    {
-        final switch (ulReason)
-        {
-        case DLL_PROCESS_ATTACH:
-            //Runtime.initialize();
-            gc_init();
-            //initStaticDataGC();
-            rt_moduleCtor();
-            //rt_moduleTlsCtor();
-            GC.disable();
-            break;
-        case DLL_PROCESS_DETACH:
-            break;
-        case DLL_THREAD_ATTACH:
-            break;
-        case DLL_THREAD_DETACH:
-            break;
-        }
-        g_hInst = hInstance;
-        return true;
-    }
-
-    T* _makeNew(T)(ref ReplContext repl, size_t index, T t = T.init)
-    {
-        void* ptr;
-        ptr = GC.calloc(T.sizeof);
-        GC.disable();
-        memcpy(ptr, &t, T.sizeof);
-        GC.enable();
-
-        repl.symbols[index].type = T.stringof.idup;
-        repl.symbols[index].addr = ptr;
-        repl.symbols[index].isClass = _isClass!T;
-
-        static if (_isClass!T)
-        {
-            repl.vtbl ~= typeid(T).vtbl.dup;
-            repl.symbols[index].vtblIndex = repl.vtbl.length - 1;
-        }
-
-        return cast(T*)ptr;
-    }
-
-    template _Typeof(alias T)
-    {
-        static if (__traits(compiles, T.init))
-        {
-            pragma(msg, "T.INIT");
-            alias typeof(T) _Typeof;
-        }
-        else static if (__traits(compiles, T().init))
-        {
-            pragma(msg, "T().INIT");
-            alias typeof(T().init) _Typeof;
-        }
-        else
-            static assert(false);
-    }
-
-    template _Typeof(T)
-    {
-        alias T _Typeof;
-    }
-
-    T* _getVar(T)(ReplContext repl, size_t index)
-    {
-        return cast(T*)repl.symbols[index].addr;
-    }
-
-    template _isClass(T)
-    {
-        enum _isClass = __traits(compiles, __traits(classInstanceSize, T));
-    }
-
-    string _exprResult(E)(lazy E expr)
-    {
-        static if (__traits(compiles, typeof(expr)))
-        {
-            static if (is(typeof(expr) == void))
-            {
-                expr();
-                return "";
-            }
-            else
-                return expr().to!string;
-        }
-    }
-
-    ` ~ sharedDefs;
+    ` ~ utilstring ~ sharedDefs;
 
     auto file = File(repl.filename ~ ".d", "w");
     file.write(dllHeader ~ code);

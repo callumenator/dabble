@@ -285,8 +285,7 @@ struct Parser
                     auto idx = s.repl.symbols.length - 1;
                     auto idxStr = idx.to!string;
 
-                    p.matches[2] = "(*" ~ p.matches[2] ~ ")";
-                    p.matches[0] = p.matches[2];
+                    p.matches[0] = "(*" ~ p.matches[2] ~ ")";
                     p.matches = p.matches[0..1];
 
                     if (p.name == "ReplParse.VarDeclInit")

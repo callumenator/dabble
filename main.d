@@ -19,16 +19,6 @@ import
     actions,
     grammartest;
 
-void* makeNew(T)()
-{
-    void* ptr;
-    T t = T.init;
-    ptr = GC.calloc(T.sizeof);
-    GC.disable();
-    memcpy(ptr, &t, T.sizeof);
-    GC.enable();
-    return ptr;
-}
 
 class A { void* a; }
 class B { int z; A** a;}
@@ -106,7 +96,17 @@ void stress(ReplContext repl)
      "import std.array;",
      "app = appender!string;",
      "for(auto i=0; i<50; i++) app.put(`blah`);",
-     "writeln(app.data);"
+     "writeln(app.data);",
+     "import std.container;",
+     "ar = Array!int(4, 6, 2, 3, 8, 0, 2);",
+     "sort(ar);",
+     "foreach(val; ar[]){ writeln(val); }"
+    ];
+
+    code =
+    ["class C { int a; }",
+     "c = new C;",
+     "writeln(c);"
     ];
 
     string err;
@@ -119,58 +119,15 @@ void stress(ReplContext repl)
 
 
 
-    template _Typeof(alias T)
-    {
-        static if (__traits(compiles, T.init))
-        {
-            pragma(msg, "T.INIT");
-            alias typeof(T) _Typeof;
-        }
-        else static if (__traits(compiles, T().init))
-        {
-            pragma(msg, "T().INIT");
-            alias typeof(T().init) _Typeof;
-        }
-        else
-            static assert(false);
-    }
-
-    template _Typeof(T)
-    {
-        alias T _Typeof;
-    }
-
-
-    T* _makeNew(T)(ref ReplContext repl, size_t index, T t = T.init)
-    {
-        void* ptr;
-        ptr = GC.calloc(T.sizeof);
-        GC.disable();
-        memcpy(ptr, &t, T.sizeof);
-        GC.enable();
-
-        return cast(T*)ptr;
-    }
-
-    //auto _makeNew(T)(ReplContext repl, size_t index, T t)
-    //{
-     //   return _makeNew!T(repl, index, t);
-    //}
-
-
 void main()
 {
 
     ReplContext repl;
     repl.gc = gc_getProxy();
 
-    //auto a = [1,2,3,4];
-    //pragma(msg, typeof(_makeNew(repl, 0, a.sort)).stringof);
+    stress(repl);
 
-
-    //stress(repl);
-
-    loop(repl, Debug.times);
+    //loop(repl, Debug.times);
 
     return;
 
