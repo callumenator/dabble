@@ -103,6 +103,7 @@ struct Parser
                "return 0;\n" ~
                "}\n\n" ~
                "void _main2(ref ReplContext _repl_) {\n" ~
+               "auto dummy = 1.to!string;\n" ~
                wrap[0] ~ //"writeln(`A`);\n" ~
                prefix ~
                makeCode(p) ~ //"writeln(`B`);\n" ~

@@ -192,13 +192,14 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
     extern (C) void gc_setProxy(void*);
     extern (C) void gc_clrProxy();
 
-    HINSTANCE g_hInst;
+    __gshared HINSTANCE g_hInst;
 
     extern(Windows) BOOL DllMain(HINSTANCE hInstance,DWORD ulReason,LPVOID lpvReserved)
     {
         final switch (ulReason)
         {
         case DLL_PROCESS_ATTACH:
+            g_hInst = hInstance;
             Runtime.initialize();
             break;
         case DLL_PROCESS_DETACH:

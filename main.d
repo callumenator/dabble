@@ -101,6 +101,8 @@ void main()
     ReplContext repl;
     repl.gc = gc_getProxy();
 
+//string err;
+//eval("enum TEST { ONE, TWO, THREE }", repl, err);
     loop(repl, Debug.times);
 
     return;
