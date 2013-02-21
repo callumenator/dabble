@@ -90,9 +90,6 @@ struct ReplContext
 void loop(ref ReplContext repl,
           Debug flag = Debug.none)
 {
-    //if (exists(repl.filename ~ ".dll"))
-    //    remove(repl.filename ~ ".dll");
-
     string error;
     char[] lineBuffer;
     stdin.readln(lineBuffer);
@@ -110,7 +107,6 @@ void loop(ref ReplContext repl,
             }
             default:
             {
-                string result;
                 if (eval(lineBuffer.to!string, repl, error, flag))
                     writeln(error);
             }
@@ -192,15 +188,15 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
     extern (C) void gc_setProxy(void*);
     extern (C) void gc_clrProxy();
 
-    __gshared HINSTANCE g_hInst;
+    HINSTANCE g_hInst;
 
     extern(Windows) BOOL DllMain(HINSTANCE hInstance,DWORD ulReason,LPVOID lpvReserved)
     {
         final switch (ulReason)
         {
         case DLL_PROCESS_ATTACH:
-            g_hInst = hInstance;
             Runtime.initialize();
+            GC.disable();
             break;
         case DLL_PROCESS_DETACH:
             break;
@@ -272,8 +268,8 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
         enum def = "LIBRARY replDll\n" ~
                    "DESCRIPTION 'replDll'\n" ~
                    "EXETYPE	 NT\n" ~
-                   "CODE PRELOAD DISCARDABLE\n" ~
-                   "DATA PRELOAD MULTIPLE";
+                   "CODE PRELOAD\n" ~
+                   "DATA PRELOAD";
 
         file.write(def);
         file.close();
@@ -284,7 +280,10 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
     //auto cmd2 = "dmd " ~ repl.filename ~ ".obj " ~ repl.filename ~ ".def";
     //auto cmd2 = "link /CODEVIEW /DEBUG " ~ filename ~ ".obj,,,phobos.lib+kernel32.lib," ~ filename ~ ".def";
 
-    auto cmd1 = "dmd -g " ~include ~" "~ repl.filename ~ ".d " ~ repl.filename ~ ".def";
+    auto cmd1 = "dmd -c "~ repl.filename ~ ".d";
+    auto cmd2 = "link " ~ repl.filename ~ ".obj,,,phobos.lib+kernel32.lib," ~ repl.filename ~ ".def";
+
+    cmd1 ~= " & " ~ cmd2;
 
     try{
         error = shell(cmd1);
