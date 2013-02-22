@@ -50,6 +50,12 @@ enum sharedDefs =
         void* addr;
     }
 
+    struct Vtbl
+    {
+        string name;
+        void*[] vtbl;
+    }
+
     struct ReplContext
     {
         string filename = "replDll";
@@ -57,7 +63,7 @@ enum sharedDefs =
         string[] userTypes;
         Symbol[] symbols;
         int[string] symbolSet;
-        void*[][] vtbl;
+        Vtbl[] vtbls;
         void* gc;
         bool verbose = false;
     }
@@ -87,7 +93,7 @@ struct ReplContext
     string[] userTypes;
     Symbol[] symbols;
     int[string] symbolSet;
-    void*[][] vtbl;
+    Vtbl[] vtbls;
     void* gc;
     bool verbose = false;
 }

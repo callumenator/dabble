@@ -37,6 +37,8 @@ enum string utilstring =
 
     T* _makeNew(T)(ref ReplContext repl, size_t index, T t = T.init)
     {
+        import std.traits;
+
         void* ptr;
         ptr = GC.calloc(T.sizeof);
         GC.disable();
@@ -49,9 +51,12 @@ enum string utilstring =
 
         static if (_isClass!T)
         {
-            repl.vtbl ~= typeid(T).vtbl.dup;
-            repl.symbols[index].vtblIndex = repl.vtbl.length - 1;
+            //repl.vtbl ~= typeid(T).vtbl.dup;
+            //repl.symbols[index].vtblIndex = repl.vtbl.length - 1;
         }
+
+        static if (isAggregateType!(RawType!T))
+            _copyVtables!T(repl);
 
         return cast(T*)ptr;
     }
@@ -110,6 +115,8 @@ enum string utilstring =
     **/
     template RawType(T)
     {
+        import std.traits;
+
         static if (isPointer!T)
             alias RawType!(PointerTarget!T) RawType;
         else static if (isArray!T)
@@ -122,24 +129,56 @@ enum string utilstring =
 
     string[] classRefs(T)()
     {
+        import std.algorithm, std.traits;
+
         string[] refs;
         alias RawType!T _rawType;
 
-        static if (isArray!T || isPointer!T)
-        {
-            static if (__traits(compiles, __traits(classInstanceSize, _rawType)))
-                refs ~= _rawType.stringof;
-        }
+        static if (_isClass!_rawType)
+            refs ~= _rawType.stringof;
 
-        foreach(member; __traits(allMembers, _rawType))
+        static if (isAggregateType!_rawType)
         {
-            static if (__traits(compiles, typeof(mixin(_rawType.stringof~"."~member))))
+            foreach(member; __traits(allMembers, _rawType))
             {
-                alias RawType!(typeof(mixin(_rawType.stringof~"."~member))) _type;
-                static if (__traits(compiles, __traits(classInstanceSize, _type)))
-                    refs ~= _type.stringof ~ classRefs!_type;
+                static if (__traits(compiles, typeof(mixin(_rawType.stringof~"."~member))))
+                {
+                    alias RawType!(typeof(mixin(_rawType.stringof~"."~member))) _type;
+                    static if (_isClass!_type)
+                        refs ~= _type.stringof ~ classRefs!_type;
+                }
             }
         }
-        return refs.sort.uniq.array;
+
+        /++
+        static if (isArray!T || isPointer!T)
+        {
+            static if (_isClass!_rawType)
+                refs ~= _rawType.stringof;
+        }
+        ++/
+
+        return refs.sort().uniq.array;
     }
+
+    void _copyVtables(T)(ref ReplContext repl)
+    {
+        void _fillVtables(T, int N)(ref ReplContext repl)
+        {
+            static if (N >= 0)
+            {
+                enum cr = classRefs!T;
+
+                if (!canFind!"a.name == b"(repl.vtbls, cr[N]))
+                    mixin("repl.vtbls ~= Vtbl(\""~cr[N]~"\".idup, typeid("~cr[N]~").vtbl.dup);");
+
+                _fillVtables!(T, N-1)(repl);
+            }
+            else
+                return;
+        }
+
+        _fillVtables!(T, (classRefs!T).length-1)(repl);
+    }
+
 `;

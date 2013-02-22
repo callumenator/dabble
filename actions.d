@@ -37,16 +37,11 @@ struct ParseState
 
         // Declared Vars
         int stop = newVars == -1 ? repl.symbols.length : newVars;
-        foreach(idx, sym; repl.symbols[0..stop])
+        foreach(idx, ref sym; repl.symbols[0..stop])
         {
             prefix ~= "auto "~sym.name~" = _getVar!("~sym.type~")(_repl_,"~idx.to!string~");\n";
 
-            if (sym.isClass)
-                prefix ~= "memcpy(_repl_.vtbl[" ~ sym.vtblIndex.to!string ~ "].ptr, "
-                        ~ "typeid(" ~ sym.type ~ ").vtbl.ptr, "
-                        ~ "typeid(" ~ sym.type ~ ").vtbl.length * (void*).sizeof);\n";
-
-            suffix ~= "_repl_.symbols[" ~ idx.to!string
+            suffix ~= "if (*"~sym.name~" !is null) _repl_.symbols[" ~ idx.to!string
                     ~ "].current = to!string(*" ~ sym.name ~ ").idup;\n";
         }
 
@@ -54,7 +49,7 @@ struct ParseState
         {
             foreach(idx, sym; repl.symbols[newVars..$])
             {
-                suffix ~= "_repl_.symbols[" ~ (idx+newVars).to!string
+                suffix ~= "if (*"~sym.name~" !is null) _repl_.symbols[" ~ (idx+newVars).to!string
                         ~ "].current = to!string(*" ~ sym.name ~ ").idup;\n";
             }
         }
@@ -104,24 +99,27 @@ struct Parser
                "}\n\n" ~
                "void _main2(ref ReplContext _repl_) {\n" ~
                "auto dummy = 1.to!string;\n" ~
-               wrap[0] ~ //"writeln(`A`);\n" ~
-               prefix ~
-               makeCode(p) ~ //"writeln(`B`);\n" ~
-               wrap[1] ~ //"writeln(`C`);\n" ~
-               "if (_finalType.length != 0) writeln(`=> `, _finalType);\n" ~
+               "\n" ~ genFixups() ~
+               "\n" ~ wrap[0] ~ //"writeln(`A`);\n" ~
+               "\n" ~ prefix ~
+               "\n" ~ makeCode(p) ~ //"writeln(`B`);\n" ~
+               "\n" ~ wrap[1] ~ //"writeln(`C`);\n" ~
+               "\nif (_finalType.length != 0) writeln(`=> `, _finalType);\n" ~
                "}\n";
     }
 
     static string makeCode(T)(T t)
     {
-        auto code = std.array.join(t.matches);
-        return code;
-        auto lines = splitter(code, ";");
-        auto result = "";
-        foreach(line; lines)
-            if (strip(line).length != 0)
-                result ~= "_finalType = _expResult("~line~");\n";
-        return result;
+        return std.array.join(t.matches);
+    }
+
+    static string genFixups()
+    {
+        string fixup;
+        foreach(i, v; s.repl.vtbls)
+            fixup ~= "memcpy(_repl_.vtbls["~i.to!string~"].vtbl.ptr, typeid("~v.name~").vtbl.ptr, "
+                   ~ "typeid("~v.name~").vtbl.length * (void*).sizeof);\n";
+        return fixup;
     }
 
     static T incDepth(T)(T t)
@@ -292,6 +290,13 @@ struct Parser
                         prefix ~= "auto "~name~" = _makeNew(_repl_,"~idxStr~","~rhs~");\n";
                     else
                         prefix ~= "auto "~name~" = _makeNew!("~type~")(_repl_,"~idxStr~");\n";
+
+                    /++
+                    prefix ~= "if (_repl_.symbols["~idxStr~"].isClass) {\n"
+                            ~ "  auto entry = countUntil!`a.name == b`(_repl_.vtbls, _repl_.symbols["~idxStr~"].type);\n"
+                            ~ "  auto _ptr = _repl_.vtbls[entry].vtbl.ptr;\n"
+                            ~ "  memcpy(*cast(void***)"~name~", &_ptr, (void*).sizeof);\n}\n";
+                    ++/
                 }
             }
         }
@@ -394,11 +399,18 @@ void deadSymbols(ref ReplContext repl)
 {
     Symbol[] keep;
     foreach(sym; repl.symbols)
+    {
         if (sym.current !is null)
+        {
             keep ~= sym;
+            writeln("ALIVE SYMBOL: ", sym.current);
+        }
         else
+        {
             repl.symbolSet.remove(sym.name);
-
+            writeln("KILLED SYMBOL: ", sym.current);
+        }
+    }
     repl.symbols = keep;
 }
 
@@ -423,6 +435,7 @@ string castSymbolToRef(Symbol sym, uint index)
     return "(*cast(Ref!("~sym.type~")*)_repl_.symbols["~index.to!string~"].addr)";
 }
 
+/++
 void fixupVtbls(ref ReplContext repl)
 {
     foreach(sym; repl.symbols)
@@ -434,5 +447,5 @@ void fixupVtbls(ref ReplContext repl)
         }
     }
 }
-
+++/
 

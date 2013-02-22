@@ -66,11 +66,12 @@ string[] classRefs(T)()
                 refs ~= _type.stringof ~ classRefs!_type;
         }
     }
-    return refs.sort.uniq.array;
+    return refs.sort().uniq.array;
 }
 
 
-void stress(ReplContext repl)
+
+void stress(ref ReplContext repl)
 {
     auto code =
     ["struct S {int x, y = 5; }",
@@ -105,8 +106,6 @@ void stress(ReplContext repl)
 
     code =
     ["class C { int a; }",
-     "c = new C;",
-     "writeln(c);"
     ];
 
     string err;
@@ -118,6 +117,25 @@ void stress(ReplContext repl)
 }
 
 
+void _copyVtables(T)(ref ReplContext repl)
+{
+    void _fillVtables(T, int N)(ref ReplContext repl)
+    {
+        static if (N >= 0)
+        {
+            enum cr = classRefs!T;
+
+            if (!canFind!"a.name == b"(repl.vtbls, cr[N]))
+                mixin("repl.vtbls ~= Vtbl(`"~cr[N]~"`, typeid(" ~ cr[N] ~ ").vtbl.dup);");
+
+            _fillVtables!(T, N-1)(repl);
+        }
+        else
+            return;
+    }
+
+    _fillVtables!(T, (classRefs!T).length-1)(repl);
+}
 
 void main()
 {
@@ -125,9 +143,10 @@ void main()
     ReplContext repl;
     repl.gc = gc_getProxy();
 
+
     stress(repl);
 
-    //loop(repl, Debug.times);
+    loop(repl, Debug.times);
 
     return;
 

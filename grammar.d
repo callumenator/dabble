@@ -126,7 +126,7 @@ ReplParse:
 
     AddressOf <- ((:'&' (:w / LBracket)* Ident)(!('['/'.'/'(')))
 
-    VarRewrite <- Skip / Ident {Parser.varRewrite}
+    VarRewrite <- Skip / Ident {Parser.varRewrite} (wx '.' wx Ident)*
 
     Skip <- TemplateArg
     TemplateArg <- wx '!' wx BwParens(.)

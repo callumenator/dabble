@@ -125,7 +125,7 @@ ReplParse:
 
     AddressOf <- ((:'&' (:w / LBracket)* Ident)(!('['/'.'/'(')))
 
-    VarRewrite <- Skip / Ident {Parser.varRewrite}
+    VarRewrite <- Skip / Ident {Parser.varRewrite} (wx '.' wx Ident)*
 
     Skip <- TemplateArg
     TemplateArg <- wx '!' wx BwParens(.)
@@ -880,11 +880,11 @@ struct GenericReplParse(TParseTree)
 
     static TParseTree VarRewrite(TParseTree p)
     {
-         return pegged.peg.named!(pegged.peg.or!(Skip, pegged.peg.action!(Ident, Parser.varRewrite)), "ReplParse.VarRewrite")(p);
+         return pegged.peg.named!(pegged.peg.or!(Skip, pegged.peg.and!(pegged.peg.action!(Ident, Parser.varRewrite), pegged.peg.zeroOrMore!(pegged.peg.and!(wx, pegged.peg.literal!("."), wx, Ident)))), "ReplParse.VarRewrite")(p);
     }
     static TParseTree VarRewrite(string s)
     {
-        return pegged.peg.named!(pegged.peg.or!(Skip, pegged.peg.action!(Ident, Parser.varRewrite)), "ReplParse.VarRewrite")(TParseTree("", false,[], s));
+        return pegged.peg.named!(pegged.peg.or!(Skip, pegged.peg.and!(pegged.peg.action!(Ident, Parser.varRewrite), pegged.peg.zeroOrMore!(pegged.peg.and!(wx, pegged.peg.literal!("."), wx, Ident)))), "ReplParse.VarRewrite")(TParseTree("", false,[], s));
     }
     static string VarRewrite(GetName g)
     {
