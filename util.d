@@ -181,4 +181,19 @@ enum string utilstring =
         _fillVtables!(T, (classRefs!T).length-1)(repl);
     }
 
+    extern (C) Object _d_newclass(const ClassInfo ci)
+    {
+        import core.memory;
+        void* p;
+
+        p = GC.malloc(ci.init.length,
+                      GC.BlkAttr.FINALIZE | (ci.m_flags & 2 ? GC.BlkAttr.NO_SCAN : 0));
+
+        // initialize it
+        (cast(byte*) p)[0 .. ci.init.length] = ci.init[];
+
+        return cast(Object) p;
+    }
+
+
 `;

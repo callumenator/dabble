@@ -137,9 +137,9 @@ void _copyVtables(T)(ref ReplContext repl)
     _fillVtables!(T, (classRefs!T).length-1)(repl);
 }
 
+
 void main()
 {
-
     ReplContext repl;
     repl.gc = gc_getProxy();
 
