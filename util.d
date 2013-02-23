@@ -108,6 +108,27 @@ enum string utilstring =
             return T.stringof;
     }
 
+    template _Typeof(alias T)
+    {
+        static if (__traits(compiles, T.init))
+        {
+            pragma(msg, "T.INIT");
+            alias typeof(T) _Typeof;
+        }
+        else static if (__traits(compiles, T().init))
+        {
+            pragma(msg, "T().INIT");
+            alias typeof(T().init) _Typeof;
+        }
+        else
+            static assert(false);
+    }
+
+    template _Typeof(T)
+    {
+        alias T _Typeof;
+    }
+
     T* _getVar(T)(ReplContext repl, size_t index)
     {
         return cast(T*)repl.symbols[index].addr;

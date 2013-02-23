@@ -141,19 +141,40 @@ void stress(ref ReplContext repl)
 
 import std.container, std.traits, std.demangle;
 
-string _typeOf(T)(T t)
-{
-    static if (__traits(compiles, __traits(parent, T)))
+    string _typeOf(T)(T t)
     {
-        auto parent = __traits(parent, T).stringof;
-        if (parent != T.stringof)
-            return parent ~ "." ~ T.stringof;
+        static if (__traits(compiles, __traits(parent, T)))
+        {
+            auto parent = __traits(parent, T).stringof;
+            if (parent != T.stringof)
+                return parent ~ "." ~ T.stringof;
+            else
+                return T.stringof;
+        }
         else
             return T.stringof;
     }
-    else
-        return T.stringof;
-}
+
+    template _Typeof(alias T)
+    {
+        static if (__traits(compiles, T.init))
+        {
+            pragma(msg, "T.INIT");
+            alias typeof(T) _Typeof;
+        }
+        else static if (__traits(compiles, T().init))
+        {
+            pragma(msg, "T().INIT");
+            alias typeof(T().init) _Typeof;
+        }
+        else
+            static assert(false);
+    }
+
+    template _Typeof(T)
+    {
+        alias T _Typeof;
+    }
 
     string _exprResult(E)(lazy E expr)
     {
@@ -186,7 +207,7 @@ void main()
     repl.symbols.length = 10;
     auto a = _makeNew!"appender!string"(repl, 0, appender!string);
     auto ar = _getVar!(typeof(appender!string))(repl,0);
-    writeln(_typeOf(ar));
+    writeln(_Typeof!(appender!string));
     //auto result = _exprResult((*ar).put(`HELLO`.idup));
     //writeln(result);
     //writeln((*ar).data);
