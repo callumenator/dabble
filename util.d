@@ -9,18 +9,18 @@ enum string utilstring =
     extern (C) void rt_moduleCtor();
     extern (C) void rt_moduleTlsCtor();
 
-
     HINSTANCE g_hInst;
 
     extern(Windows) BOOL DllMain(HINSTANCE hInstance,DWORD ulReason,LPVOID lpvReserved)
     {
+        g_hInst = hInstance;
         final switch (ulReason)
         {
         case DLL_PROCESS_ATTACH:
-            //Runtime.initialize();
-            gc_init();
+            Runtime.initialize();
+            //gc_init();
             //initStaticDataGC();
-            rt_moduleCtor();
+            //rt_moduleCtor();
             //rt_moduleTlsCtor();
             GC.disable();
             break;
@@ -31,11 +31,11 @@ enum string utilstring =
         case DLL_THREAD_DETACH:
             break;
         }
-        g_hInst = hInstance;
         return true;
     }
 
-    T* _makeNew(T)(ref ReplContext repl, size_t index, T t = T.init)
+
+    T* _makeNewImplA(T)(ref ReplContext repl, size_t index, T t = T.init)
     {
         import std.traits;
 
@@ -45,52 +45,64 @@ enum string utilstring =
         memcpy(ptr, &t, T.sizeof);
         GC.enable();
 
-        repl.symbols[index].type = T.stringof.idup;
+        repl.symbols[index].type = _typeOf(*_v).idup;
         repl.symbols[index].addr = ptr;
-        repl.symbols[index].isClass = _isClass!T;
-
-        static if (_isClass!T)
-        {
-            //repl.vtbl ~= typeid(T).vtbl.dup;
-            //repl.symbols[index].vtblIndex = repl.vtbl.length - 1;
-        }
-
-        static if (isAggregateType!(RawType!T))
-            _copyVtables!T(repl);
 
         return cast(T*)ptr;
     }
 
-    template _Typeof(alias T)
+
+    auto _makeNewImplB(string s)(ref ReplContext repl, size_t index)
     {
-        static if (__traits(compiles, T.init))
+        mixin("alias typeof("~s~") _T;");
+        enum assign = "auto _v = new "~s~";";
+        static if (__traits(compiles, mixin("{"~assign~"}")))
+            mixin(assign);
+        else
         {
-            pragma(msg, "T.INIT");
-            alias typeof(T) _Typeof;
+            static if (isArray!_T || __traits(compiles, __traits(classInstanceSize, _T)))
+            {
+                mixin("auto _init = "~s~";");
+                auto _v = GC.calloc(_T.sizeof);
+                GC.disable();
+                memcpy(_v, &_init, _T.sizeof);
+                GC.enable();
+            }
+            else
+            {
+                mixin("auto _v = new typeof("~s~");");
+                mixin("*_v = "~s~";");
+            }
         }
-        else static if (__traits(compiles, T().init))
+
+        repl.symbols[index].type = _typeOf(*_v).idup;
+        repl.symbols[index].addr = _v;
+        return cast(_T*)_v;
+    }
+
+    auto _makeNew(string s, T)(ref ReplContext repl, size_t index, T t = T.init)
+    {
+        enum assign = "{auto _v = new "~s~";}";
+        static if (__traits(compiles, mixin(assign)))
+            return _makeNewImplB!s(repl, index);
+        else
+            return _makeNewImplA(repl, index, t);
+    }
+
+    string _typeOf(T)(T t)
+    {
+        static if (__traits(compiles, __traits(parent, T)))
         {
-            pragma(msg, "T().INIT");
-            alias typeof(T().init) _Typeof;
+            auto parent = __traits(parent, T).stringof;
+            if (parent != T.stringof)
+                return parent ~ "." ~ T.stringof;
+            else
+                return T.stringof;
         }
         else
-            static assert(false);
+            return T.stringof;
     }
 
-    template _Typeof(T)
-    {
-        alias T _Typeof;
-    }
-
-    T* _getVar(T)(ReplContext repl, size_t index)
-    {
-        return cast(T*)repl.symbols[index].addr;
-    }
-
-    template _isClass(T)
-    {
-        enum _isClass = __traits(compiles, __traits(classInstanceSize, T));
-    }
 
     string _exprResult(E)(lazy E expr)
     {
@@ -102,8 +114,58 @@ enum string utilstring =
                 return "";
             }
             else
-                return expr().to!string;
+            {
+                //writeln(expr().to!string);
+                return "";expr().to!string;
+            }
+
         }
+    }
+
+    extern (C) Object _d_newclass(const ClassInfo ci)
+    {
+        import core.memory, std.string;
+        void* p;
+
+        p = GC.malloc(ci.init.length,
+                      GC.BlkAttr.FINALIZE | (ci.m_flags & 2 ? GC.BlkAttr.NO_SCAN : 0));
+
+        (cast(byte*) p)[0 .. ci.init.length] = ci.init[];
+
+        auto obj = cast(Object) p;
+        _hookNewClass(typeid(obj), p);
+        return obj;
+    }
+
+`;
+
+
+
+/++
+
+    template _isClass(T)
+    {
+        enum _isClass = __traits(compiles, __traits(classInstanceSize, T));
+    }
+
+    void _copyVtables(T)(ref ReplContext repl)
+    {
+        void _fillVtables(T, int N)(ref ReplContext repl)
+        {
+            static if (N >= 0)
+            {
+                enum cr = classRefs!T;
+
+                if (!canFind!"a.name == b"(repl.vtbls, cr[N]))
+                    mixin("repl.vtbls ~= Vtbl(\""~cr[N]~"\".idup, typeid("~cr[N]~").vtbl.dup);");
+
+                _fillVtables!(T, N-1)(repl);
+            }
+            else
+                return;
+        }
+
+        _fillVtables!(T, (classRefs!T).length-1)(repl);
     }
 
     /**
@@ -160,40 +222,4 @@ enum string utilstring =
 
         return refs.sort().uniq.array;
     }
-
-    void _copyVtables(T)(ref ReplContext repl)
-    {
-        void _fillVtables(T, int N)(ref ReplContext repl)
-        {
-            static if (N >= 0)
-            {
-                enum cr = classRefs!T;
-
-                if (!canFind!"a.name == b"(repl.vtbls, cr[N]))
-                    mixin("repl.vtbls ~= Vtbl(\""~cr[N]~"\".idup, typeid("~cr[N]~").vtbl.dup);");
-
-                _fillVtables!(T, N-1)(repl);
-            }
-            else
-                return;
-        }
-
-        _fillVtables!(T, (classRefs!T).length-1)(repl);
-    }
-
-    extern (C) Object _d_newclass(const ClassInfo ci)
-    {
-        import core.memory;
-        void* p;
-
-        p = GC.malloc(ci.init.length,
-                      GC.BlkAttr.FINALIZE | (ci.m_flags & 2 ? GC.BlkAttr.NO_SCAN : 0));
-
-        // initialize it
-        (cast(byte*) p)[0 .. ci.init.length] = ci.init[];
-
-        return cast(Object) p;
-    }
-
-
-`;
+++/

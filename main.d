@@ -27,48 +27,6 @@ class D { C[B] c; B[int] b; }
 struct S { int a; }
 
 
-/**
-Aliases itself to the underlying type of T. E.g.:
-----
-alias A*[] _type;
-assert(is(RawType!_type == A));
----
-**/
-template RawType(T)
-{
-    static if (isPointer!T)
-        alias RawType!(PointerTarget!T) RawType;
-    else static if (isArray!T)
-        alias RawType!(ForeachType!T) RawType;
-    else static if (isAssociativeArray!T)
-        alias RawType!(ValueType!T) RawType;
-    else
-        alias T RawType;
-}
-
-string[] classRefs(T)()
-{
-    string[] refs;
-    alias RawType!T _rawType;
-
-    static if (isArray!T || isPointer!T)
-    {
-        static if (__traits(compiles, __traits(classInstanceSize, _rawType)))
-            refs ~= _rawType.stringof;
-    }
-
-    foreach(member; __traits(allMembers, _rawType))
-    {
-        static if (__traits(compiles, typeof(mixin(_rawType.stringof~"."~member))))
-        {
-            alias RawType!(typeof(mixin(_rawType.stringof~"."~member))) _type;
-            static if (__traits(compiles, __traits(classInstanceSize, _type)))
-                refs ~= _type.stringof ~ classRefs!_type;
-        }
-    }
-    return refs.sort().uniq.array;
-}
-
 
 
 void stress(ref ReplContext repl)
@@ -104,9 +62,14 @@ void stress(ref ReplContext repl)
      "foreach(val; ar[]){ writeln(val); }"
     ];
 
+
     code =
-    ["class C { int a; }",
+    ["import std.container;",
+     "ar = Array!int(4, 6, 2, 3, 8, 0, 2);",
+     "b = ar[];",
+     "c = b;"
     ];
+
 
     string err;
     foreach(i, c; code)
@@ -116,27 +79,82 @@ void stress(ref ReplContext repl)
     }
 }
 
-
-void _copyVtables(T)(ref ReplContext repl)
-{
-    void _fillVtables(T, int N)(ref ReplContext repl)
+    T* _makeNewImplA(T)(ref ReplContext repl, size_t index, T t = T.init)
     {
-        static if (N >= 0)
-        {
-            enum cr = classRefs!T;
+        import std.traits;
 
-            if (!canFind!"a.name == b"(repl.vtbls, cr[N]))
-                mixin("repl.vtbls ~= Vtbl(`"~cr[N]~"`, typeid(" ~ cr[N] ~ ").vtbl.dup);");
+        void* ptr;
+        ptr = GC.calloc(T.sizeof);
+        GC.disable();
+        memcpy(ptr, &t, T.sizeof);
+        GC.enable();
 
-            _fillVtables!(T, N-1)(repl);
-        }
-        else
-            return;
+        repl.symbols[index].type = T.stringof.idup;
+        repl.symbols[index].addr = ptr;
+
+        return cast(T*)ptr;
     }
 
-    _fillVtables!(T, (classRefs!T).length-1)(repl);
-}
 
+    auto _makeNewImplB(string s)(ref ReplContext repl, size_t index)
+    {
+        mixin("alias typeof("~s~") _T;");
+        enum assign = "auto _v = new "~s~";";
+        static if (__traits(compiles, mixin("{"~assign~"}")))
+            mixin(assign);
+        else
+        {
+            static if (isArray!_T || __traits(compiles, __traits(classInstanceSize, _T)))
+            {
+                mixin("auto _init = "~s~";");
+                auto _v = GC.calloc(_T.sizeof);
+                GC.disable();
+                memcpy(_v, &_init, _T.sizeof);
+                GC.enable();
+            }
+            else
+            {
+                mixin("auto _v = new typeof("~s~");");
+                mixin("*_v = "~s~";");
+            }
+        }
+
+        repl.symbols[index].type = _T.stringof.idup;
+        repl.symbols[index].addr = _v;
+        return cast(_T*)_v;
+    }
+
+    auto _makeNew(string s, T)(ref ReplContext repl, size_t index, T t = T.init)
+    {
+        enum assign = "{auto _v = new "~s~";}";
+        static if (__traits(compiles, mixin(assign)))
+        {
+            pragma(msg, "B");
+            return _makeNewImplB!s(repl, index);
+        }
+        else
+        {
+            pragma(msg, "A");
+            return _makeNewImplA(repl, index, t);
+        }
+    }
+
+
+import std.container, std.traits, std.demangle;
+
+string _typeOf(T)(T t)
+{
+    static if (__traits(compiles, __traits(parent, T)))
+    {
+        auto parent = __traits(parent, T).stringof;
+        if (parent != T.stringof)
+            return parent ~ "." ~ T.stringof;
+        else
+            return T.stringof;
+    }
+    else
+        return T.stringof;
+}
 
 void main()
 {
@@ -146,7 +164,7 @@ void main()
 
     stress(repl);
 
-    loop(repl, Debug.times);
+    //loop(repl, Debug.times);
 
     return;
 

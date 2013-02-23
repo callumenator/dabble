@@ -41,7 +41,7 @@ struct ParseState
         {
             prefix ~= "auto "~sym.name~" = _getVar!("~sym.type~")(_repl_,"~idx.to!string~");\n";
 
-            suffix ~= "if (*"~sym.name~" !is null) _repl_.symbols[" ~ idx.to!string
+            suffix ~= "_repl_.symbols[" ~ idx.to!string
                     ~ "].current = to!string(*" ~ sym.name ~ ").idup;\n";
         }
 
@@ -49,7 +49,7 @@ struct ParseState
         {
             foreach(idx, sym; repl.symbols[newVars..$])
             {
-                suffix ~= "if (*"~sym.name~" !is null) _repl_.symbols[" ~ (idx+newVars).to!string
+                suffix ~= "_repl_.symbols[" ~ (idx+newVars).to!string
                         ~ "].current = to!string(*" ~ sym.name ~ ").idup;\n";
             }
         }
@@ -100,10 +100,10 @@ struct Parser
                "void _main2(ref ReplContext _repl_) {\n" ~
                "auto dummy = 1.to!string;\n" ~
                "\n" ~ genFixups() ~
-               "\n" ~ wrap[0] ~ //"writeln(`A`);\n" ~
+               "\n" ~ wrap[0] ~ "writeln(`A`);\n" ~
                "\n" ~ prefix ~
-               "\n" ~ makeCode(p) ~ //"writeln(`B`);\n" ~
-               "\n" ~ wrap[1] ~ //"writeln(`C`);\n" ~
+               "\n" ~ makeCode(p) ~ "writeln(`B`);\n" ~
+               "\n" ~ wrap[1] ~ "writeln(`C`);\n" ~
                "\nif (_finalType.length != 0) writeln(`=> `, _finalType);\n" ~
                "}\n";
     }
@@ -268,7 +268,8 @@ struct Parser
                     if (type == "auto" || p.name == "ReplParse.VarDeclInit")
                     {
                         rhs = strip(p.children[$-1].matches[0]);
-                        type = "_Typeof!(" ~ rhs ~ ")";
+                        //type = "_Typeof!(" ~ rhs ~ ")";
+                        type = "typeof(" ~ rhs ~ ")";
                     }
 
                     auto newSymbol = Symbol(name, type);
@@ -287,16 +288,9 @@ struct Parser
                     p.matches = p.matches[0..1];
 
                     if (p.name == "ReplParse.VarDeclInit")
-                        prefix ~= "auto "~name~" = _makeNew(_repl_,"~idxStr~","~rhs~");\n";
+                        prefix ~= "auto "~name~" = _makeNew!q\"#"~rhs~"#\"(_repl_,"~idxStr~","~rhs~");\n";
                     else
                         prefix ~= "auto "~name~" = _makeNew!("~type~")(_repl_,"~idxStr~");\n";
-
-                    /++
-                    prefix ~= "if (_repl_.symbols["~idxStr~"].isClass) {\n"
-                            ~ "  auto entry = countUntil!`a.name == b`(_repl_.vtbls, _repl_.symbols["~idxStr~"].type);\n"
-                            ~ "  auto _ptr = _repl_.vtbls[entry].vtbl.ptr;\n"
-                            ~ "  memcpy(*cast(void***)"~name~", &_ptr, (void*).sizeof);\n}\n";
-                    ++/
                 }
             }
         }

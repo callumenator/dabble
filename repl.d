@@ -45,8 +45,6 @@ enum sharedDefs =
         string type;
         string current;
         string checkType;
-        uint vtblIndex;
-        bool isClass;
         void* addr;
     }
 
@@ -75,8 +73,6 @@ struct Symbol
     string type;
     string current;
     string checkType;
-    uint vtblIndex;
-    bool isClass;
     void* addr;
 }
 
@@ -98,7 +94,6 @@ struct ReplContext
     bool verbose = false;
 }
 
-
 void loop(ref ReplContext repl,
           Debug flag = Debug.none)
 {
@@ -113,7 +108,7 @@ void loop(ref ReplContext repl,
             case "print":
             {
                 foreach(val; repl.symbols)
-                    writeln(val.name, " (", val.type, ") = ", val.current, " isClass?: ", val.isClass);
+                    writeln(val.name, " (", val.type, ") = ", val.current);
 
                 break;
             }
@@ -184,23 +179,77 @@ bool eval(string code,
     //resolveTypes(repl);
     //fixupVtbls(repl);
 
-    deadSymbols(repl);
-
+    //deadSymbols(repl);
+    hookNewClass(typeid(Object), null, &repl);
     return 0;
+}
+
+extern(C) void hookNewClass(TypeInfo_Class ti, void* cptr, ReplContext* repl)
+{
+
+    import core.thread, std.string;
+    static __gshared uint _count = 0;
+    static __gshared string[] names;
+    static __gshared void*[][] vtbls;
+    static __gshared void*[] ptrs;
+
+    if (_count == 0 && ti.name == "core.thread.Thread")
+        return;
+
+    if (repl is null)
+    {
+        names ~= ti.name.idup;
+        vtbls ~= ti.vtbl.dup;
+        ptrs ~= cptr;
+    }
+    else
+    {
+        import std.algorithm;
+        foreach(i; 0..names.length)
+        {
+            size_t index = countUntil!"a.name == b"(repl.vtbls, names[i]);
+            void* ptr;
+
+            if (index == -1) // No entry exists, dup the vtable
+            {
+                repl.vtbls ~= Vtbl(names[i].idup, vtbls[i].dup);
+                index = repl.vtbls.length - 1;
+                ptr = repl.vtbls[index].vtbl.ptr;
+            }
+            else
+                ptr = repl.vtbls[index].vtbl.ptr;
+
+            // Now redirect the vtable pointer in the class
+            memcpy(ptrs[i], &ptr, (void*).sizeof);
+        }
+        names.clear;
+        vtbls.clear;
+        ptrs.clear;
+        _count = 0;
+    }
 }
 
 bool buildCode(string code, ref ReplContext repl, ref string error)
 {
     import util;
 
-    enum dllHeader =
+    string dllHeader =
     `
-    import rt.memory;
-    import std.stdio, std.conv, std.range, std.algorithm;
+
+    import std.stdio, std.conv, std.range, std.algorithm, std.traits;
     import std.c.stdio, std.c.string, std.c.stdlib, std.c.windows.windows;
     import core.sys.windows.dll, core.runtime, core.memory;
 
-    ` ~ utilstring ~ sharedDefs;
+    void _hookNewClass(TypeInfo_Class ti, void* cptr)
+    {
+        alias extern(C) void function(TypeInfo_Class, void*, ReplContext*) cb;
+        auto fp = cast(cb)(0x` ~ (&hookNewClass).to!string ~ `);
+        fp(ti, cptr, null);
+    }
+
+    `
+    ~ utilstring ~ sharedDefs;
+
 
     auto file = File(repl.filename ~ ".d", "w");
     file.write(dllHeader ~ code);
@@ -222,12 +271,12 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
     }
 
     //-Ic:/cal/d/dmd2/src/druntime/src
-    auto include = "-Ic:/d/dmd2/src/druntime/src ";
+    auto include = `-Ic:\d\dmd2\src\druntime\src `;
     //auto cmd2 = "dmd " ~ repl.filename ~ ".obj " ~ repl.filename ~ ".def";
     //auto cmd2 = "link /CODEVIEW /DEBUG " ~ filename ~ ".obj,,,phobos.lib+kernel32.lib," ~ filename ~ ".def";
 
     auto cmd1 = "dmd "~ include ~ " " ~ repl.filename ~ ".d " ~ repl.filename ~ ".def";
-    //auto cmd2 = "link " ~ repl.filename ~ ".obj,,,phobos.lib+kernel32.lib," ~ repl.filename ~ ".def";
+    auto cmd2 = "link " ~ repl.filename ~ ".obj,,,phobos.lib+kernel32.lib," ~ repl.filename ~ ".def";
 
     //cmd1 ~= " & " ~ cmd2;
 
