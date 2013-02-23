@@ -21,7 +21,8 @@ import
 import
     loader,
     parser,
-    actions;
+    actions,
+    util;
 
 extern(C) void* gc_getProxy();
 
@@ -33,39 +34,6 @@ enum Debug
     times       = 0x01,
     parseOnly   = 0x02
 }
-
-/**
-* Defs that are shared between this module and the compiled dll
-*/
-enum sharedDefs =
-`
-    struct Symbol
-    {
-        string name;
-        string type;
-        string current;
-        string checkType;
-        void* addr;
-    }
-
-    struct Vtbl
-    {
-        string name;
-        void*[] vtbl;
-    }
-
-    struct ReplContext
-    {
-        string filename = "replDll";
-        string[] imports;
-        string[] userTypes;
-        Symbol[] symbols;
-        int[string] symbolSet;
-        Vtbl[] vtbls;
-        void* gc;
-        bool verbose = false;
-    }
-`;
 
 struct Symbol
 {
@@ -93,6 +61,7 @@ struct ReplContext
     void* gc;
     bool verbose = false;
 }
+
 
 void loop(ref ReplContext repl,
           Debug flag = Debug.none)
@@ -129,14 +98,28 @@ bool eval(string code,
           ref string error,
           Debug flag = Debug.none)
 {
+    Tuple!(long,"parse",long,"build",long,"call") _times;
+
+    scope(success)
+    {
+        if (flag & Debug.times)
+        {
+            write("TIMINGS: parse: ", _times.parse);
+            if (!(flag & Debug.parseOnly))
+            {
+                write(", build: ", _times.build);
+                write(", call: ", _times.call);
+                writeln(", TOTAL: ", _times.parse + _times.build + _times.call);
+            }
+        }
+    }
+
+
     StopWatch sw;
     sw.start();
 
     auto text = Parser.go(code, repl);
-    auto parseTime = sw.peek().msecs();
-
-    if (flag & Debug.times)
-        writeln("PARSE: ", parseTime);
+    _times.parse = sw.peek().msecs();
 
     if (flag & Debug.parseOnly)
     {
@@ -152,10 +135,7 @@ bool eval(string code,
 
     sw.reset();
     auto build = buildCode(text, repl, error);
-    auto buildTime = sw.peek().msecs();
-
-    if (flag & Debug.times)
-        writeln("BUILD: ", buildTime);
+    _times.build = sw.peek().msecs();
 
     if (build)
         return 1;
@@ -165,99 +145,26 @@ bool eval(string code,
 
     sw.reset();
     auto call = callCode(loadCode(repl.filename), repl, error);
-    auto callTime = sw.peek().msecs();
-
-    if (flag & Debug.times)
-        writeln("CALL: ", callTime);
+    _times.call = sw.peek().msecs();
 
     if (call)
         return 1;
-
-    if (flag & Debug.times)
-        writeln("TOTAL: ", parseTime + buildTime + callTime);
-
-    //resolveTypes(repl);
-    //fixupVtbls(repl);
 
     //deadSymbols(repl);
     hookNewClass(typeid(Object), null, &repl);
     return 0;
 }
 
-extern(C) void hookNewClass(TypeInfo_Class ti, void* cptr, ReplContext* repl)
-{
 
-    import core.thread, std.string;
-    static __gshared uint _count = 0;
-    static __gshared string[] names;
-    static __gshared void*[][] vtbls;
-    static __gshared void*[] ptrs;
-
-    if (_count == 0 && ti.name == "core.thread.Thread")
-        return;
-
-    if (repl is null)
-    {
-        names ~= ti.name.idup;
-        vtbls ~= ti.vtbl.dup;
-        ptrs ~= cptr;
-    }
-    else
-    {
-        import std.algorithm;
-        foreach(i; 0..names.length)
-        {
-            size_t index = countUntil!"a.name == b"(repl.vtbls, names[i]);
-            void* ptr;
-
-            if (index == -1) // No entry exists, dup the vtable
-            {
-                repl.vtbls ~= Vtbl(names[i].idup, vtbls[i].dup);
-                index = repl.vtbls.length - 1;
-                ptr = repl.vtbls[index].vtbl.ptr;
-            }
-            else
-                ptr = repl.vtbls[index].vtbl.ptr;
-
-            // Now redirect the vtable pointer in the class
-            memcpy(ptrs[i], &ptr, (void*).sizeof);
-        }
-        names.clear;
-        vtbls.clear;
-        ptrs.clear;
-        _count = 0;
-    }
-}
 
 bool buildCode(string code, ref ReplContext repl, ref string error)
 {
-    import util;
-
-    string dllHeader =
-    `
-
-    import std.stdio, std.conv, std.range, std.algorithm, std.traits;
-    import std.c.stdio, std.c.string, std.c.stdlib, std.c.windows.windows;
-    import core.sys.windows.dll, core.runtime, core.memory;
-
-    void _hookNewClass(TypeInfo_Class ti, void* cptr)
-    {
-        alias extern(C) void function(TypeInfo_Class, void*, ReplContext*) cb;
-        auto fp = cast(cb)(0x` ~ (&hookNewClass).to!string ~ `);
-        fp(ti, cptr, null);
-    }
-
-    `
-    ~ utilstring ~ sharedDefs;
-
-
     auto file = File(repl.filename ~ ".d", "w");
-    file.write(dllHeader ~ code);
+    file.write(genHeader() ~ code);
     file.close();
 
     if (!exists(repl.filename ~ ".def"))
     {
-        // The .def
         file = File(repl.filename ~ ".def", "w");
 
         enum def = "LIBRARY replDll\n" ~
@@ -270,28 +177,20 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
         file.close();
     }
 
-    //-Ic:/cal/d/dmd2/src/druntime/src
-    auto include = `-Ic:\d\dmd2\src\druntime\src `;
-    //auto cmd2 = "dmd " ~ repl.filename ~ ".obj " ~ repl.filename ~ ".def";
-    //auto cmd2 = "link /CODEVIEW /DEBUG " ~ filename ~ ".obj,,,phobos.lib+kernel32.lib," ~ filename ~ ".def";
-
-    auto cmd1 = "dmd "~ include ~ " " ~ repl.filename ~ ".d " ~ repl.filename ~ ".def";
-    auto cmd2 = "link " ~ repl.filename ~ ".obj,,,phobos.lib+kernel32.lib," ~ repl.filename ~ ".def";
-
-    //cmd1 ~= " & " ~ cmd2;
+    auto cmd1 = "dmd -J../drepl " ~ repl.filename ~ ".d " ~ repl.filename ~ ".def";
+    //auto cmd2 = "link " ~ repl.filename ~ ".obj,,,phobos.lib+kernel32.lib," ~ repl.filename ~ ".def";
 
     try{
         error = shell(cmd1);
 		if (error.length)
              writeln(error);
-
         return 0;
     }
     catch(Exception e) {
         return 1;
     }
 
-    return 0;
+    assert(false);
 }
 
 

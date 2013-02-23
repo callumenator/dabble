@@ -1,8 +1,73 @@
 
 module util;
 
-enum string utilstring =
+import std.conv : to;
+
+import
+    repl;
+
+
+/**
+* The DLL replaces the runtime _d_newclass in order to intercept
+* class allocations, and redirect the classes to point at copies
+* of the vtables on the heap. This function is called from within
+* the DLL for each new class allocation.
+*/
+extern(C) void hookNewClass(TypeInfo_Class ti, void* cptr, ReplContext* repl)
+{
+    import std.algorithm : countUntil;
+    import std.c.string : memcpy;
+
+    struct _Info { string name; void*[] vtbl; void* classPtr; }
+
+    static __gshared uint count = 0;
+    static __gshared _Info[] infos;
+
+    if (count == 0 && ti.name == "core.thread.Thread")
+        return;
+
+    if (repl is null)
+    {
+        count++;
+        infos ~= _Info(ti.name.idup, ti.vtbl.dup, cptr);
+    }
+    else
+    {
+        foreach(i; infos)
+        {
+            void* vtblPtr = null;
+            size_t index = countUntil!"a.name == b"(repl.vtbls, i.name);
+
+            if (index == -1) // No entry exists, need to dup the vtable
+            {
+                repl.vtbls ~= Vtbl(i.name, i.vtbl);
+                index = repl.vtbls.length - 1;
+            }
+
+            vtblPtr = repl.vtbls[index].vtbl.ptr;
+
+            assert(vtblPtr !is null, "Null vtbl pointer");
+
+            // Now redirect the vtable pointer in the class
+            memcpy(i.classPtr, &vtblPtr, (void*).sizeof);
+        }
+        count = 0;
+        infos.clear;
+    }
+}
+
+/**
+* Generate the DLL header. This needs to be done dynamically, as we
+* take the address of hookNewClass, and hard-code it in the DLL (!)
+*/
+string genHeader()
+{
+    return
 `
+    import std.stdio, std.conv, std.range, std.algorithm, std.traits;
+    import std.c.stdio, std.c.string, std.c.stdlib, std.c.windows.windows;
+    import core.sys.windows.dll, core.runtime, core.memory;
+
     extern (C) void gc_setProxy(void*);
     extern (C) void gc_clrProxy();
     extern (C) void gc_init();
@@ -35,6 +100,33 @@ enum string utilstring =
     }
 
 
+    struct Symbol
+    {
+        string name;
+        string type;
+        string current;
+        string checkType;
+        void* addr;
+    }
+
+    struct Vtbl
+    {
+        string name;
+        void*[] vtbl;
+    }
+
+    struct ReplContext
+    {
+        string filename = "replDll";
+        string[] imports;
+        string[] userTypes;
+        Symbol[] symbols;
+        int[string] symbolSet;
+        Vtbl[] vtbls;
+        void* gc;
+        bool verbose = false;
+    }
+
     T* _makeNewImplA(T)(ref ReplContext repl, size_t index, T t = T.init)
     {
         import std.traits;
@@ -45,12 +137,9 @@ enum string utilstring =
         memcpy(ptr, &t, T.sizeof);
         GC.enable();
 
-        repl.symbols[index].type = _typeOf(t).idup;
         repl.symbols[index].addr = ptr;
-
         return cast(T*)ptr;
     }
-
 
     auto _makeNewImplB(string s)(ref ReplContext repl, size_t index)
     {
@@ -79,8 +168,6 @@ enum string utilstring =
                 mixin("*_v = "~s~";");
             }
         }
-
-        repl.symbols[index].type = _typeOf(*_v).idup;
         repl.symbols[index].addr = _v;
         return cast(_T*)_v;
     }
@@ -94,6 +181,7 @@ enum string utilstring =
             return _makeNewImplA(repl, index, t);
     }
 
+    /++
     string _typeOf(T)(T t)
     {
         static if (__traits(compiles, __traits(parent, T)))
@@ -107,19 +195,14 @@ enum string utilstring =
         else
             return T.stringof;
     }
+    ++/
 
     template _Typeof(alias T)
     {
         static if (__traits(compiles, T.init))
-        {
-            pragma(msg, "T.INIT");
             alias typeof(T) _Typeof;
-        }
         else static if (__traits(compiles, T().init))
-        {
-            pragma(msg, "T().INIT");
             alias typeof(T().init) _Typeof;
-        }
         else
             static assert(false);
     }
@@ -167,89 +250,11 @@ enum string utilstring =
         return obj;
     }
 
+    void _hookNewClass(TypeInfo_Class ti, void* cptr)
+    {
+        alias extern(C) void function(TypeInfo_Class, void*, ReplContext*) cb;
+        auto fp = cast(cb)(0x` ~ (&hookNewClass).to!string ~ `);
+        fp(ti, cptr, null);
+    }
 `;
-
-
-
-/++
-
-    template _isClass(T)
-    {
-        enum _isClass = __traits(compiles, __traits(classInstanceSize, T));
-    }
-
-    void _copyVtables(T)(ref ReplContext repl)
-    {
-        void _fillVtables(T, int N)(ref ReplContext repl)
-        {
-            static if (N >= 0)
-            {
-                enum cr = classRefs!T;
-
-                if (!canFind!"a.name == b"(repl.vtbls, cr[N]))
-                    mixin("repl.vtbls ~= Vtbl(\""~cr[N]~"\".idup, typeid("~cr[N]~").vtbl.dup);");
-
-                _fillVtables!(T, N-1)(repl);
-            }
-            else
-                return;
-        }
-
-        _fillVtables!(T, (classRefs!T).length-1)(repl);
-    }
-
-    /**
-    Aliases itself to the underlying type of T. E.g.:
-    ----
-    alias A*[] _type;
-    assert(is(RawType!_type == A));
-    ---
-    **/
-    template RawType(T)
-    {
-        import std.traits;
-
-        static if (isPointer!T)
-            alias RawType!(PointerTarget!T) RawType;
-        else static if (isArray!T)
-            alias RawType!(ForeachType!T) RawType;
-        else static if (isAssociativeArray!T)
-            alias RawType!(ValueType!T) RawType;
-        else
-            alias T RawType;
-    }
-
-    string[] classRefs(T)()
-    {
-        import std.algorithm, std.traits;
-
-        string[] refs;
-        alias RawType!T _rawType;
-
-        static if (_isClass!_rawType)
-            refs ~= _rawType.stringof;
-
-        static if (isAggregateType!_rawType)
-        {
-            foreach(member; __traits(allMembers, _rawType))
-            {
-                static if (__traits(compiles, typeof(mixin(_rawType.stringof~"."~member))))
-                {
-                    alias RawType!(typeof(mixin(_rawType.stringof~"."~member))) _type;
-                    static if (_isClass!_type)
-                        refs ~= _type.stringof ~ classRefs!_type;
-                }
-            }
-        }
-
-        /++
-        static if (isArray!T || isPointer!T)
-        {
-            static if (_isClass!_rawType)
-                refs ~= _rawType.stringof;
-        }
-        ++/
-
-        return refs.sort().uniq.array;
-    }
-++/
+}
