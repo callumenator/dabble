@@ -64,9 +64,11 @@ void stress(ref ReplContext repl)
 
 
     code =
-    ["import std.array;",
-     "ar = appender!string;",
-     "ar.put(`hello`);"
+    ["import std.container;",
+     "ar = Array!int(1,5,2,7,3,7,3);",
+     "ar.insertBack(10);",
+     "ar.insertBack(10);",
+     "ar.insertBack(10);"
     ];
 
 
@@ -74,7 +76,7 @@ void stress(ref ReplContext repl)
     foreach(i, c; code)
     {
         writeln("Line: ", i, " -> ", c);
-        eval(c, repl, err);
+        eval(c, repl, err, Debug.times);
     }
 }
 
@@ -204,16 +206,19 @@ void main()
     ReplContext repl;
     repl.gc = gc_getProxy();
 
+/++
     repl.symbols.length = 10;
-    auto a = _makeNew!"appender!string"(repl, 0, appender!string);
-    auto ar = _getVar!(typeof(appender!string))(repl,0);
-    writeln(_Typeof!(appender!string));
+    auto a = _makeNew!"Array!int(1,2,3,4,5)"(repl, 0, Array!int(1,2,3,4,5));
+    auto ar = _getVar!(typeof(Array!int(1,2,3,4,5)))(repl,0);
+    auto s = (*ar).to!string;
+
     //auto result = _exprResult((*ar).put(`HELLO`.idup));
     //writeln(result);
     //writeln((*ar).data);
 
-
-    //stress(repl);
+    //pragma(msg, __traits(compiles, _Typeof!(Array!int(1,2,3,4,5))));
+++/
+    stress(repl);
 
     //loop(repl, Debug.times);
 

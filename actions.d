@@ -268,11 +268,11 @@ struct Parser
                     if (type == "auto" || p.name == "ReplParse.VarDeclInit")
                     {
                         rhs = strip(p.children[$-1].matches[0]);
-                        type = "typeof(" ~ rhs ~ ")";
+                        type = "_Typeof!(" ~ rhs ~ ")";
                     }
 
                     auto newSymbol = Symbol(name, type);
-                    newSymbol.checkType = type;
+
 
                     s.repl.symbols ~= newSymbol;
 
@@ -288,9 +288,20 @@ struct Parser
                     p.matches = p.matches[0..1];
 
                     if (p.name == "ReplParse.VarDeclInit")
+                    {
                         prefix ~= "auto "~name~" = _makeNew!q\"#"~rhs~"#\"(_repl_,"~idxStr~","~rhs~");\n";
+                        prefix ~= "static if (__traits(compiles, _Typeof!("~rhs~"))) \n";
+                        prefix ~= "_repl_.symbols["~idxStr~"].checkType = `_Typeof!("~rhs~")`.idup;\n";
+                        prefix ~= "else \n";
+                        prefix ~= "_repl_.symbols["~idxStr~"].checkType = `typeof("~rhs~")`.idup;\n";
+                    }
                     else
+                    {
                         prefix ~= "auto "~name~" = _makeNew!("~type~")(_repl_,"~idxStr~");\n";
+                        newSymbol.checkType = type;
+                    }
+
+
                 }
             }
         }
