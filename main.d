@@ -64,10 +64,9 @@ void stress(ref ReplContext repl)
 
 
     code =
-    ["import std.container;",
-     "ar = Array!int(4, 6, 2, 3, 8, 0, 2);",
-     "b = ar[];",
-     "c = b;"
+    ["import std.array;",
+     "ar = appender!string;",
+     "ar.put(`hello`);"
     ];
 
 
@@ -82,7 +81,7 @@ void stress(ref ReplContext repl)
     T* _makeNewImplA(T)(ref ReplContext repl, size_t index, T t = T.init)
     {
         import std.traits;
-
+        pragma(msg, "IMPL A")
         void* ptr;
         ptr = GC.calloc(T.sizeof);
         GC.disable();
@@ -156,13 +155,44 @@ string _typeOf(T)(T t)
         return T.stringof;
 }
 
+    string _exprResult(E)(lazy E expr)
+    {
+        static if (__traits(compiles, typeof(expr)))
+        {
+            static if (is(typeof(expr) == void))
+            {
+                expr();
+                return "";
+            }
+            else
+            {
+                return expr().to!string;
+            }
+
+        }
+    }
+    T* _getVar(T)(ReplContext repl, size_t index)
+    {
+        return cast(T*)repl.symbols[index].addr;
+    }
+
+import std.array;
+
 void main()
 {
     ReplContext repl;
     repl.gc = gc_getProxy();
 
+    repl.symbols.length = 10;
+    auto a = _makeNew!"appender!string"(repl, 0, appender!string);
+    auto ar = _getVar!(typeof(appender!string))(repl,0);
+    writeln(_typeOf(ar));
+    //auto result = _exprResult((*ar).put(`HELLO`.idup));
+    //writeln(result);
+    //writeln((*ar).data);
 
-    stress(repl);
+
+    //stress(repl);
 
     //loop(repl, Debug.times);
 

@@ -283,7 +283,8 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
     try{
         error = shell(cmd1);
 		if (error.length)
-            writeln(error);
+             writeln(error);
+
         return 0;
     }
     catch(Exception e) {

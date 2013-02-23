@@ -45,7 +45,7 @@ enum string utilstring =
         memcpy(ptr, &t, T.sizeof);
         GC.enable();
 
-        repl.symbols[index].type = _typeOf(*_v).idup;
+        repl.symbols[index].type = _typeOf(t).idup;
         repl.symbols[index].addr = ptr;
 
         return cast(T*)ptr;
@@ -57,11 +57,15 @@ enum string utilstring =
         mixin("alias typeof("~s~") _T;");
         enum assign = "auto _v = new "~s~";";
         static if (__traits(compiles, mixin("{"~assign~"}")))
+        {
+            writeln("IMPL B - 1");
             mixin(assign);
+        }
         else
         {
             static if (isArray!_T || __traits(compiles, __traits(classInstanceSize, _T)))
             {
+                writeln("IMPL B - 2");
                 mixin("auto _init = "~s~";");
                 auto _v = GC.calloc(_T.sizeof);
                 GC.disable();
@@ -70,6 +74,7 @@ enum string utilstring =
             }
             else
             {
+                writeln("IMPL B - 3");
                 mixin("auto _v = new typeof("~s~");");
                 mixin("*_v = "~s~";");
             }
@@ -103,6 +108,11 @@ enum string utilstring =
             return T.stringof;
     }
 
+    T* _getVar(T)(ReplContext repl, size_t index)
+    {
+        return cast(T*)repl.symbols[index].addr;
+    }
+
 
     string _exprResult(E)(lazy E expr)
     {
@@ -115,8 +125,7 @@ enum string utilstring =
             }
             else
             {
-                //writeln(expr().to!string);
-                return "";expr().to!string;
+                return expr().to!string;
             }
 
         }

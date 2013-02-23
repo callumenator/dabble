@@ -39,7 +39,7 @@ struct ParseState
         int stop = newVars == -1 ? repl.symbols.length : newVars;
         foreach(idx, ref sym; repl.symbols[0..stop])
         {
-            prefix ~= "auto "~sym.name~" = _getVar!("~sym.type~")(_repl_,"~idx.to!string~");\n";
+            prefix ~= "auto "~sym.name~" = _getVar!("~sym.checkType~")(_repl_,"~idx.to!string~");\n";
 
             suffix ~= "_repl_.symbols[" ~ idx.to!string
                     ~ "].current = to!string(*" ~ sym.name ~ ").idup;\n";
@@ -268,11 +268,11 @@ struct Parser
                     if (type == "auto" || p.name == "ReplParse.VarDeclInit")
                     {
                         rhs = strip(p.children[$-1].matches[0]);
-                        //type = "_Typeof!(" ~ rhs ~ ")";
                         type = "typeof(" ~ rhs ~ ")";
                     }
 
                     auto newSymbol = Symbol(name, type);
+                    newSymbol.checkType = type;
 
                     s.repl.symbols ~= newSymbol;
 
