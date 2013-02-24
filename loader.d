@@ -32,11 +32,6 @@ import
     std.c.stdlib,
     core.sys.windows.windows;
 
-version(DEBUG_OUTPUT)
-{
-//#include <stdio.h>
-}
-
 extern(C) int    stricmp(char* s1, char* s2);
 extern(Windows)
 {

@@ -40,7 +40,7 @@ struct ParseState
         foreach(idx, sym; repl.symbols)
         {
             if (idx < stop) // var is not new, grab it from ReplContext
-                prefix ~= "auto "~sym.name~" = _getVar!("~sym.checkType~")(_repl_,"~idx.to!string~");\n";
+                prefix ~= "auto "~sym.name~" = _REPL.getVar!("~sym.checkType~")(_repl_,"~idx.to!string~");\n";
 
             suffix ~= "_repl_.symbols["~idx.to!string~"].current = to!string(*"~sym.name~").idup;\n";
         }
@@ -60,7 +60,8 @@ struct Parser
 
     static string go(string input, ref ReplContext repl)
     {
-        suffix = "";
+        prefix.clear;
+        suffix.clear;
         verbose = repl.verbose;
         s = ParseState();
         s.repl = &repl;
@@ -80,23 +81,23 @@ struct Parser
         auto wrap = s.genWrapper();
         return s.genImports() ~
                s.genTypes() ~
-               "export extern(C) int _main(ref ReplContext _repl_) {\n" ~
-               "auto dummy = 1.to!string;\n" ~
-               "gc_setProxy(_repl_.gc);\n" ~
-               "import std.exception;\n" ~
-               "auto e = collectException!Error(_main2(_repl_));\n" ~
-               "if (e) { writeln(e.msg); return -1; }\n" ~
-               "return 0;\n" ~
+               "export extern(C) int _main(ref _REPL.ReplContext _repl_) {\n" ~
+               "   auto dummy = 1.to!string;\n" ~
+               "   gc_setProxy(_repl_.gc);\n" ~
+               "   import std.exception;\n" ~
+               "   auto e = collectException!Error(_main2(_repl_));\n" ~
+               "   if (e) { writeln(e.msg); return -1; }\n" ~
+               "   return 0;\n" ~
                "}\n\n" ~
 
-               "void _main2(ref ReplContext _repl_) {\n" ~
-               "\n  string _expressionResult = ``;\n" ~
-               "\n  " ~ genFixups() ~
-               "\n  " ~ wrap[0] ~ //"writeln(`A`);\n" ~
-               "\n  " ~ prefix ~
-               "\n  " ~ makeCode(p) ~ //"writeln(`B`);\n" ~
-               "\n  " ~ wrap[1] ~ //"writeln(`C`);\n" ~
-               "\n  if (_expressionResult.length != 0) writeln(`=> `, _expressionResult);\n" ~
+               "void _main2(ref _REPL.ReplContext _repl_) {\n" ~
+               "\nstring _expressionResult = ``;\n" ~
+               "\n" ~ genFixups() ~
+               "\n" ~ wrap[0] ~ //"writeln(`A`);\n" ~
+               "\n" ~ prefix ~
+               "\n" ~ makeCode(p) ~ //"writeln(`B`);\n" ~
+               "\n" ~ wrap[1] ~ //"writeln(`C`);\n" ~
+               "\nif (_expressionResult.length != 0) writeln(`=> `, _expressionResult);\n" ~
                "}\n";
     }
 
@@ -202,7 +203,7 @@ struct Parser
         if (t.successful)
         {
             t = ReplParse.decimateTree(t);
-            t.matches[0] = "_finalType = _exprResult("~t.matches[0]~");";
+            t.matches[0] = "_expressionResult = _REPL.exprResult("~t.matches[0]~");";
         }
 
         return t;
@@ -260,7 +261,7 @@ struct Parser
                     if (type == "auto" || p.name == "ReplParse.VarDeclInit")
                     {
                         rhs = strip(p.children[$-1].matches[0]);
-                        rhsType = "_Typeof!(" ~ rhs ~ ")";
+                        rhsType = "_REPL.Typeof!(" ~ rhs ~ ")";
                     }
 
                     s.repl.symbols ~= Symbol(name);
@@ -280,27 +281,24 @@ struct Parser
                     {
                         if (type != "auto")
                         {
-                            prefix ~= type~"* "~name~" = cast("~type~"*)_makeNew!q\"#"~rhs~"#\"(_repl_,"~idxStr~","~rhs~");\n";
+                            prefix ~= type~"* "~name~" = cast("~type~"*)_REPL.makeNew!q\"#"~rhs~"#\"(_repl_,"~idxStr~","~rhs~");\n";
                             s.repl.symbols[idx].checkType = type;
                         }
                         else
                         {
-                            prefix ~= "auto "~name~" = _makeNew!q\"#"~rhs~"#\"(_repl_,"~idxStr~","~rhs~");\n";
-                            prefix ~= "static if (__traits(compiles, _Typeof!("~rhs~"))) \n";
-                            prefix ~= "_repl_.symbols["~idxStr~"].checkType = q\"#_Typeof!("~rhs~")#\".idup;\n";
+                            prefix ~= "auto "~name~" = _REPL.makeNew!q\"#"~rhs~"#\"(_repl_,"~idxStr~","~rhs~");\n";
+                            prefix ~= "static if (__traits(compiles, _REPL.Typeof!("~rhs~"))) \n";
+                            prefix ~= "  _repl_.symbols["~idxStr~"].checkType = q\"#_REPL.Typeof!("~rhs~")#\".idup;\n";
                             prefix ~= "else \n";
-                            prefix ~= "_repl_.symbols["~idxStr~"].checkType = q\"#typeof("~rhs~")#\".idup;\n";
+                            prefix ~= "  _repl_.symbols["~idxStr~"].checkType = q\"#typeof("~rhs~")#\".idup;\n";
                         }
                     }
                     else
                     {
-                        prefix ~= type~"* "~name~" = _makeNew!(``,"~type~")(_repl_,"~idxStr~");\n";
+                        prefix ~= type~"* "~name~" = _REPL.makeNew!(``,"~type~")(_repl_,"~idxStr~");\n";
                         s.repl.symbols[idx].checkType = type;
-
                     }
                     prefix ~= "_repl_.symbols["~idxStr~"].type = typeof(*"~name~").stringof.idup;\n";
-
-
                 }
             }
         }

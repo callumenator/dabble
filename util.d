@@ -99,139 +99,126 @@ string genHeader()
         return true;
     }
 
-
-    struct Symbol
+    struct _REPL
     {
-        string name;
-        string type;
-        string current;
-        string checkType;
-        void* addr;
-    }
-
-    struct Vtbl
-    {
-        string name;
-        void*[] vtbl;
-    }
-
-    struct ReplContext
-    {
-        string filename = "replDll";
-        string[] imports;
-        string[] userTypes;
-        Symbol[] symbols;
-        int[string] symbolSet;
-        Vtbl[] vtbls;
-        void* gc;
-        bool verbose = false;
-    }
-
-    T* _makeNewImplA(T)(ref ReplContext repl, size_t index, T t = T.init)
-    {
-        import std.traits;
-
-        void* ptr;
-        ptr = GC.calloc(T.sizeof);
-        GC.disable();
-        memcpy(ptr, &t, T.sizeof);
-        GC.enable();
-
-        repl.symbols[index].addr = ptr;
-        return cast(T*)ptr;
-    }
-
-    auto _makeNewImplB(string s)(ref ReplContext repl, size_t index)
-    {
-        mixin("alias typeof("~s~") _T;");
-        enum assign = "auto _v = new "~s~";";
-        static if (__traits(compiles, mixin("{"~assign~"}")))
+        static struct Symbol
         {
-            writeln("IMPL B - 1");
-            mixin(assign);
+            string name;
+            string type;
+            string current;
+            string checkType;
+            void* addr;
         }
-        else
+
+        static struct Vtbl
         {
-            static if (isArray!_T || __traits(compiles, __traits(classInstanceSize, _T)))
-            {
-                writeln("IMPL B - 2");
-                mixin("auto _init = "~s~";");
-                auto _v = GC.calloc(_T.sizeof);
-                GC.disable();
-                memcpy(_v, &_init, _T.sizeof);
-                GC.enable();
-            }
+            string name;
+            void*[] vtbl;
+        }
+
+        static struct ReplContext
+        {
+            string filename = "replDll";
+            string[] imports;
+            string[] userTypes;
+            _REPL.Symbol[] symbols;
+            int[string] symbolSet;
+            _REPL.Vtbl[] vtbls;
+            void* gc;
+            bool verbose = false;
+        }
+
+        static T* makeNewImplA(T)(ref _REPL.ReplContext repl, size_t index, T t = T.init)
+        {
+            import std.traits;
+
+            void* ptr;
+            ptr = GC.calloc(T.sizeof);
+            GC.disable();
+            memcpy(ptr, &t, T.sizeof);
+            GC.enable();
+
+            repl.symbols[index].addr = ptr;
+            return cast(T*)ptr;
+        }
+
+        static auto makeNewImplB(string s)(ref _REPL.ReplContext repl, size_t index)
+        {
+            mixin("alias typeof("~s~") _T;");
+            enum assign = "auto _v = new "~s~";";
+            static if (__traits(compiles, mixin("{"~assign~"}")))
+                mixin(assign);
             else
             {
-                writeln("IMPL B - 3");
-                mixin("auto _v = new typeof("~s~");");
-                mixin("*_v = "~s~";");
+                static if (isArray!_T || is(T == class))
+                {
+                    mixin("auto _init = "~s~";");
+                    auto _v = GC.calloc(_T.sizeof);
+                    GC.disable();
+                    memcpy(_v, &_init, _T.sizeof);
+                    GC.enable();
+                }
+                else
+                {
+                    mixin("auto _v = new typeof("~s~");");
+                    mixin("*_v = "~s~";");
+                }
+            }
+            repl.symbols[index].addr = _v;
+            return cast(_T*)_v;
+        }
+
+        static auto makeNew(string s, T)(ref _REPL.ReplContext repl, size_t index, T t = T.init)
+        {
+            enum assign = "{auto _v = new "~s~";}";
+            static if (__traits(compiles, mixin(assign)))
+                return _REPL.makeNewImplB!s(repl, index);
+            else
+                return _REPL.makeNewImplA(repl, index, t);
+        }
+
+        template Typeof(alias T)
+        {
+            static if (__traits(compiles, T.init))
+                alias typeof(T) Typeof;
+            else static if (__traits(compiles, T().init))
+                alias typeof(T().init) Typeof;
+            else
+                static assert(false);
+        }
+
+        template Typeof(T)
+        {
+            alias T Typeof;
+        }
+
+        static T* getVar(T)(_REPL.ReplContext repl, size_t index)
+        {
+            return cast(T*)repl.symbols[index].addr;
+        }
+
+
+        static string exprResult(E)(lazy E expr)
+        {
+            static if (__traits(compiles, typeof(expr)))
+            {
+                static if (is(typeof(expr) == void))
+                {
+                    expr();
+                    return "";
+                }
+                else
+                {
+                    return expr().to!string;
+                }
             }
         }
-        repl.symbols[index].addr = _v;
-        return cast(_T*)_v;
-    }
 
-    auto _makeNew(string s, T)(ref ReplContext repl, size_t index, T t = T.init)
-    {
-        enum assign = "{auto _v = new "~s~";}";
-        static if (__traits(compiles, mixin(assign)))
-            return _makeNewImplB!s(repl, index);
-        else
-            return _makeNewImplA(repl, index, t);
-    }
-
-    /++
-    string _typeOf(T)(T t)
-    {
-        static if (__traits(compiles, __traits(parent, T)))
+        static void hookNewClass(TypeInfo_Class ti, void* cptr)
         {
-            auto parent = __traits(parent, T).stringof;
-            if (parent != T.stringof)
-                return parent ~ "." ~ T.stringof;
-            else
-                return T.stringof;
-        }
-        else
-            return T.stringof;
-    }
-    ++/
-
-    template _Typeof(alias T)
-    {
-        static if (__traits(compiles, T.init))
-            alias typeof(T) _Typeof;
-        else static if (__traits(compiles, T().init))
-            alias typeof(T().init) _Typeof;
-        else
-            static assert(false);
-    }
-
-    template _Typeof(T)
-    {
-        alias T _Typeof;
-    }
-
-    T* _getVar(T)(ReplContext repl, size_t index)
-    {
-        return cast(T*)repl.symbols[index].addr;
-    }
-
-
-    string _exprResult(E)(lazy E expr)
-    {
-        static if (__traits(compiles, typeof(expr)))
-        {
-            static if (is(typeof(expr) == void))
-            {
-                expr();
-                return "";
-            }
-            else
-            {
-                return expr().to!string;
-            }
-
+            alias extern(C) void function(TypeInfo_Class, void*, _REPL.ReplContext*) cb;
+            auto fp = cast(cb)(0x` ~ (&hookNewClass).to!string ~ `);
+            fp(ti, cptr, null);
         }
     }
 
@@ -246,15 +233,10 @@ string genHeader()
         (cast(byte*) p)[0 .. ci.init.length] = ci.init[];
 
         auto obj = cast(Object) p;
-        _hookNewClass(typeid(obj), p);
+        _REPL.hookNewClass(typeid(obj), p);
         return obj;
     }
 
-    void _hookNewClass(TypeInfo_Class ti, void* cptr)
-    {
-        alias extern(C) void function(TypeInfo_Class, void*, ReplContext*) cb;
-        auto fp = cast(cb)(0x` ~ (&hookNewClass).to!string ~ `);
-        fp(ti, cptr, null);
-    }
+
 `;
 }
