@@ -79,11 +79,8 @@ string genHeader()
 
     HINSTANCE g_hInst;
 
-    //import rt.memory;
-
     extern(Windows) BOOL DllMain(HINSTANCE hInstance,DWORD ulReason,LPVOID lpvReserved)
     {
-        //printf("%x", &g_hInst);
         //g_hInst = hInstance;
         final switch (ulReason)
         {

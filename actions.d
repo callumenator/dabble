@@ -71,11 +71,7 @@ struct Parser
         return s.genImports() ~
                s.genTypes() ~
                "export extern(C) int _main(ref _REPL.ReplContext _repl_) {\n" ~
-               "   writeln(`IN FUNC AT LEAST`);\n" ~
-               "   alias to!string stringTo;\n" ~
-               "   writeln(&stringTo!int);\n" ~
                "   auto dummy = 1.to!string;\n" ~
-               "   writeln(`IN FUNC AT LEAST 2`);\n" ~
                "   //gc_setProxy(_repl_.gc);\n" ~
                "   import std.exception;\n" ~
                "   auto e = collectException!Error(_main2(_repl_));\n" ~

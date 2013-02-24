@@ -1,7 +1,6 @@
 
 module sharedlib;
 
-
 version(Windows)
 {
     import std.file, std.c.stdlib;
@@ -11,9 +10,10 @@ version(Windows)
     struct SharedLib
     {
         string filename;
-        void* handle;
+        void* handle = null;
 
         @disable this();
+        @property bool loaded() { return handle !is null; }
 
         this(string file)
         {
@@ -33,12 +33,15 @@ version(Windows)
 
         void free(bool callDetach = true)
         {
+            if (handle is null)
+                return;
+
             MemoryFreeLibrary(handle, callDetach);
         }
 
         T getFunction(T)(string name) in {assert(handle !is null, "Null handle");} body
         {
-            return cast(T) MemoryGetProcAddress(handle, name.toStringz());
+            return cast(T) MemoryGetProcAddress(handle, cast(char*)(name.toStringz()));
         }
     }
 
