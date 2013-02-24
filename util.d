@@ -6,6 +6,7 @@ import std.conv : to;
 import
     repl;
 
+extern(C) void* gc_getProxy();
 
 /**
 * The DLL replaces the runtime _d_newclass in order to intercept
@@ -62,6 +63,8 @@ extern(C) void hookNewClass(TypeInfo_Class ti, void* cptr, ReplContext* repl)
 */
 string genHeader()
 {
+    void* prox = gc_getProxy();
+
     return
 `
     import std.stdio, std.conv, std.range, std.algorithm, std.traits;
@@ -76,18 +79,27 @@ string genHeader()
 
     HINSTANCE g_hInst;
 
+    //import rt.memory;
+
     extern(Windows) BOOL DllMain(HINSTANCE hInstance,DWORD ulReason,LPVOID lpvReserved)
     {
-        g_hInst = hInstance;
+        //printf("%x", &g_hInst);
+        //g_hInst = hInstance;
         final switch (ulReason)
         {
         case DLL_PROCESS_ATTACH:
             Runtime.initialize();
-            //gc_init();
-            //initStaticDataGC();
-            //rt_moduleCtor();
-            //rt_moduleTlsCtor();
-            GC.disable();
+            /++
+            gc_init();
+            printf("DONE GC\n");
+            initStaticDataGC();
+            printf("DONE STATIC DATA GC\n");
+            rt_moduleCtor();
+            printf("DONE MOD CTOR\n");
+            rt_moduleTlsCtor();
+            ++/
+            gc_setProxy(cast(void*)0x` ~ prox.to!string ~ `);
+            printf("DONE MOD TLS CTOR\n");
             break;
         case DLL_PROCESS_DETACH:
             break;
@@ -125,7 +137,7 @@ string genHeader()
             int[string] symbolSet;
             _REPL.Vtbl[] vtbls;
             void* gc;
-            bool verbose = false;
+            string[] includes;
         }
 
         static T* makeNewImplA(T)(ref _REPL.ReplContext repl, size_t index, T t = T.init)

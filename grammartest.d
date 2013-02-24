@@ -23,7 +23,6 @@ void runTests()
     repl.gc = gc_getProxy();
     Parser.s = ParseState();
     Parser.s.repl = &repl;
-    repl.verbose = true;
 
     //auto tests = ["foreach(i; iota(10)){}" ];
     //auto types = ["foreach(i; iota(10)){}" ];

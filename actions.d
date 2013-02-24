@@ -54,7 +54,6 @@ import std.stdio;
 struct Parser
 {
     static ParseState s;
-    static bool verbose = false;
     static string prefix;
     static string suffix;
 
@@ -62,28 +61,22 @@ struct Parser
     {
         prefix.clear;
         suffix.clear;
-        verbose = repl.verbose;
         s = ParseState();
         s.repl = &repl;
 
-        if (verbose)
-            writeln("Calling ReplParse...");
-
         auto p = ReplParse.Search(input);
-
-        if (verbose)
-        {
-            writeln("Printing ReplParse...");
-            writeln(p);
-        }
 
         p = ReplParse.decimateTree(p);
         auto wrap = s.genWrapper();
         return s.genImports() ~
                s.genTypes() ~
                "export extern(C) int _main(ref _REPL.ReplContext _repl_) {\n" ~
+               "   writeln(`IN FUNC AT LEAST`);\n" ~
+               "   alias to!string stringTo;\n" ~
+               "   writeln(&stringTo!int);\n" ~
                "   auto dummy = 1.to!string;\n" ~
-               "   gc_setProxy(_repl_.gc);\n" ~
+               "   writeln(`IN FUNC AT LEAST 2`);\n" ~
+               "   //gc_setProxy(_repl_.gc);\n" ~
                "   import std.exception;\n" ~
                "   auto e = collectException!Error(_main2(_repl_));\n" ~
                "   if (e) { writeln(e.msg); return -1; }\n" ~
@@ -147,54 +140,37 @@ struct Parser
     static T addImport(T)(T t)
     {
         if (t.successful) {
+            auto imp = removechars(t.matches[0], " ");
+            s.repl.imports ~= imp;
 
-            if (verbose)
-                writeln("Import...\n", t);
-
-            s.repl.imports ~= t.matches[0];
+            if (splitter(imp, ".").front != "std")
+                s.repl.includes ~= imp.replace(`.`, `\`);
         }
-
         return t;
     }
 
     static T userType(T)(T t)
     {
         if (t.successful) {
-
-            if (verbose)
-                writeln("UserType...\n", t);
-
             s.repl.userTypes ~= t.matches[0];
             t.matches.clear;
         }
-
         return t;
     }
 
     static T dupString(T)(T t)
     {
         if (t.successful) {
-
-            if (verbose)
-                writeln("String Dup...\n", t);
-
             t.matches[0] ~= ".idup";
         }
-
         return t;
     }
 
     static T wrapInstanceType(T)(T t)
     {
-
         if (t.successful) {
-
-            if (verbose)
-                writeln("Wrap Instance...\n", t);
-
             t.matches[0] = "(" ~ t.matches[0] ~ ")";
         }
-
         return t;
     }
 
@@ -245,9 +221,6 @@ struct Parser
     {
         if (p.successful)
         {
-            if (verbose)
-                writeln("VarDecl...\n", p);
-
             auto type = strip(p.children[0].matches[0]);
             auto name = strip(p.children[1].matches[0]);
 

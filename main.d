@@ -82,11 +82,10 @@ void stress(ref ReplContext repl)
 void main()
 {
 
-
     ReplContext repl;
     repl.gc = gc_getProxy();
 
-    stress(repl);
-    //loop(repl, Debug.times);
+    //stress(repl);
+    loop(repl, Debug.times);
     return;
 }

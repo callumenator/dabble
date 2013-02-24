@@ -21,6 +21,7 @@ import
 import
     loader,
     parser,
+    sharedlib,
     actions,
     util;
 
@@ -59,13 +60,14 @@ struct ReplContext
     int[string] symbolSet;
     Vtbl[] vtbls;
     void* gc;
-    bool verbose = false;
+    string[] includes;
 }
 
 
 void loop(ref ReplContext repl,
           Debug flag = Debug.none)
 {
+
     string error;
     char[] lineBuffer;
     stdin.readln(lineBuffer);
@@ -130,8 +132,7 @@ bool eval(string code,
     if (text.length == 0)
         return 0;
 
-    if (repl.verbose)
-        writeln("Building...");
+    writeln("BUILD...");
 
     sw.reset();
     auto build = buildCode(text, repl, error);
@@ -140,8 +141,7 @@ bool eval(string code,
     if (build)
         return 1;
 
-    if (repl.verbose)
-        writeln("Calling...");
+    writeln("CALL...");
 
     sw.reset();
     auto call = callCode(loadCode(repl.filename), repl, error);
@@ -177,8 +177,26 @@ bool buildCode(string code, ref ReplContext repl, ref string error)
         file.close();
     }
 
-    auto cmd1 = "dmd -J../drepl " ~ repl.filename ~ ".d " ~ repl.filename ~ ".def";
-    //auto cmd2 = "link " ~ repl.filename ~ ".obj,,,phobos.lib+kernel32.lib," ~ repl.filename ~ ".def";
+    auto includes = std.array.join(repl.includes, ".d ");
+
+    string cmd2;
+    if (repl.includes.length > 0)
+    {
+        auto cmd = "dmd -lib -ofreplLib.lib " ~ includes;
+        error = shell(cmd);
+        if (error.length)
+             writeln("Lib build error: ", error);
+        cmd2 = "link " ~ repl.filename ~ ".obj,,,replLib.lib+phobos.lib+kernel32.lib," ~ repl.filename ~ ".def";
+    }
+    else
+    {
+        cmd2 = "link " ~ repl.filename ~ ".obj,,,phobos.lib+kernel32.lib," ~ repl.filename ~ ".def";
+    }
+
+    auto cmd1 = "dmd -c " ~ repl.filename ~ ".d ";// ~ repl.filename ~ ".def";
+
+
+    cmd1 = cmd1 ~ " & " ~ cmd2;
 
     try{
         error = shell(cmd1);
@@ -215,6 +233,7 @@ static if (LOADER == "MEMORYMOD")
 
     bool callCode(HMEMORYMODULE _module, ref ReplContext repl, ref string error)
     {
+
         scope(exit) { MemoryFreeLibrary(_module, false); }
 
         alias extern(C) int function(ref ReplContext) replCode;
