@@ -3,7 +3,7 @@ module sharedlib;
 
 version(Windows)
 {
-    import std.file, std.c.stdlib;
+    import std.file : read;
     import std.string : toStringz;
     import loader;
 

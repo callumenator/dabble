@@ -105,7 +105,7 @@ bool eval(string code,
     {
         if (flag & Debug.times)
         {
-            write("TIMINGS: parse: ", _times.parse);
+            write("TIMINGS: parse: ", times.parse);
             if (!(flag & Debug.parseOnly))
             {
                 write(", build: ", times.build);
@@ -130,7 +130,7 @@ bool eval(string code,
     if (text.length == 0)
         return true;
 
-    writeln("BUILD...");
+    debug { writeln("BUILD..."); }
 
     sw.reset();
     auto build = build(text, repl, error);
@@ -139,7 +139,7 @@ bool eval(string code,
     if (!build)
         return false;
 
-    writeln("CALL...");
+    debug { writeln("CALL..."); }
 
     sw.reset();
     auto call = call(repl, error);
@@ -154,7 +154,7 @@ bool eval(string code,
 }
 
 
-bool build(string code, ref ReplContext repl, ref string error)
+bool build(string code, ref ReplContext repl, out string error)
 {
     auto file = File(repl.filename ~ ".d", "w");
     file.write(genHeader() ~ code);
@@ -191,8 +191,6 @@ bool build(string code, ref ReplContext repl, ref string error)
     }
 
     auto cmd1 = "dmd -c " ~ repl.filename ~ ".d ";// ~ repl.filename ~ ".def";
-
-
     cmd1 = cmd1 ~ " & " ~ cmd2;
 
     try{

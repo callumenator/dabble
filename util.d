@@ -94,9 +94,9 @@ string genHeader()
             rt_moduleCtor();
             printf("DONE MOD CTOR\n");
             rt_moduleTlsCtor();
+            printf("DONE MOD TLS CTOR\n");
             ++/
             gc_setProxy(cast(void*)0x` ~ prox.to!string ~ `);
-            printf("DONE MOD TLS CTOR\n");
             break;
         case DLL_PROCESS_DETACH:
             break;
