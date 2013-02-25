@@ -2,21 +2,7 @@
 module repl;
 
 import
-    std.array,
-    std.typecons,
-    std.range,
-    std.traits,
-    std.c.string,
-    std.path,
-    core.memory,
-    std.file,
-    std.process,
-    std.string,
-    std.stdio,
-    std.conv,
-    std.c.windows.windows,
-    core.runtime,
-    std.datetime;
+    std.stdio;
 
 import
     loader,
@@ -65,7 +51,6 @@ struct ReplContext
 void loop(ref ReplContext repl,
           Debug flag = Debug.none)
 {
-
     string error;
     char[] lineBuffer;
     stdin.readln(lineBuffer);
@@ -99,6 +84,9 @@ bool eval(string code,
           ref string error,
           Debug flag = Debug.none)
 {
+    import std.datetime : StopWatch;
+    import std.typecons;
+
     Tuple!(long,"parse",long,"build",long,"call") times;
 
     scope(success)
@@ -156,6 +144,9 @@ bool eval(string code,
 
 bool build(string code, ref ReplContext repl, out string error)
 {
+    import std.file : exists;
+    import std.process : shell;
+
     auto file = File(repl.filename ~ ".d", "w");
     file.write(genHeader() ~ code);
     file.close();
@@ -209,6 +200,8 @@ bool build(string code, ref ReplContext repl, out string error)
 
 bool call(ref ReplContext repl, out string error)
 {
+    import core.memory : GC;
+
     alias extern(C) int function(ref ReplContext) funcType;
     auto lib = SharedLib(repl.filename ~ ".dll");
 
