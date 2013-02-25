@@ -137,53 +137,27 @@ string genHeader()
             string[] includes;
         }
 
-        static T* makeNewImplA(T)(ref _REPL.ReplContext repl, size_t index, T t = T.init)
-        {
-            import std.traits;
-
-            void* ptr;
-            ptr = GC.calloc(T.sizeof);
-            GC.disable();
-            memcpy(ptr, &t, T.sizeof);
-            GC.enable();
-
-            repl.symbols[index].addr = ptr;
-            return cast(T*)ptr;
-        }
-
-        static auto makeNewImplB(string s)(ref _REPL.ReplContext repl, size_t index)
-        {
-            mixin("alias typeof("~s~") _T;");
-            enum assign = "auto _v = new "~s~";";
-            static if (__traits(compiles, mixin("{"~assign~"}")))
-                mixin(assign);
-            else
-            {
-                static if (isArray!_T || is(T == class))
-                {
-                    mixin("auto _init = "~s~";");
-                    auto _v = GC.calloc(_T.sizeof);
-                    GC.disable();
-                    memcpy(_v, &_init, _T.sizeof);
-                    GC.enable();
-                }
-                else
-                {
-                    mixin("auto _v = new typeof("~s~");");
-                    mixin("*_v = "~s~";");
-                }
-            }
-            repl.symbols[index].addr = _v;
-            return cast(_T*)_v;
-        }
-
         static auto makeNew(string s, T)(ref _REPL.ReplContext repl, size_t index, T t = T.init)
         {
-            enum assign = "{auto _v = new "~s~";}";
-            static if (__traits(compiles, mixin(assign)))
-                return _REPL.makeNewImplB!s(repl, index);
+            import std.traits;
+            enum assign = "auto _v = new "~s~";";
+            static if (__traits(compiles, mixin("{"~assign~"}")))
+            {
+                mixin(assign);
+                repl.symbols[index].addr = _v;
+                return cast(T*)_v;
+            }
             else
-                return _REPL.makeNewImplA(repl, index, t);
+            {
+                void* ptr;
+                ptr = GC.calloc(T.sizeof);
+                GC.disable();
+                memcpy(ptr, &t, T.sizeof);
+                GC.enable();
+
+                repl.symbols[index].addr = ptr;
+                return cast(T*)ptr;
+            }
         }
 
         static string NewTypeof(string S, E)(lazy E expr)
@@ -211,9 +185,7 @@ string genHeader()
                     return "";
                 }
                 else
-                {
                     return expr().to!string;
-                }
             }
         }
 
