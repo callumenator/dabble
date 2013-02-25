@@ -226,12 +226,9 @@ struct Parser
                 {} // redifinition, pegged calling actions more than once
                 else
                 {
-                    string rhs, rhsType;
+                    string rhs;
                     if (type == "auto" || p.name == "ReplParse.VarDeclInit")
-                    {
                         rhs = strip(p.children[$-1].matches[0]);
-                        rhsType = "_REPL.Typeof!(" ~ rhs ~ ")";
-                    }
 
                     s.repl.symbols ~= Symbol(name);
 
@@ -256,10 +253,7 @@ struct Parser
                         else
                         {
                             prefix ~= "auto "~name~" = _REPL.makeNew!q\"#"~rhs~"#\"(_repl_,"~idxStr~","~rhs~");\n";
-                            prefix ~= "static if (__traits(compiles, _REPL.Typeof!("~rhs~"))) \n";
-                            prefix ~= "  _repl_.symbols["~idxStr~"].checkType = q\"#_REPL.Typeof!("~rhs~")#\".idup;\n";
-                            prefix ~= "else \n";
-                            prefix ~= "  _repl_.symbols["~idxStr~"].checkType = q\"#typeof("~rhs~")#\".idup;\n";
+                            prefix ~= "_repl_.symbols["~idxStr~"].checkType = _REPL.NewTypeof!(q\"#"~rhs~"#\")("~rhs~").idup;\n";
                         }
                     }
                     else

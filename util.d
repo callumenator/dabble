@@ -186,26 +186,20 @@ string genHeader()
                 return _REPL.makeNewImplA(repl, index, t);
         }
 
-        template Typeof(alias T)
+        static string NewTypeof(string S, E)(lazy E expr)
         {
-            static if (__traits(compiles, T.init))
-                alias typeof(T) Typeof;
-            else static if (__traits(compiles, T().init))
-                alias typeof(T().init) Typeof;
+            import std.traits;
+            alias ReturnType!expr RT;
+            static if (__traits(compiles, mixin( "{" ~ RT.stringof ~ " _v;}")))
+                return RT.stringof;
             else
-                static assert(false);
-        }
-
-        template Typeof(T)
-        {
-            alias T Typeof;
+                return "typeof(" ~ S ~ ")";
         }
 
         static T* getVar(T)(_REPL.ReplContext repl, size_t index)
         {
             return cast(T*)repl.symbols[index].addr;
         }
-
 
         static string exprResult(E)(lazy E expr)
         {

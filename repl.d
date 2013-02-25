@@ -116,8 +116,8 @@ bool eval(string code,
     }
 
     StopWatch sw;
-    sw.start();
 
+    sw.start();
     auto text = Parser.go(code, repl);
     times.parse = sw.peek().msecs();
 

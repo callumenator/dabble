@@ -19,13 +19,6 @@ import
     actions,
     grammartest;
 
-
-class A { void* a; }
-class B { int z; A** a;}
-class C { int a; private: B[] b; }
-class D { C[B] c; B[int] b; }
-struct S { int a; }
-
 void stress(ref ReplContext repl)
 {
     auto code =
@@ -58,17 +51,6 @@ void stress(ref ReplContext repl)
      "foreach(val; ar[]){ writeln(val); }"
     ];
 
-    /++
-    code =
-    ["import std.container;",
-     "ar = Array!int(1,5,2,7,3,7,3);",
-     "ar.insertBack(10);",
-     "ar.insertBack(10);",
-     "ar.insertBack(10);"
-    ];
-    ++/
-
-
     string err;
     foreach(i, c; code)
     {
@@ -81,7 +63,6 @@ void stress(ref ReplContext repl)
 
 void main()
 {
-
     ReplContext repl;
     repl.gc = gc_getProxy();
 
