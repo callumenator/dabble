@@ -15,9 +15,9 @@ extern(C) void* gc_getProxy();
 
 enum Debug
 {
-    none        = 0x00,
-    times       = 0x01,
-    parseOnly   = 0x02
+    none        = 0x00, /// no debug output
+    times       = 0x01, /// display time to parse, build and call
+    parseOnly   = 0x02  /// show parse tree and return
 }
 
 struct Symbol
@@ -47,7 +47,10 @@ struct ReplContext
     string[] includes;
 }
 
-
+/**
+* Main repl entry point. Keep reading lines from stdin, handle any
+* repl commands, pass the rest onto eval.
+*/
 void loop(ref ReplContext repl,
           Debug flag = Debug.none)
 {
@@ -78,7 +81,9 @@ void loop(ref ReplContext repl,
     return;
 }
 
-
+/**
+* Evaluate code in the context of the supplied ReplContext.
+*/
 bool eval(string code,
           ref ReplContext repl,
           ref string error,
@@ -88,6 +93,7 @@ bool eval(string code,
     import std.typecons;
 
     Tuple!(long,"parse",long,"build",long,"call") times;
+    StopWatch sw;
 
     scope(success)
     {
@@ -103,8 +109,6 @@ bool eval(string code,
         }
     }
 
-    StopWatch sw;
-
     sw.start();
     auto text = Parser.go(code, repl);
     times.parse = sw.peek().msecs();
@@ -112,7 +116,7 @@ bool eval(string code,
     if (flag & Debug.parseOnly)
     {
         writeln(text);
-        return false;
+        return true;
     }
 
     if (text.length == 0)
@@ -133,16 +137,28 @@ bool eval(string code,
     auto call = call(repl, error);
     times.call = sw.peek().msecs();
 
-    if (!call)
-        return false;
+    deadSymbols(repl);
 
-    //deadSymbols(repl);
-    hookNewClass(typeid(Object), null, &repl);
-    return true;
+    final switch(call) with(CallResult)
+    {
+        case success:
+            hookNewClass(typeid(Object) /** dummy **/, null /** dummy **/, &repl, false);
+            return true;
+        case loadError:
+        case runtimeError:
+            hookNewClass(typeid(Object) /** dummy **/, null /** dummy **/, &repl, true);
+            return false;
+    }
+
+    assert(false);
 }
 
-
-bool build(string code, ref ReplContext repl, out string error)
+/**
+* Build a shared lib from supplied code.
+*/
+bool build(string code,
+           ref ReplContext repl,
+           out string error)
 {
     import std.file : exists;
     import std.process : shell;
@@ -165,32 +181,27 @@ bool build(string code, ref ReplContext repl, out string error)
         file.close();
     }
 
+    string cmd = "dmd " ~ repl.filename ~ ".d " ~ repl.filename ~ ".def";
     auto includes = std.array.join(repl.includes, ".d ");
-
-    string cmd2;
     if (repl.includes.length > 0)
     {
-        auto cmd = "dmd -lib -ofreplLib.lib " ~ includes;
-        error = shell(cmd);
+        error = shell("dmd -lib -ofreplLib.lib " ~ includes);
+
         if (error.length)
              writeln("Lib build error: ", error);
-        cmd2 = "link " ~ repl.filename ~ ".obj,,,replLib.lib+phobos.lib+kernel32.lib," ~ repl.filename ~ ".def";
+
+        cmd ~= " replLib.lib";
     }
-    else
+
+    try
     {
-        cmd2 = "link " ~ repl.filename ~ ".obj,,,phobos.lib+kernel32.lib," ~ repl.filename ~ ".def";
-    }
-
-    auto cmd1 = "dmd -c " ~ repl.filename ~ ".d ";// ~ repl.filename ~ ".def";
-    cmd1 = cmd1 ~ " & " ~ cmd2;
-
-    try{
-        error = shell(cmd1);
+        error = shell(cmd);
 		if (error.length)
              writeln(error);
         return true;
     }
-    catch(Exception e) {
+    catch(Exception e)
+    {
         return false;
     }
 
@@ -198,7 +209,19 @@ bool build(string code, ref ReplContext repl, out string error)
 }
 
 
-bool call(ref ReplContext repl, out string error)
+enum CallResult
+{
+    success,
+    loadError,
+    runtimeError
+}
+
+
+/**
+* Load the shared lib, and call the _main function. Free the lib on exit.
+*/
+CallResult call(ref ReplContext repl,
+               out string error)
 {
     import core.memory : GC;
 
@@ -208,28 +231,25 @@ bool call(ref ReplContext repl, out string error)
     scope(exit) lib.free(false /** don't alert lib **/ );
 
     if (!lib.loaded)
-        return false;
+        return CallResult.loadError;
 
     auto funcPtr = lib.getFunction!(funcType)("_main");
 
     if (funcPtr is null)
-        return false;
-
-    try
     {
-        auto res = funcPtr(repl);
-
-        if (res == -1)
-            GC.collect();
-
-        GC.removeRange(getSectionBase(lib.handle, ".CRT"));
-        return true;
-    }
-    catch(Exception e)
-    {
-        error = e.msg;
-        return false;
+        error = "Unable to obtain function pointer";
+        return CallResult.loadError;
     }
 
-    assert(false);
+    auto res = funcPtr(repl);
+
+    scope(exit) GC.removeRange(getSectionBase(lib.handle, ".CRT"));
+
+    if (res == -1)
+    {
+        GC.collect();
+        return CallResult.runtimeError;
+    }
+
+    return CallResult.success;
 }

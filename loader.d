@@ -383,10 +383,6 @@ void FinalizeSections(PMEMORYMODULE modul)
         int readable =   (section.Characteristics & IMAGE_SCN_MEM_READ) != 0;
         int writeable =  (section.Characteristics & IMAGE_SCN_MEM_WRITE) != 0;
 
-        executable = 1;
-        readable = 1;
-        writeable = 1;
-
         if ((section.Characteristics & IMAGE_SCN_MEM_DISCARDABLE) && !executable)
         {
             // section is not needed any more and can safely be freed

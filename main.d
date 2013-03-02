@@ -2,16 +2,7 @@
 module main;
 
 import
-    std.algorithm,
-    std.array,
-    core.memory,
-    std.process,
-    std.conv,
-    std.file,
-    std.stdio,
-    std.string,
-    std.c.string,
-    std.traits;
+    std.stdio;
 
 import
     repl,
@@ -22,7 +13,8 @@ import
 void stress(ref ReplContext repl)
 {
     auto code =
-    ["struct S {int x, y = 5; }",
+    ["err0 = `1.2`.to!int;",
+     "struct S {int x, y = 5; }",
      "a = [1,2,3,4];",
      "b = a.sort;",
      "c = b;",
@@ -59,10 +51,10 @@ void stress(ref ReplContext repl)
     }
 }
 
-
-
+import std.exception;
 void main()
 {
+
     ReplContext repl;
     repl.gc = gc_getProxy();
 

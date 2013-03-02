@@ -21,8 +21,6 @@ void runTests()
 
     ReplContext repl;
     repl.gc = gc_getProxy();
-    Parser.s = ParseState();
-    Parser.s.repl = &repl;
 
     //auto tests = ["foreach(i; iota(10)){}" ];
     //auto types = ["foreach(i; iota(10)){}" ];

@@ -3,7 +3,7 @@ module actions;
 import
     std.algorithm,
     std.array,
-    std.typecons,
+    std.stdio,
     std.conv,
     std.string;
 
@@ -11,69 +11,32 @@ import
     repl,
     parser;
 
-struct ParseState
-{
-    int blockDepth = 0;
-    int newVars = -1; // index into repl.symbols at which new vars begin
-    ReplContext* repl;
-
-    string genImports()
-    {
-        if (repl.imports.length > 0)
-            return "import " ~ std.array.join(repl.imports, ",\n") ~ ";\n\n";
-        else return "";
-    }
-
-    string genTypes()
-    {
-        if (repl.userTypes.length > 0)
-            return std.array.join(repl.userTypes, "\n\n") ~ "\n\n";
-        else return "";
-    }
-
-    Tuple!(string,string) genWrapper()
-    {
-        string prefix, suffix;
-        int stop = newVars == -1 ? repl.symbols.length : newVars;
-        foreach(idx, sym; repl.symbols)
-        {
-            if (idx < stop) // var is not new, grab it from ReplContext
-                prefix ~= "auto "~sym.name~" = _REPL.getVar!("~sym.checkType~")(_repl_,"~idx.to!string~");\n";
-
-            suffix ~= "_repl_.symbols["~idx.to!string~"].current = to!string(*"~sym.name~").idup;\n";
-        }
-        return tuple(prefix, suffix);
-    }
-}
-
-import std.stdio;
 
 struct Parser
 {
-    static ParseState s;
-    static string prefix;
-    static string suffix;
-
-    static string go(string input, ref ReplContext repl)
+    /**
+    * Start parsing.
+    */
+    static string go(string input, ref ReplContext _repl)
     {
         prefix.clear;
         suffix.clear;
-        s = ParseState();
-        s.repl = &repl;
+        newVars = -1;
+        repl = &_repl;
 
         auto p = ReplParse.Search(input);
 
         p = ReplParse.decimateTree(p);
 
-        auto wrap = s.genWrapper();
+        genWrapper();
 
-        return s.genImports() ~
-               s.genTypes() ~
+        return genImports() ~
+               genTypes() ~
+
                "export extern(C) int _main(ref _REPL.ReplContext _repl_) {\n" ~
-               "   auto dummy = 1.to!string;\n" ~
-               "   //gc_setProxy(_repl_.gc);\n" ~
+               "   gc_setProxy(_repl_.gc);\n" ~
                "   import std.exception;\n" ~
-               "   auto e = collectException!Error(_main2(_repl_));\n" ~
+               "   auto e = collectException!Throwable(_main2(_repl_));\n" ~
                "   if (e) { writeln(e.msg); return -1; }\n" ~
                "   return 0;\n" ~
                "}\n\n" ~
@@ -81,29 +44,73 @@ struct Parser
                "void _main2(ref _REPL.ReplContext _repl_) {\n" ~
                "\nstring _expressionResult = ``;\n" ~
                "\n" ~ genFixups() ~
-               "\n" ~ wrap[0] ~ //"writeln(`A`);\n" ~
                "\n" ~ prefix ~
-               "\n" ~ makeCode(p) ~ //"writeln(`B`);\n" ~
-               //"\n" ~ suffix ~
-               "\n" ~ wrap[1] ~ //"writeln(`C`);\n" ~
+               "\n" ~ makeCode(p) ~
+               "\n" ~ suffix ~
                "\nif (_expressionResult.length != 0) writeln(`=> `, _expressionResult);\n" ~
                "}\n";
     }
 
+    /**
+    * Concat the code that remains in the parse tree.
+    */
     static string makeCode(T)(T t)
     {
         return std.array.join(t.matches);
     }
 
+    /**
+    * Generate code to initialize vars and get their current values on exit.
+    */
+    static void genWrapper()
+    {
+        string temp;
+        int stop = newVars == -1 ? repl.symbols.length : newVars;
+        foreach(idx, sym; repl.symbols)
+        {
+            if (idx < stop) // var is not new, grab it from ReplContext
+                temp ~= "auto "~sym.name~" = _REPL.getVar!("~sym.checkType~")(_repl_,"~idx.to!string~");\n";
+
+            suffix ~= "_repl_.symbols["~idx.to!string~"].current = to!string(*"~sym.name~").idup;\n";
+        }
+        prefix = temp ~ prefix;
+    }
+
+    /**
+    * Generate code to copy new vtables over heap copies.
+    */
     static string genFixups()
     {
         string fixup;
-        foreach(i, v; s.repl.vtbls)
+        foreach(i, v; repl.vtbls)
             fixup ~= "memcpy(_repl_.vtbls["~i.to!string~"].vtbl.ptr, typeid("~v.name~").vtbl.ptr, "
                    ~ "typeid("~v.name~").vtbl.length * (void*).sizeof);\n";
         return fixup;
     }
 
+    /**
+    * Add user imports to header.
+    */
+    static string genImports()
+    {
+        if (repl.imports.length > 0)
+            return "import " ~ std.array.join(repl.imports, ",\n") ~ ";\n\n";
+        else return "";
+    }
+
+    /**
+    * Add user defined types to header.
+    */
+    static string genTypes()
+    {
+        if (repl.userTypes.length > 0)
+            return std.array.join(repl.userTypes, "\n\n") ~ "\n\n";
+        else return "";
+    }
+
+    /**
+    * Clear the matches for this rule.
+    */
     static T clear(T)(T t)
     {
         if (t.successful)
@@ -112,27 +119,36 @@ struct Parser
         return t;
     }
 
+    /**
+    * A new import has been added.
+    */
     static T addImport(T)(T t)
     {
         if (t.successful) {
             auto imp = removechars(t.matches[0], " ");
-            s.repl.imports ~= imp;
+            repl.imports ~= imp;
 
             if (splitter(imp, ".").front != "std")
-                s.repl.includes ~= imp.replace(`.`, `\`);
+                repl.includes ~= imp.replace(`.`, `\`);
         }
         return t;
     }
 
+    /**
+    * A new user type has been defined.
+    */
     static T userType(T)(T t)
     {
         if (t.successful) {
-            s.repl.userTypes ~= t.matches[0];
+            repl.userTypes ~= t.matches[0];
             t.matches.clear;
         }
         return t;
     }
 
+    /**
+    * Dup a string onto the heap.
+    */
     static T dupString(T)(T t)
     {
         if (t.successful) {
@@ -141,6 +157,9 @@ struct Parser
         return t;
     }
 
+    /**
+    * Wrap a template argument....
+    */
     static T wrapInstanceType(T)(T t)
     {
         if (t.successful) {
@@ -149,6 +168,9 @@ struct Parser
         return t;
     }
 
+    /**
+    * Wrap an expression in the code needed to return its result as a string.
+    */
     static T wrapShowType(T)(T t)
     {
         if (t.successful)
@@ -160,22 +182,28 @@ struct Parser
         return t;
     }
 
+    /**
+    * Re-direct a symbol to its pointer.
+    */
     static T varRewrite(T)(T t)
     {
         if (t.successful)
         {
-            if (t.matches[0] in s.repl.symbolSet)
+            if (t.matches[0] in repl.symbolSet)
                 t.matches[0] = "(*" ~ t.matches[0] ~ ")";
         }
 
         return t;
     }
 
+    /**
+    * Handle variable assignments that may also be declarations.
+    */
     static T autoVarDecl(T)(T p)
     {
         if (p.successful)
         {
-            if (p.children[0].matches[0] !in s.repl.symbolSet)
+            if (p.children[0].matches[0] !in repl.symbolSet)
             {
                 p.name = "ReplParse.VarDeclInit";
                 p.matches = ["",""] ~ p.matches;
@@ -184,13 +212,16 @@ struct Parser
             }
             else
             {
-                // If name was a known symbol, this is a simple assignment, not new declaration
+                // If name was a known symbol, this is a simple assignment, not a new declaration
                 p.successful = false;
             }
         }
         return p;
     }
 
+    /**
+    * Handle three type of variable declaration/initialization.
+    */
     static T varDecl(T)(T p)
     {
         if (p.successful)
@@ -198,67 +229,116 @@ struct Parser
             auto type = strip(p.children[0].matches[0]);
             auto name = strip(p.children[1].matches[0]);
 
-            if (name in s.repl.symbolSet)
+            if (name in repl.symbolSet)
             {} // redifinition, pegged calling actions more than once
             else
             {
-                string rhs;
-                if (type == "auto" || p.name == "ReplParse.VarDeclInit")
-                    rhs = strip(p.children[$-1].matches[0]);
-
-                s.repl.symbols ~= Symbol(name);
-
-                if (s.newVars == -1)
-                    s.newVars = s.repl.symbols.length - 1;
-
-                s.repl.symbolSet[name] = s.repl.symbols.length - 1;
-
-                auto idx = s.repl.symbols.length - 1;
-                auto idxStr = idx.to!string;
-
                 p.matches[0] = "(*" ~ p.matches[2] ~ ")";
                 p.matches = p.matches[0..1];
 
-                if (p.name == "ReplParse.VarDeclInit")
+                if (p.name == "ReplParse.VarDecl")
                 {
-                    if (type != "auto")
-                    {
-                        prefix ~= type ~ "* " ~ name ~ " = cast(" ~ type ~ "*)_REPL.makeNew!q\"#"
-                                ~ rhs ~ "#\"(_repl_," ~ idxStr ~ "," ~ rhs ~ ");\n";
-                        s.repl.symbols[idx].checkType = type;
-                    }
+                    newTypedVar(name, type);
+                }
+                else if (p.name == "ReplParse.VarDeclInit")
+                {
+                    auto rhs = strip(p.children[$-1].matches[0]);
+
+                    if (type == "auto")
+                        newAutoVar(name, rhs);
                     else
-                    {
-                        prefix ~= "auto " ~ name ~ " = _REPL.makeNew!q\"#"
-                                ~ rhs ~ "#\"(_repl_," ~ idxStr ~ "," ~ rhs ~ ");\n";
-                        prefix ~= "_repl_.symbols["~idxStr~"].checkType = _REPL.NewTypeof!(q\"#"
-                                ~ rhs ~ "#\")(" ~ rhs ~ ").idup;\n";
-                    }
+                        newInitVar(name, type, rhs);
                 }
-                else
-                {
-                    prefix ~= type ~" * " ~ name ~ " = _REPL.makeNew!(``,"
-                            ~ type ~ ")(_repl_," ~ idxStr ~ ");\n";
-                    s.repl.symbols[idx].checkType = type;
-                }
-                prefix ~= "_repl_.symbols[" ~ idxStr ~ "].type = typeof(*"
-                        ~ name ~ ").stringof.idup;\n";
             }
         }
         return p;
     }
+
+    /**
+    * Add a new variable to the list, return its index.
+    */
+    static int addVar(Symbol symbol)
+    {
+        repl.symbols ~= symbol;
+        newVars = repl.symbols.length - 1;
+        repl.symbolSet[symbol.name] = newVars;
+        return newVars;
+    }
+
+    /**
+    * Create a new variable that has a type but no initializer.
+    */
+    static void newTypedVar(string name, string type)
+    {
+        auto symbol = Symbol(name);
+        symbol.checkType = type;
+        auto idx = addVar(symbol);
+
+        prefix ~= type ~" * " ~ name ~ " = _REPL.makeNew!(``,"
+                ~ type ~ ")(_repl_," ~ idx.to!string ~ ");\n";
+
+        genTypeOf(symbol, idx);
+    }
+
+    /**
+    * Create a new variable that has a type and an initializer.
+    */
+    static void newInitVar(string name, string type, string init)
+    {
+        auto symbol = Symbol(name);
+        symbol.checkType = type;
+        auto idx = addVar(symbol);
+
+        prefix ~= type ~ "* " ~ name ~ " = cast(" ~ type ~ "*)_REPL.makeNew!q\"#"
+                ~ init ~ "#\"(_repl_," ~ idx.to!string ~ "," ~ init ~ ");\n";
+
+        genTypeOf(symbol, idx);
+    }
+
+    /**
+    * Create a new variable that has no type, but has an initializer (i.e. auto var).
+    */
+    static void newAutoVar(string name, string init)
+    {
+        auto symbol = Symbol(name);
+        auto idx = addVar(symbol);
+
+        prefix ~= "auto " ~ name ~ " = _REPL.makeNew!q\"#"
+                ~ init ~ "#\"(_repl_," ~ idx.to!string ~ "," ~ init ~ ");\n";
+
+        prefix ~= "_repl_.symbols[" ~ idx.to!string ~ "].checkType = _REPL.NewTypeof!(q\"#"
+                ~ init ~ "#\")(" ~ init ~ ").idup;\n";
+
+        genTypeOf(symbol, idx);
+    }
+
+    /**
+    * Generate the code to populate the 'type' field of the variable.
+    * This type is used only for display.
+    */
+    static void genTypeOf(Symbol sym, size_t index)
+    {
+        prefix ~= "_repl_.symbols[" ~ index.to!string ~ "].type = typeof(*"
+                ~ sym.name ~ ").stringof.idup;\n";
+    }
+
+    static ReplContext* repl;
+    static string prefix;
+    static string suffix;
+    static int newVars = -1;
 }
 
+/**
+* Remove any symbols that do not have a current value string associated with
+* them. These are assumed to be dead, probably because compilation failed.
+*/
 void deadSymbols(ref ReplContext repl)
 {
     Symbol[] keep;
     foreach(sym; repl.symbols)
     {
         if (sym.current !is null)
-        {
             keep ~= sym;
-            debug { writeln("ALIVE SYMBOL: ", sym.current); }
-        }
         else
         {
             repl.symbolSet.remove(sym.name);

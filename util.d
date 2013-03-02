@@ -14,7 +14,7 @@ extern(C) void* gc_getProxy();
 * of the vtables on the heap. This function is called from within
 * the DLL for each new class allocation.
 */
-extern(C) void hookNewClass(TypeInfo_Class ti, void* cptr, ReplContext* repl)
+extern(C) void hookNewClass(TypeInfo_Class ti, void* cptr, ReplContext* repl, bool clear = false)
 {
     import std.algorithm : countUntil;
     import std.c.string : memcpy;
@@ -31,6 +31,12 @@ extern(C) void hookNewClass(TypeInfo_Class ti, void* cptr, ReplContext* repl)
     {
         count++;
         infos ~= _Info(ti.name.idup, ti.vtbl.dup, cptr);
+    }
+    else if (clear)
+    {
+        count = 0;
+        infos.clear;
+        return;
     }
     else
     {
@@ -72,31 +78,14 @@ string genHeader()
     import core.sys.windows.dll, core.runtime, core.memory;
 
     extern (C) void gc_setProxy(void*);
-    extern (C) void gc_clrProxy();
-    extern (C) void gc_init();
-    extern (C) void rt_moduleCtor();
-    extern (C) void rt_moduleTlsCtor();
-
-    HINSTANCE g_hInst;
 
     extern(Windows) BOOL DllMain(HINSTANCE hInstance,DWORD ulReason,LPVOID lpvReserved)
     {
-        //g_hInst = hInstance;
         final switch (ulReason)
         {
         case DLL_PROCESS_ATTACH:
+            _REPL.fixUp();
             Runtime.initialize();
-            /++
-            gc_init();
-            printf("DONE GC\n");
-            initStaticDataGC();
-            printf("DONE STATIC DATA GC\n");
-            rt_moduleCtor();
-            printf("DONE MOD CTOR\n");
-            rt_moduleTlsCtor();
-            printf("DONE MOD TLS CTOR\n");
-            ++/
-            gc_setProxy(cast(void*)0x` ~ prox.to!string ~ `);
             break;
         case DLL_PROCESS_DETACH:
             break;
@@ -135,6 +124,41 @@ string genHeader()
             _REPL.Vtbl[] vtbls;
             void* gc;
             string[] includes;
+        }
+
+        static void fixUp()
+        {
+            import core.sys.windows.threadaux : getTEB;
+
+            alias extern(Windows)
+            void* fnRtlAllocateHeap(void* HeapHandle, uint Flags, size_t Size) nothrow;
+
+            HANDLE hnd = GetModuleHandleA( "NTDLL" );
+            assert( hnd, "cannot get module handle for ntdll" );
+
+            fnRtlAllocateHeap* fnAlloc = cast(fnRtlAllocateHeap*) GetProcAddress( hnd, "RtlAllocateHeap" );
+
+            auto teb = getTEB();
+            void** peb = cast(void**) teb[12];
+            void* heap = peb[6];
+
+            auto sz = _tlsend - _tlsstart;
+            void* _tlsdata = cast(void*) (*fnAlloc)( heap, 0xc0000, sz );
+
+            core.stdc.string.memcpy( _tlsdata, _tlsstart, sz );
+
+            auto tlsindex = 1;
+
+            // create copy of tls pointer array
+            void** array = cast(void**) (*fnAlloc)( heap, 0xc0000, (tlsindex + 1) * (void*).sizeof );
+
+            if( tlsindex > 0 && teb[11] )
+                core.stdc.string.memcpy( array, teb[11], tlsindex * (void*).sizeof);
+
+            array[tlsindex] = _tlsdata;
+            teb[11] = cast(void*) array;
+
+            _tls_index ++;
         }
 
         static auto makeNew(string s, T)(ref _REPL.ReplContext repl, size_t index, T t = T.init)
@@ -191,27 +215,54 @@ string genHeader()
 
         static void hookNewClass(TypeInfo_Class ti, void* cptr)
         {
-            alias extern(C) void function(TypeInfo_Class, void*, _REPL.ReplContext*) cb;
+            alias extern(C) void function(TypeInfo_Class, void*, _REPL.ReplContext*, bool) cb;
             auto fp = cast(cb)(0x` ~ (&hookNewClass).to!string ~ `);
-            fp(ti, cptr, null);
+            fp(ti, cptr, null, false);
         }
     }
 
     extern (C) Object _d_newclass(const ClassInfo ci)
     {
-        import core.memory, std.string;
+        import core.memory, std.string, core.sys.windows.stacktrace;
         void* p;
 
-        p = GC.malloc(ci.init.length,
-                      GC.BlkAttr.FINALIZE | (ci.m_flags & 2 ? GC.BlkAttr.NO_SCAN : 0));
+        //printf(" NEWCLASS %s\n", cast(char*)toStringz(ci.name));
 
-        (cast(byte*) p)[0 .. ci.init.length] = ci.init[];
+        bool leak = false;
+        auto curr = cast(ClassInfo)ci;
 
-        auto obj = cast(Object) p;
-        _REPL.hookNewClass(typeid(obj), p);
-        return obj;
+        while(curr)
+        {
+            if (curr == typeid(Throwable) || curr == typeid(StackTrace))
+            {
+                leak = true;
+                break;
+            }
+            curr = curr.base;
+        }
+
+
+        if (leak)
+        {
+            p = malloc(ci.init.length); // let it leak for now
+            (cast(byte*) p)[0 .. ci.init.length] = ci.init[];
+            return cast(Object)p;
+        }
+        else
+        {
+            p = GC.malloc(ci.init.length,
+                          GC.BlkAttr.FINALIZE | (ci.m_flags & 2 ? GC.BlkAttr.NO_SCAN : 0));
+
+            (cast(byte*) p)[0 .. ci.init.length] = ci.init[];
+
+            auto obj = cast(Object) p;
+            _REPL.hookNewClass(typeid(obj), p);
+
+            return obj;
+        }
     }
 
 
 `;
 }
+

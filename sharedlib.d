@@ -1,6 +1,9 @@
 
 module sharedlib;
 
+/**
+* Encapsulate shared lib functions.
+*/
 version(Windows)
 {
     import std.file : read;
@@ -15,6 +18,9 @@ version(Windows)
         @disable this();
         @property bool loaded() { return handle !is null; }
 
+        /**
+        * Load a shared lib given a filename.
+        */
         this(string file)
         {
             filename = file;
@@ -44,7 +50,6 @@ version(Windows)
             return cast(T) MemoryGetProcAddress(handle, cast(char*)(name.toStringz()));
         }
     }
-
 }
 else
 {
