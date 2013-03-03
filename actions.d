@@ -64,16 +64,17 @@ struct Parser
     */
     static void genWrapper()
     {
-        string temp;
+        string ptemp, stemp;
         int stop = newVars == -1 ? repl.symbols.length : newVars;
         foreach(idx, sym; repl.symbols)
         {
             if (idx < stop) // var is not new, grab it from ReplContext
-                temp ~= "auto "~sym.name~" = _REPL.getVar!("~sym.checkType~")(_repl_,"~idx.to!string~");\n";
+                ptemp ~= "auto "~sym.name~" = _REPL.getVar!("~sym.checkType~")(_repl_,"~idx.to!string~");\n";
 
-            suffix ~= "_repl_.symbols["~idx.to!string~"].current = to!string(*"~sym.name~").idup;\n";
+            stemp ~= "_repl_.symbols["~idx.to!string~"].current = to!string(*"~sym.name~").idup;\n";
         }
-        prefix = temp ~ prefix;
+        prefix = ptemp ~ prefix;
+        suffix = stemp ~ suffix;
     }
 
     /**
@@ -278,6 +279,7 @@ struct Parser
                 ~ type ~ ")(_repl_," ~ idx.to!string ~ ");\n";
 
         genTypeOf(symbol, idx);
+        genValid(idx);
     }
 
     /**
@@ -293,6 +295,7 @@ struct Parser
                 ~ init ~ "#\"(_repl_," ~ idx.to!string ~ "," ~ init ~ ");\n";
 
         genTypeOf(symbol, idx);
+        genValid(idx);
     }
 
     /**
@@ -310,6 +313,7 @@ struct Parser
                 ~ init ~ "#\")(" ~ init ~ ").idup;\n";
 
         genTypeOf(symbol, idx);
+        genValid(idx);
     }
 
     /**
@@ -321,6 +325,25 @@ struct Parser
         prefix ~= "_repl_.symbols[" ~ index.to!string ~ "].type = typeof(*"
                 ~ sym.name ~ ").stringof.idup;\n";
     }
+
+    /**
+    * Generate the code to set the valid field to true. This should be
+    * executed after the main code, so we know if it worked.
+    */
+    static void genValid(size_t index)
+    {
+        suffix ~= "_repl_.symbols[" ~ index.to!string ~ "].valid = true;\n";
+    }
+
+    /**
+    * Return true if a symbol with the given name has been defined.
+    */
+    static bool defined(string name)
+    {
+        auto ptr = name in repl.symbolSet;
+        return ptr !is null;
+    }
+
 
     static ReplContext* repl;
     static string prefix;
@@ -337,7 +360,7 @@ void deadSymbols(ref ReplContext repl)
     Symbol[] keep;
     foreach(sym; repl.symbols)
     {
-        if (sym.current !is null)
+        if (sym.valid)
             keep ~= sym;
         else
         {

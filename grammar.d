@@ -13,7 +13,7 @@ ReplParse:
            / UserType
            / Var
            / Statement
-           / BwBraces(VarRewrite/Import/AddressOf/UserType/.)
+           / BwBraces(VarRewrite/Import/UserType/.)
            / eoi
            / .
 
@@ -124,12 +124,11 @@ ReplParse:
     TypeOf <- ('typeof' wx ~BwParens(TypeOfInner))
     TypeOfInner <- TypeOf / VarRewrite / .
 
-    AddressOf <- ((:'&' (:w / LBracket)* Ident)(!('['/'.'/'(')))
-
     VarRewrite <- Skip / Ident {Parser.varRewrite} (wx '.' wx Ident)*
 
     Skip <- TemplateArg
-    TemplateArg <- wx '!' wx BwParens(.)
+    TemplateArg <- wx '!' wx (~Type)
+                 / wx '!' wx BwParens(.)
 
     ### Helpers
 
@@ -185,21 +184,14 @@ ReplParse:
 
         StringOf    <- (~(wx ;'.' wx 'stringof'))
 
-        Char <~ backslash ( quote
-                          / doublequote
-                          / backquote
-                          / backslash
-                          / '-'
-                          / '['
-                          / ']'
+        Char <~ backslash ( quote / doublequote / backquote / backslash
+                          / '-' / '[' / ']'
                           / [nrt]
-                          / [0-2][0-7][0-7]
-                          / [0-7][0-7]?
+                          / [0-2][0-7][0-7] / [0-7][0-7]?
                           / 'x' hexDigit hexDigit
                           / 'u' hexDigit hexDigit hexDigit hexDigit
                           / 'U' hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit
-                          )
-              / . # or anything else
+                          )  / . # or anything else
 
         Comment             <~ (LineComment / BlockComment / NestingBlockComment)
 

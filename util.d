@@ -105,6 +105,7 @@ string genHeader()
             string type;
             string current;
             string checkType;
+            bool valid = false;
             void* addr;
         }
 
@@ -225,8 +226,6 @@ string genHeader()
     {
         import core.memory, std.string, core.sys.windows.stacktrace;
         void* p;
-
-        //printf(" NEWCLASS %s\n", cast(char*)toStringz(ci.name));
 
         bool leak = false;
         auto curr = cast(ClassInfo)ci;

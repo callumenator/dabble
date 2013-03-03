@@ -2,6 +2,7 @@
 module repl;
 
 import
+    std.algorithm,
     std.stdio;
 
 import
@@ -26,6 +27,7 @@ struct Symbol
     string type;
     string current;
     string checkType;
+    bool valid = false;
     void* addr;
 }
 
@@ -71,8 +73,7 @@ void loop(ref ReplContext repl,
             }
             default:
             {
-                if (eval(lineBuffer.to!string, repl, error, flag))
-                    writeln(error);
+                eval(lineBuffer.to!string, repl, error, flag);
             }
         }
 
@@ -129,7 +130,10 @@ bool eval(string code,
     times.build = sw.peek().msecs();
 
     if (!build)
+    {
+        writeln("Error: " ~ error);
         return false;
+    }
 
     debug { writeln("CALL..."); }
 
@@ -160,7 +164,7 @@ bool build(string code,
            ref ReplContext repl,
            out string error)
 {
-    import std.file : exists;
+    import std.file : exists, readText;
     import std.process : shell;
 
     auto file = File(repl.filename ~ ".d", "w");
@@ -181,31 +185,33 @@ bool build(string code,
         file.close();
     }
 
+    bool attempt(string cmd, out string err)
+    {
+        try {
+            shell(cmd ~ " 2> errout.txt");
+            return true;
+        }
+        catch(Exception e)
+        {
+            err = parseError(readText("errout.txt"));
+            return false;
+        }
+    }
+
     string cmd = "dmd " ~ repl.filename ~ ".d " ~ repl.filename ~ ".def";
     auto includes = std.array.join(repl.includes, ".d ");
     if (repl.includes.length > 0)
     {
-        error = shell("dmd -lib -ofreplLib.lib " ~ includes);
-
-        if (error.length)
-             writeln("Lib build error: ", error);
+        if (!attempt("dmd -lib -ofreplLib.lib " ~ includes, error))
+            return false;
 
         cmd ~= " replLib.lib";
     }
 
-    try
-    {
-        error = shell(cmd);
-		if (error.length)
-             writeln(error);
-        return true;
-    }
-    catch(Exception e)
-    {
+    if (!attempt(cmd, error))
         return false;
-    }
 
-    assert(false);
+    return true;
 }
 
 
@@ -221,7 +227,7 @@ enum CallResult
 * Load the shared lib, and call the _main function. Free the lib on exit.
 */
 CallResult call(ref ReplContext repl,
-               out string error)
+                out string error)
 {
     import core.memory : GC;
 
@@ -252,4 +258,32 @@ CallResult call(ref ReplContext repl,
     }
 
     return CallResult.success;
+}
+
+/**
+* Do some processing on errors returned by DMD.
+*/
+string parseError(string error)
+{
+    import std.string : splitLines;
+
+    if (error.length == 0)
+        return "";
+
+    string res;
+    auto lines = splitLines(error);
+    foreach(line; lines)
+    {
+        auto r = error.splitter(":");
+
+        if (r.empty)
+            res ~= line;
+        else
+        {
+            r.popFront();
+            r.popFront();
+            res ~= r.front;
+        }
+    }
+    return res;
 }

@@ -43,6 +43,14 @@ void stress(ref ReplContext repl)
      "foreach(val; ar[]){ writeln(val); }"
     ];
 
+    run(code);
+}
+
+void run(string[] code)
+{
+    ReplContext repl;
+    repl.gc = gc_getProxy();
+
     string err;
     foreach(i, c; code)
     {
@@ -54,6 +62,8 @@ void stress(ref ReplContext repl)
 import std.exception;
 void main()
 {
+
+    auto a = (1);
 
     ReplContext repl;
     repl.gc = gc_getProxy();
