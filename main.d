@@ -56,12 +56,8 @@ void run(string[] code)
     }
 }
 
-import std.exception;
 void main()
 {
-
-    auto a = (1);
-
     ReplContext repl;
     repl.gc = gc_getProxy();
 
