@@ -1,6 +1,8 @@
 module grammar;
 
-import pegged.peg, pegged.grammar;
+import
+    pegged.peg,
+    pegged.grammar;
 
 enum grammar = `
 ReplParse:
