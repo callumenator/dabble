@@ -8,8 +8,8 @@ import
     std.string;
 
 import
-    repl,
-    parser;
+    parser,
+    repl;
 
 
 struct Parser

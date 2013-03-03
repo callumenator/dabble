@@ -6,10 +6,10 @@ import
     std.stdio;
 
 import
+    actions,
     loader,
     parser,
     sharedlib,
-    actions,
     util;
 
 extern(C) void* gc_getProxy();
@@ -166,10 +166,13 @@ bool build(string code,
 {
     import std.file : exists, readText;
     import std.process : shell;
+    import std.parallelism : task;
 
     auto file = File(repl.filename ~ ".d", "w");
     file.write(genHeader() ~ code);
     file.close();
+
+    scope(exit) task!cleanup(repl).executeInNewThread();
 
     if (!exists(repl.filename ~ ".def"))
     {
@@ -214,14 +217,34 @@ bool build(string code,
     return true;
 }
 
+/**
+* Cleanup some dmd outputs in a another thread.
+*/
+void cleanup(ReplContext repl)
+{
+    import std.file : exists, remove;
 
+    auto clean = [
+        repl.filename ~ ".obj",
+        repl.filename ~ ".map",
+        "errout.txt"
+    ];
+
+    foreach(f; clean)
+        if (exists(f))
+            try { remove(f); } catch(Exception e) {}
+}
+
+
+/**
+* Result of attempting to load and call compiled code.
+*/
 enum CallResult
 {
     success,
     loadError,
     runtimeError
 }
-
 
 /**
 * Load the shared lib, and call the _main function. Free the lib on exit.

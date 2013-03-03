@@ -5,10 +5,7 @@ import
     std.stdio;
 
 import
-    repl,
-    parser,
-    actions,
-    grammartest;
+    repl;
 
 void stress(ref ReplContext repl)
 {
