@@ -15,7 +15,6 @@ version(Windows)
         string filename;
         void* handle = null;
 
-        @disable this();
         @property bool loaded() { return handle !is null; }
 
         /**

@@ -419,7 +419,6 @@ void FinalizeSections(PMEMORYMODULE modul)
 void PerformBaseRelocation(PMEMORYMODULE modul, DWORD delta)
 {
     import std.stdio;
-    writeln("RELOCATING");
 
     DWORD i;
     ubyte *codeBase = modul.codeBase;

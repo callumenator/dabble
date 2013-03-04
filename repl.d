@@ -56,6 +56,8 @@ struct ReplContext
 void loop(ref ReplContext repl,
           Debug flag = Debug.none)
 {
+    writeln("DABBLE:");
+
     string error;
     char[] lineBuffer;
     stdin.readln(lineBuffer);
@@ -196,7 +198,8 @@ bool build(string code,
         }
         catch(Exception e)
         {
-            err = parseError(readText("errout.txt"));
+            if (exists("errout.txt"))
+                err = parseError(readText("errout.txt"));
             return false;
         }
     }
@@ -254,10 +257,15 @@ CallResult call(ref ReplContext repl,
 {
     import core.memory : GC;
 
+    static SharedLib lastLib; // XP hack
+
     alias extern(C) int function(ref ReplContext) funcType;
     auto lib = SharedLib(repl.filename ~ ".dll");
 
-    scope(exit) lib.free(false /** don't alert lib **/ );
+    if (lastLib.handle !is null)
+        lastLib.free(false);
+
+    lastLib = lib;
 
     if (!lib.loaded)
         return CallResult.loadError;
@@ -303,9 +311,13 @@ string parseError(string error)
             res ~= line;
         else
         {
-            r.popFront();
-            r.popFront();
-            res ~= r.front;
+            string tmp;
+            while(!r.empty)
+            {
+                tmp = r.front;
+                r.popFront();
+            }
+            res ~= tmp;
         }
     }
     return res;

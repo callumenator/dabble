@@ -56,12 +56,15 @@ void run(string[] code)
     }
 }
 
+
 void main()
 {
     ReplContext repl;
     repl.gc = gc_getProxy();
 
-    stress(repl);
-    //loop(repl, Debug.times);
+    //stress(repl);
+
+    loop(repl);
+
     return;
 }
