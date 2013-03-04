@@ -147,27 +147,28 @@ ReplParse:
         Seq(T)      <- (wx T)+
         Seq(T, Sep) <- wx T wx (Sep wx T wx)*
 
-        Until(T, U) <- (!(T/eoi) (Comment/String/U))*
+        Until(T, U) <- (!(T/eoi) (Comment/String/CharLiteral/U))*
 
         AllUntil(T)     <~ (!(T/eoi) ( Comment
                                      / String
+                                     / CharLiteral
                                      / AllBetween(LBracket,RBracket)
                                      / AllBetween(LBrace,RBrace)
                                      / .) )*
 
         AllBetween(L,R) <~ NestedList(L, Comment / String, R)
 
-        BwBraces(T=.) <- Nested('{', Comment / String / T, '}')
-        BwParens(T=.) <- Nested('(', Comment / String / T, ')')
-        BwBrackets(T=.) <- Nested('[', Comment / String / T, ']')
+        BwBraces(T=.) <- Nested('{', Comment / String / CharLiteral / T, '}')
+        BwParens(T=.) <- Nested('(', Comment / String / CharLiteral / T, ')')
+        BwBrackets(T=.) <- Nested('[', Comment / String / CharLiteral / T, ']')
         Nested(L,Items,R) <- ^L (!R (Nested(L,Items,R) / blank / Items))* ^R
 
         ## NOTE: These are not inclusive of the terminator
-        GrabToColon(T=.) <~ (!(';'/eoi) (String/Comment/FuncBlock/T))*
-        GrabToComma(T=.) <~ (!(','/eoi) (String/Comment/FuncBlock/ArrayLit/T))*
-        GrabToClosingParens(T=.) <~ (!(')'/eoi) (String/Comment/FuncBlock/BwParens(T)/T))*
+        GrabToColon(T=.) <~ (!(';'/eoi) (String/CharLiteral/Comment/FuncBlock/T))*
+        GrabToComma(T=.) <~ (!(','/eoi) (String/CharLiteral/Comment/FuncBlock/ArrayLit/T))*
+        GrabToClosingParens(T=.) <~ (!(')'/eoi) (String/CharLiteral/Comment/FuncBlock/BwParens(T)/T))*
 
-        NestItems   <- Comment / String
+        NestItems   <- Comment / String / CharLiteral
         String      <- (WYSString / DBQString / TKNString / DLMString / StringOf) {Parser.dupString}
         StringNoDup <- (WYSString / DBQString / TKNString / DLMString)
 
@@ -194,6 +195,8 @@ ReplParse:
                           / 'u' hexDigit hexDigit hexDigit hexDigit
                           / 'U' hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit
                           )  / . # or anything else
+
+        CharLiteral <~ quote Char quote
 
         Comment             <~ (LineComment / BlockComment / NestingBlockComment)
 

@@ -144,27 +144,28 @@ ReplParse:
         Seq(T)      <- (wx T)+
         Seq(T, Sep) <- wx T wx (Sep wx T wx)*
 
-        Until(T, U) <- (!(T/eoi) (Comment/String/U))*
+        Until(T, U) <- (!(T/eoi) (Comment/String/CharLiteral/U))*
 
         AllUntil(T)     <~ (!(T/eoi) ( Comment
                                      / String
+                                     / CharLiteral
                                      / AllBetween(LBracket,RBracket)
                                      / AllBetween(LBrace,RBrace)
                                      / .) )*
 
         AllBetween(L,R) <~ NestedList(L, Comment / String, R)
 
-        BwBraces(T=.) <- Nested('{', Comment / String / T, '}')
-        BwParens(T=.) <- Nested('(', Comment / String / T, ')')
-        BwBrackets(T=.) <- Nested('[', Comment / String / T, ']')
+        BwBraces(T=.) <- Nested('{', Comment / String / CharLiteral / T, '}')
+        BwParens(T=.) <- Nested('(', Comment / String / CharLiteral / T, ')')
+        BwBrackets(T=.) <- Nested('[', Comment / String / CharLiteral / T, ']')
         Nested(L,Items,R) <- ^L (!R (Nested(L,Items,R) / blank / Items))* ^R
 
         ## NOTE: These are not inclusive of the terminator
-        GrabToColon(T=.) <~ (!(';'/eoi) (String/Comment/FuncBlock/T))*
-        GrabToComma(T=.) <~ (!(','/eoi) (String/Comment/FuncBlock/ArrayLit/T))*
-        GrabToClosingParens(T=.) <~ (!(')'/eoi) (String/Comment/FuncBlock/BwParens(T)/T))*
+        GrabToColon(T=.) <~ (!(';'/eoi) (String/CharLiteral/Comment/FuncBlock/T))*
+        GrabToComma(T=.) <~ (!(','/eoi) (String/CharLiteral/Comment/FuncBlock/ArrayLit/T))*
+        GrabToClosingParens(T=.) <~ (!(')'/eoi) (String/CharLiteral/Comment/FuncBlock/BwParens(T)/T))*
 
-        NestItems   <- Comment / String
+        NestItems   <- Comment / String / CharLiteral
         String      <- (WYSString / DBQString / TKNString / DLMString / StringOf) {Parser.dupString}
         StringNoDup <- (WYSString / DBQString / TKNString / DLMString)
 
@@ -191,6 +192,8 @@ ReplParse:
                           / 'u' hexDigit hexDigit hexDigit hexDigit
                           / 'U' hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit
                           )  / . # or anything else
+
+        CharLiteral <~ quote Char quote
 
         Comment             <~ (LineComment / BlockComment / NestingBlockComment)
 
@@ -292,6 +295,7 @@ struct GenericReplParse(TParseTree)
         rules["DLMString"] = toDelegate(&ReplParse.DLMString);
         rules["StringOf"] = toDelegate(&ReplParse.StringOf);
         rules["Char"] = toDelegate(&ReplParse.Char);
+        rules["CharLiteral"] = toDelegate(&ReplParse.CharLiteral);
         rules["Comment"] = toDelegate(&ReplParse.Comment);
         rules["LineComment"] = toDelegate(&ReplParse.LineComment);
         rules["BlockComment"] = toDelegate(&ReplParse.BlockComment);
@@ -1411,16 +1415,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree Until(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(T, eoi)), pegged.peg.or!(Comment, String, U))), "ReplParse.Until!(" ~ pegged.peg.getName!(T)() ~ ", " ~ pegged.peg.getName!(U) ~ ")")(p);
+            return         pegged.peg.named!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(T, eoi)), pegged.peg.or!(Comment, String, CharLiteral, U))), "ReplParse.Until!(" ~ pegged.peg.getName!(T)() ~ ", " ~ pegged.peg.getName!(U) ~ ")")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(T, eoi)), pegged.peg.or!(Comment, String, U))), "ReplParse.Until!(" ~ pegged.peg.getName!(T)() ~ ", " ~ pegged.peg.getName!(U) ~ ")"), "Until_2")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(T, eoi)), pegged.peg.or!(Comment, String, CharLiteral, U))), "ReplParse.Until!(" ~ pegged.peg.getName!(T)() ~ ", " ~ pegged.peg.getName!(U) ~ ")"), "Until_2")(p);
     }
     static TParseTree Until(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(T, eoi)), pegged.peg.or!(Comment, String, U))), "ReplParse.Until!(" ~ pegged.peg.getName!(T)() ~ ", " ~ pegged.peg.getName!(U) ~ ")")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(T, eoi)), pegged.peg.or!(Comment, String, CharLiteral, U))), "ReplParse.Until!(" ~ pegged.peg.getName!(T)() ~ ", " ~ pegged.peg.getName!(U) ~ ")")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(T, eoi)), pegged.peg.or!(Comment, String, U))), "ReplParse.Until!(" ~ pegged.peg.getName!(T)() ~ ", " ~ pegged.peg.getName!(U) ~ ")"), "Until_2")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(T, eoi)), pegged.peg.or!(Comment, String, CharLiteral, U))), "ReplParse.Until!(" ~ pegged.peg.getName!(T)() ~ ", " ~ pegged.peg.getName!(U) ~ ")"), "Until_2")(TParseTree("", false,[], s));
     }
     static string Until(GetName g)
     {
@@ -1433,16 +1437,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree AllUntil(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(T, eoi)), pegged.peg.or!(Comment, String, AllBetween!(LBracket, RBracket), AllBetween!(LBrace, RBrace), pegged.peg.any)))), "ReplParse.AllUntil!(" ~ pegged.peg.getName!(T) ~ ")")(p);
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(T, eoi)), pegged.peg.or!(Comment, String, CharLiteral, AllBetween!(LBracket, RBracket), AllBetween!(LBrace, RBrace), pegged.peg.any)))), "ReplParse.AllUntil!(" ~ pegged.peg.getName!(T) ~ ")")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(T, eoi)), pegged.peg.or!(Comment, String, AllBetween!(LBracket, RBracket), AllBetween!(LBrace, RBrace), pegged.peg.any)))), "ReplParse.AllUntil!(" ~ pegged.peg.getName!(T) ~ ")"), "AllUntil_1")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(T, eoi)), pegged.peg.or!(Comment, String, CharLiteral, AllBetween!(LBracket, RBracket), AllBetween!(LBrace, RBrace), pegged.peg.any)))), "ReplParse.AllUntil!(" ~ pegged.peg.getName!(T) ~ ")"), "AllUntil_1")(p);
     }
     static TParseTree AllUntil(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(T, eoi)), pegged.peg.or!(Comment, String, AllBetween!(LBracket, RBracket), AllBetween!(LBrace, RBrace), pegged.peg.any)))), "ReplParse.AllUntil!(" ~ pegged.peg.getName!(T) ~ ")")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(T, eoi)), pegged.peg.or!(Comment, String, CharLiteral, AllBetween!(LBracket, RBracket), AllBetween!(LBrace, RBrace), pegged.peg.any)))), "ReplParse.AllUntil!(" ~ pegged.peg.getName!(T) ~ ")")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(T, eoi)), pegged.peg.or!(Comment, String, AllBetween!(LBracket, RBracket), AllBetween!(LBrace, RBrace), pegged.peg.any)))), "ReplParse.AllUntil!(" ~ pegged.peg.getName!(T) ~ ")"), "AllUntil_1")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(T, eoi)), pegged.peg.or!(Comment, String, CharLiteral, AllBetween!(LBracket, RBracket), AllBetween!(LBrace, RBrace), pegged.peg.any)))), "ReplParse.AllUntil!(" ~ pegged.peg.getName!(T) ~ ")"), "AllUntil_1")(TParseTree("", false,[], s));
     }
     static string AllUntil(GetName g)
     {
@@ -1477,16 +1481,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree BwBraces(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(Nested!(pegged.peg.literal!("{"), pegged.peg.or!(Comment, String, T), pegged.peg.literal!("}")), "ReplParse.BwBraces!(" ~ pegged.peg.getName!(T) ~ ")")(p);
+            return         pegged.peg.named!(Nested!(pegged.peg.literal!("{"), pegged.peg.or!(Comment, String, CharLiteral, T), pegged.peg.literal!("}")), "ReplParse.BwBraces!(" ~ pegged.peg.getName!(T) ~ ")")(p);
         else
-            return hooked!(pegged.peg.named!(Nested!(pegged.peg.literal!("{"), pegged.peg.or!(Comment, String, T), pegged.peg.literal!("}")), "ReplParse.BwBraces!(" ~ pegged.peg.getName!(T) ~ ")"), "BwBraces_1")(p);
+            return hooked!(pegged.peg.named!(Nested!(pegged.peg.literal!("{"), pegged.peg.or!(Comment, String, CharLiteral, T), pegged.peg.literal!("}")), "ReplParse.BwBraces!(" ~ pegged.peg.getName!(T) ~ ")"), "BwBraces_1")(p);
     }
     static TParseTree BwBraces(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(Nested!(pegged.peg.literal!("{"), pegged.peg.or!(Comment, String, T), pegged.peg.literal!("}")), "ReplParse.BwBraces!(" ~ pegged.peg.getName!(T) ~ ")")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(Nested!(pegged.peg.literal!("{"), pegged.peg.or!(Comment, String, CharLiteral, T), pegged.peg.literal!("}")), "ReplParse.BwBraces!(" ~ pegged.peg.getName!(T) ~ ")")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(Nested!(pegged.peg.literal!("{"), pegged.peg.or!(Comment, String, T), pegged.peg.literal!("}")), "ReplParse.BwBraces!(" ~ pegged.peg.getName!(T) ~ ")"), "BwBraces_1")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(Nested!(pegged.peg.literal!("{"), pegged.peg.or!(Comment, String, CharLiteral, T), pegged.peg.literal!("}")), "ReplParse.BwBraces!(" ~ pegged.peg.getName!(T) ~ ")"), "BwBraces_1")(TParseTree("", false,[], s));
     }
     static string BwBraces(GetName g)
     {
@@ -1499,16 +1503,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree BwParens(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(Nested!(pegged.peg.literal!("("), pegged.peg.or!(Comment, String, T), pegged.peg.literal!(")")), "ReplParse.BwParens!(" ~ pegged.peg.getName!(T) ~ ")")(p);
+            return         pegged.peg.named!(Nested!(pegged.peg.literal!("("), pegged.peg.or!(Comment, String, CharLiteral, T), pegged.peg.literal!(")")), "ReplParse.BwParens!(" ~ pegged.peg.getName!(T) ~ ")")(p);
         else
-            return hooked!(pegged.peg.named!(Nested!(pegged.peg.literal!("("), pegged.peg.or!(Comment, String, T), pegged.peg.literal!(")")), "ReplParse.BwParens!(" ~ pegged.peg.getName!(T) ~ ")"), "BwParens_1")(p);
+            return hooked!(pegged.peg.named!(Nested!(pegged.peg.literal!("("), pegged.peg.or!(Comment, String, CharLiteral, T), pegged.peg.literal!(")")), "ReplParse.BwParens!(" ~ pegged.peg.getName!(T) ~ ")"), "BwParens_1")(p);
     }
     static TParseTree BwParens(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(Nested!(pegged.peg.literal!("("), pegged.peg.or!(Comment, String, T), pegged.peg.literal!(")")), "ReplParse.BwParens!(" ~ pegged.peg.getName!(T) ~ ")")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(Nested!(pegged.peg.literal!("("), pegged.peg.or!(Comment, String, CharLiteral, T), pegged.peg.literal!(")")), "ReplParse.BwParens!(" ~ pegged.peg.getName!(T) ~ ")")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(Nested!(pegged.peg.literal!("("), pegged.peg.or!(Comment, String, T), pegged.peg.literal!(")")), "ReplParse.BwParens!(" ~ pegged.peg.getName!(T) ~ ")"), "BwParens_1")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(Nested!(pegged.peg.literal!("("), pegged.peg.or!(Comment, String, CharLiteral, T), pegged.peg.literal!(")")), "ReplParse.BwParens!(" ~ pegged.peg.getName!(T) ~ ")"), "BwParens_1")(TParseTree("", false,[], s));
     }
     static string BwParens(GetName g)
     {
@@ -1521,16 +1525,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree BwBrackets(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(Nested!(pegged.peg.literal!("["), pegged.peg.or!(Comment, String, T), pegged.peg.literal!("]")), "ReplParse.BwBrackets!(" ~ pegged.peg.getName!(T) ~ ")")(p);
+            return         pegged.peg.named!(Nested!(pegged.peg.literal!("["), pegged.peg.or!(Comment, String, CharLiteral, T), pegged.peg.literal!("]")), "ReplParse.BwBrackets!(" ~ pegged.peg.getName!(T) ~ ")")(p);
         else
-            return hooked!(pegged.peg.named!(Nested!(pegged.peg.literal!("["), pegged.peg.or!(Comment, String, T), pegged.peg.literal!("]")), "ReplParse.BwBrackets!(" ~ pegged.peg.getName!(T) ~ ")"), "BwBrackets_1")(p);
+            return hooked!(pegged.peg.named!(Nested!(pegged.peg.literal!("["), pegged.peg.or!(Comment, String, CharLiteral, T), pegged.peg.literal!("]")), "ReplParse.BwBrackets!(" ~ pegged.peg.getName!(T) ~ ")"), "BwBrackets_1")(p);
     }
     static TParseTree BwBrackets(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(Nested!(pegged.peg.literal!("["), pegged.peg.or!(Comment, String, T), pegged.peg.literal!("]")), "ReplParse.BwBrackets!(" ~ pegged.peg.getName!(T) ~ ")")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(Nested!(pegged.peg.literal!("["), pegged.peg.or!(Comment, String, CharLiteral, T), pegged.peg.literal!("]")), "ReplParse.BwBrackets!(" ~ pegged.peg.getName!(T) ~ ")")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(Nested!(pegged.peg.literal!("["), pegged.peg.or!(Comment, String, T), pegged.peg.literal!("]")), "ReplParse.BwBrackets!(" ~ pegged.peg.getName!(T) ~ ")"), "BwBrackets_1")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(Nested!(pegged.peg.literal!("["), pegged.peg.or!(Comment, String, CharLiteral, T), pegged.peg.literal!("]")), "ReplParse.BwBrackets!(" ~ pegged.peg.getName!(T) ~ ")"), "BwBrackets_1")(TParseTree("", false,[], s));
     }
     static string BwBrackets(GetName g)
     {
@@ -1565,16 +1569,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree GrabToColon(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(";"), eoi)), pegged.peg.or!(String, Comment, FuncBlock, T)))), "ReplParse.GrabToColon!(" ~ pegged.peg.getName!(T) ~ ")")(p);
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(";"), eoi)), pegged.peg.or!(String, CharLiteral, Comment, FuncBlock, T)))), "ReplParse.GrabToColon!(" ~ pegged.peg.getName!(T) ~ ")")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(";"), eoi)), pegged.peg.or!(String, Comment, FuncBlock, T)))), "ReplParse.GrabToColon!(" ~ pegged.peg.getName!(T) ~ ")"), "GrabToColon_1")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(";"), eoi)), pegged.peg.or!(String, CharLiteral, Comment, FuncBlock, T)))), "ReplParse.GrabToColon!(" ~ pegged.peg.getName!(T) ~ ")"), "GrabToColon_1")(p);
     }
     static TParseTree GrabToColon(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(";"), eoi)), pegged.peg.or!(String, Comment, FuncBlock, T)))), "ReplParse.GrabToColon!(" ~ pegged.peg.getName!(T) ~ ")")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(";"), eoi)), pegged.peg.or!(String, CharLiteral, Comment, FuncBlock, T)))), "ReplParse.GrabToColon!(" ~ pegged.peg.getName!(T) ~ ")")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(";"), eoi)), pegged.peg.or!(String, Comment, FuncBlock, T)))), "ReplParse.GrabToColon!(" ~ pegged.peg.getName!(T) ~ ")"), "GrabToColon_1")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(";"), eoi)), pegged.peg.or!(String, CharLiteral, Comment, FuncBlock, T)))), "ReplParse.GrabToColon!(" ~ pegged.peg.getName!(T) ~ ")"), "GrabToColon_1")(TParseTree("", false,[], s));
     }
     static string GrabToColon(GetName g)
     {
@@ -1587,16 +1591,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree GrabToComma(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(","), eoi)), pegged.peg.or!(String, Comment, FuncBlock, ArrayLit, T)))), "ReplParse.GrabToComma!(" ~ pegged.peg.getName!(T) ~ ")")(p);
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(","), eoi)), pegged.peg.or!(String, CharLiteral, Comment, FuncBlock, ArrayLit, T)))), "ReplParse.GrabToComma!(" ~ pegged.peg.getName!(T) ~ ")")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(","), eoi)), pegged.peg.or!(String, Comment, FuncBlock, ArrayLit, T)))), "ReplParse.GrabToComma!(" ~ pegged.peg.getName!(T) ~ ")"), "GrabToComma_1")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(","), eoi)), pegged.peg.or!(String, CharLiteral, Comment, FuncBlock, ArrayLit, T)))), "ReplParse.GrabToComma!(" ~ pegged.peg.getName!(T) ~ ")"), "GrabToComma_1")(p);
     }
     static TParseTree GrabToComma(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(","), eoi)), pegged.peg.or!(String, Comment, FuncBlock, ArrayLit, T)))), "ReplParse.GrabToComma!(" ~ pegged.peg.getName!(T) ~ ")")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(","), eoi)), pegged.peg.or!(String, CharLiteral, Comment, FuncBlock, ArrayLit, T)))), "ReplParse.GrabToComma!(" ~ pegged.peg.getName!(T) ~ ")")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(","), eoi)), pegged.peg.or!(String, Comment, FuncBlock, ArrayLit, T)))), "ReplParse.GrabToComma!(" ~ pegged.peg.getName!(T) ~ ")"), "GrabToComma_1")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(","), eoi)), pegged.peg.or!(String, CharLiteral, Comment, FuncBlock, ArrayLit, T)))), "ReplParse.GrabToComma!(" ~ pegged.peg.getName!(T) ~ ")"), "GrabToComma_1")(TParseTree("", false,[], s));
     }
     static string GrabToComma(GetName g)
     {
@@ -1609,16 +1613,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree GrabToClosingParens(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(")"), eoi)), pegged.peg.or!(String, Comment, FuncBlock, BwParens!(T), T)))), "ReplParse.GrabToClosingParens!(" ~ pegged.peg.getName!(T) ~ ")")(p);
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(")"), eoi)), pegged.peg.or!(String, CharLiteral, Comment, FuncBlock, BwParens!(T), T)))), "ReplParse.GrabToClosingParens!(" ~ pegged.peg.getName!(T) ~ ")")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(")"), eoi)), pegged.peg.or!(String, Comment, FuncBlock, BwParens!(T), T)))), "ReplParse.GrabToClosingParens!(" ~ pegged.peg.getName!(T) ~ ")"), "GrabToClosingParens_1")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(")"), eoi)), pegged.peg.or!(String, CharLiteral, Comment, FuncBlock, BwParens!(T), T)))), "ReplParse.GrabToClosingParens!(" ~ pegged.peg.getName!(T) ~ ")"), "GrabToClosingParens_1")(p);
     }
     static TParseTree GrabToClosingParens(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(")"), eoi)), pegged.peg.or!(String, Comment, FuncBlock, BwParens!(T), T)))), "ReplParse.GrabToClosingParens!(" ~ pegged.peg.getName!(T) ~ ")")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(")"), eoi)), pegged.peg.or!(String, CharLiteral, Comment, FuncBlock, BwParens!(T), T)))), "ReplParse.GrabToClosingParens!(" ~ pegged.peg.getName!(T) ~ ")")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(")"), eoi)), pegged.peg.or!(String, Comment, FuncBlock, BwParens!(T), T)))), "ReplParse.GrabToClosingParens!(" ~ pegged.peg.getName!(T) ~ ")"), "GrabToClosingParens_1")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(pegged.peg.or!(pegged.peg.literal!(")"), eoi)), pegged.peg.or!(String, CharLiteral, Comment, FuncBlock, BwParens!(T), T)))), "ReplParse.GrabToClosingParens!(" ~ pegged.peg.getName!(T) ~ ")"), "GrabToClosingParens_1")(TParseTree("", false,[], s));
     }
     static string GrabToClosingParens(GetName g)
     {
@@ -1629,16 +1633,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree NestItems(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(Comment, String), "ReplParse.NestItems")(p);
+            return         pegged.peg.named!(pegged.peg.or!(Comment, String, CharLiteral), "ReplParse.NestItems")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(Comment, String), "ReplParse.NestItems"), "NestItems")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.or!(Comment, String, CharLiteral), "ReplParse.NestItems"), "NestItems")(p);
     }
     static TParseTree NestItems(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(Comment, String), "ReplParse.NestItems")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.or!(Comment, String, CharLiteral), "ReplParse.NestItems")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(Comment, String), "ReplParse.NestItems"), "NestItems")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.or!(Comment, String, CharLiteral), "ReplParse.NestItems"), "NestItems")(TParseTree("", false,[], s));
     }
     static string NestItems(GetName g)
     {
@@ -1795,6 +1799,25 @@ struct GenericReplParse(TParseTree)
     static string Char(GetName g)
     {
         return "ReplParse.Char";
+    }
+
+    static TParseTree CharLiteral(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(quote, Char, quote)), "ReplParse.CharLiteral")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(quote, Char, quote)), "ReplParse.CharLiteral"), "CharLiteral")(p);
+    }
+    static TParseTree CharLiteral(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(quote, Char, quote)), "ReplParse.CharLiteral")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(quote, Char, quote)), "ReplParse.CharLiteral"), "CharLiteral")(TParseTree("", false,[], s));
+    }
+    static string CharLiteral(GetName g)
+    {
+        return "ReplParse.CharLiteral";
     }
 
     static TParseTree Comment(TParseTree p)
