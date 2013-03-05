@@ -210,7 +210,10 @@ string genHeader()
                     return "";
                 }
                 else
-                    return expr().to!string;
+                {
+                    auto temp = expr();
+                    return temp.to!string;
+                }
             }
         }
 
