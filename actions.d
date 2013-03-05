@@ -275,7 +275,7 @@ struct Parser
         symbol.checkType = type;
         auto idx = addVar(symbol);
 
-        prefix ~= type ~" * " ~ name ~ " = _REPL.makeNew!(``,"
+        prefix ~= type ~" * " ~ name ~ " = _REPL.newType!("
                 ~ type ~ ")(_repl_," ~ idx.to!string ~ ");\n";
 
         genTypeOf(symbol, idx);
@@ -291,8 +291,8 @@ struct Parser
         symbol.checkType = type;
         auto idx = addVar(symbol);
 
-        prefix ~= type ~ "* " ~ name ~ " = cast(" ~ type ~ "*)_REPL.makeNew!q\"#"
-                ~ init ~ "#\"(_repl_," ~ idx.to!string ~ "," ~ init ~ ");\n";
+        prefix ~= type ~ "* " ~ name ~ " = cast(" ~ type ~ "*)_REPL.newExpr!(q\"#"~init~"#\")(_repl_,"
+                ~ idx.to!string ~ "," ~ init ~ ");\n";
 
         genTypeOf(symbol, idx);
         genValid(idx);
@@ -306,8 +306,7 @@ struct Parser
         auto symbol = Symbol(name);
         auto idx = addVar(symbol);
 
-        prefix ~= "auto " ~ name ~ " = _REPL.makeNew!q\"#"
-                ~ init ~ "#\"(_repl_," ~ idx.to!string ~ "," ~ init ~ ");\n";
+        prefix ~= "auto " ~ name ~ " = _REPL.newExpr!(q\"#"~init~"#\")(_repl_," ~ idx.to!string ~ "," ~ init ~ ");\n";
 
         prefix ~= "_repl_.symbols[" ~ idx.to!string ~ "].checkType = _REPL.NewTypeof!(q\"#"
                 ~ init ~ "#\")(" ~ init ~ ").idup;\n";

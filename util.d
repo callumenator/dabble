@@ -73,7 +73,7 @@ string genHeader()
 
     return
 `
-    import std.stdio, std.conv, std.range, std.algorithm, std.traits;
+    import std.stdio, std.conv, std.range, std.algorithm, std.traits, std.typecons;
     import std.c.stdio, std.c.string, std.c.stdlib, std.c.windows.windows;
     import core.sys.windows.dll, core.runtime, core.memory;
 
@@ -162,27 +162,47 @@ string genHeader()
             _tls_index ++;
         }
 
-        static auto makeNew(string s, T)(ref _REPL.ReplContext repl, size_t index, T t = T.init)
+        static T* newType(T)(ref _REPL.ReplContext repl, size_t index)
         {
-            import std.traits;
-            enum assign = "auto _v = new "~s~";";
-            static if (__traits(compiles, mixin("{"~assign~"}")))
+            T t = T.init;
+            auto ptr = heap(t);
+            repl.symbols[index].addr = ptr;
+            return ptr;
+        }
+
+        static auto newExpr(string S, E)(ref _REPL.ReplContext repl, size_t index, lazy E expr)
+        {
+            static if (__traits(compiles, mixin("{ auto _ = new " ~ S ~ ";}")))
             {
-                mixin(assign);
-                repl.symbols[index].addr = _v;
-                return cast(T*)_v;
+                mixin("auto ptr = new " ~ S ~ ";");
+                repl.symbols[index].addr = ptr;
+                return ptr;
             }
             else
             {
-                void* ptr;
-                ptr = GC.calloc(T.sizeof);
-                GC.disable();
-                memcpy(ptr, &t, T.sizeof);
-                GC.enable();
-
+                typeof(expr) t = expr();
+                auto ptr = heap(t);
                 repl.symbols[index].addr = ptr;
-                return cast(T*)ptr;
+                return ptr;
             }
+        }
+
+        static auto newExpr(string S, T...)(ref _REPL.ReplContext repl, size_t index, T _t) // for tuples
+        {
+            mixin("Tuple!" ~ T.stringof ~ " t;");
+            auto ptr = heap(t);
+            repl.symbols[index].addr = ptr;
+            return ptr;
+        }
+
+        static T* heap(T)(T init)
+        {
+            import core.memory, std.c.string;
+            auto ptr = GC.calloc(T.sizeof);
+            GC.disable();
+            memcpy(ptr, &init, T.sizeof);
+            GC.enable();
+            return cast(T*)ptr;
         }
 
         static string NewTypeof(string S, E)(lazy E expr)
@@ -193,6 +213,11 @@ string genHeader()
                 return RT.stringof;
             else
                 return "typeof(" ~ S ~ ")";
+        }
+
+        static string NewTypeof(string S, T...)(T t) // for tuples
+        {
+            return "Tuple!" ~ T.stringof;
         }
 
         static T* getVar(T)(_REPL.ReplContext repl, size_t index)

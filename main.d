@@ -7,19 +7,25 @@ import
 import
     repl;
 
-void stress(ref ReplContext repl)
+ReplContext stress(ref ReplContext repl)
 {
     auto code =
     ["err0 = `1.2`.to!int;",
      "struct S {int x, y = 5; }",
+     "structS = S();",
      "a = [1,2,3,4];",
      "b = a.sort;",
      "c = b;",
      "c.reverse;",
      "foreach(ref i; c) i++;",
+     "writeln(structS);",
+     "class C { int a; string b; }",
+     "classC = new C;",
      "s = `hello there`;",
      "foreach(i; iota(150)) { s ~= `x`;}",
      "writeln(s);",
+     "writeln(classC);",
+     "s_tuple = structS.tupleof;",
      "s = s[0..$-20];"
      "writeln(s);",
      "aa = [`one`:1, `two`:2, `three`:3, `four`:4];",
@@ -40,10 +46,10 @@ void stress(ref ReplContext repl)
      "foreach(val; ar[]){ writeln(val); }"
     ];
 
-    run(code);
+    return run(code);
 }
 
-void run(string[] code)
+ReplContext run(string[] code)
 {
     ReplContext repl;
     repl.gc = gc_getProxy();
@@ -54,17 +60,19 @@ void run(string[] code)
         writeln("Line: ", i, " -> ", c);
         eval(c, repl, err, Debug.times);
     }
+
+    return repl;
 }
+
 
 
 void main()
 {
     ReplContext repl;
-    repl.gc = gc_getProxy();
+    //repl = run(["struct S { int a; float b; }","S s;", "a = s.tupleof;"]);
+    repl = stress(repl);
 
-    //stress(repl);
-
-    loop(repl);
+    //loop(repl);
 
     return;
 }
