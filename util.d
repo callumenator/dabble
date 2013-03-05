@@ -115,16 +115,22 @@ string genHeader()
             void*[] vtbl;
         }
 
-        static struct ReplContext
+        struct ReplContext
         {
             string filename = "replDll";
             string[] imports;
             string[] userTypes;
-            _REPL.Symbol[] symbols;
+            Symbol[] symbols;
             int[string] symbolSet;
-            _REPL.Vtbl[] vtbls;
-            void* gc;
+            Vtbl[] vtbls;
             string[] includes;
+            void* gc;
+
+            ref ReplContext init()
+            {
+                gc = gc_getProxy();
+                return this;
+            }
         }
 
         static void fixUp()

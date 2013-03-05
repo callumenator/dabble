@@ -45,8 +45,14 @@ struct ReplContext
     Symbol[] symbols;
     int[string] symbolSet;
     Vtbl[] vtbls;
-    void* gc;
     string[] includes;
+    void* gc;
+
+    ref ReplContext init()
+    {
+        gc = gc_getProxy();
+        return this;
+    }
 }
 
 /**
