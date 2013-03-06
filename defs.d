@@ -26,7 +26,6 @@ struct Var
 
             if (type == "auto") // has initializer
             {
-                writeln("AUTO ", name, " ", init);
                 assert(init.length > 0, "Auto var without initializer");
 
                 c.prefix.put("auto " ~ name ~ " = _REPL.newExpr!(q\"#"~init~"#\")(_repl_,"
@@ -82,7 +81,7 @@ struct UserType
 
     void generate(ref Code c, size_t index)
     {
-        c.header.put(decl ~ "\n");
+        c.prefix.put(decl ~ "\n");
     }
 }
 

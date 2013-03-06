@@ -225,10 +225,7 @@ struct Parser
     */
     static bool isDefined(string name)
     {
-        foreach(v; repl.symbols)
-            if (v.type == Symbol.Type.Var && v.v.name == name)
-                return true;
-        return false;
+        return canFind!("a.type == a.Type.Var && a.v.name == b")(repl.symbols, name);
     }
 
     static ReplContext* repl;
@@ -240,10 +237,6 @@ struct Parser
 */
 void deadSymbols(ref ReplContext repl)
 {
-    Symbol[] keep;
-    foreach(sym; repl.symbols)
-        if (sym.valid)
-            keep ~= sym;
-    repl.symbols = keep;
+    repl.symbols = filter!"a.valid"(repl.symbols).array();
 }
 

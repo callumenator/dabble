@@ -110,6 +110,7 @@ bool eval(string code,
     if (!build)
     {
         writeln("Error: " ~ error);
+        deadSymbols(repl);
         return false;
     }
 
