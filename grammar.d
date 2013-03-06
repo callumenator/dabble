@@ -56,7 +56,7 @@ ReplParse:
 
     Import <- (wx "import" wx Seq( (~Seq(Ident, '.')){Parser.addImport}, ',') ';'){Parser.clear}
 
-    AliasDecl  <~ (wx 'alias' GrabToColon(VarRewrite/.) ';') {Parser.aliasDecl}
+    AliasDecl  <- wx (~('alias' GrabToColon(VarRewrite/.) ';')) {Parser.aliasDecl}
 
     UserType <-( EnumDecl
               /  StructDecl

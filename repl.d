@@ -12,7 +12,8 @@ import
     sharedlib,
     util;
 
-extern(C) void* gc_getProxy();
+public import defs;
+
 
 enum Debug
 {
@@ -21,42 +22,6 @@ enum Debug
     parseOnly   = 0x02  /// show parse tree and return
 }
 
-struct Symbol
-{
-    string name;
-    string type;
-    string current;
-    string checkType;
-    bool valid = false;
-    void* addr;
-}
-
-struct Vtbl
-{
-    string name;
-    void*[] vtbl;
-}
-
-struct ReplContext
-{
-    string filename = "replDll";
-    string[] imports;
-    string[] userTypes;
-    string[] aliasDecls;
-    Symbol[] symbols;
-    int[string] symbolSet;
-    Vtbl[] vtbls;
-    string[] includes;
-    void* gc;
-}
-
-ReplContext newContext(string filename = "replDll")
-{
-    ReplContext repl;
-    repl.filename = filename;
-    repl.gc = gc_getProxy();
-    return repl;
-}
 
 /**
 * Main repl entry point. Keep reading lines from stdin, handle any
@@ -78,7 +43,8 @@ void loop(ref ReplContext repl,
             case "print":
             {
                 foreach(val; repl.symbols)
-                    writeln(val.name, " (", val.type, ") = ", val.current);
+                    if (val.type == Symbol.Type.Var)
+                        writeln(val.v.name, " (", val.v.displayType, ") = ", val.v.current);
 
                 break;
             }
@@ -214,6 +180,7 @@ bool build(string code,
     }
 
     string cmd = "dmd " ~ repl.filename ~ ".d " ~ repl.filename ~ ".def";
+    /++
     auto includes = std.array.join(repl.includes, ".d ");
     if (repl.includes.length > 0)
     {
@@ -222,6 +189,7 @@ bool build(string code,
 
         cmd ~= " replLib.lib";
     }
+    ++/
 
     if (!attempt(cmd, error))
         return false;

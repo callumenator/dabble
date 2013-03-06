@@ -53,7 +53,7 @@ ReplParse:
 
     Import <- (wx "import" wx Seq( (~Seq(Ident, '.')){Parser.addImport}, ',') ';'){Parser.clear}
 
-    AliasDecl  <~ (wx 'alias' GrabToColon(VarRewrite/.) ';') {Parser.aliasDecl}
+    AliasDecl  <- wx (~('alias' GrabToColon(VarRewrite/.) ';')) {Parser.aliasDecl}
 
     UserType <-( EnumDecl
               /  StructDecl
@@ -689,16 +689,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree AliasDecl(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.action!(pegged.peg.and!(wx, pegged.peg.literal!("alias"), GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";")), Parser.aliasDecl)), "ReplParse.AliasDecl")(p);
+            return         pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.action!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("alias"), GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";"))), Parser.aliasDecl)), "ReplParse.AliasDecl")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.action!(pegged.peg.and!(wx, pegged.peg.literal!("alias"), GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";")), Parser.aliasDecl)), "ReplParse.AliasDecl"), "AliasDecl")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.action!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("alias"), GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";"))), Parser.aliasDecl)), "ReplParse.AliasDecl"), "AliasDecl")(p);
     }
     static TParseTree AliasDecl(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.action!(pegged.peg.and!(wx, pegged.peg.literal!("alias"), GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";")), Parser.aliasDecl)), "ReplParse.AliasDecl")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.action!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("alias"), GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";"))), Parser.aliasDecl)), "ReplParse.AliasDecl")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.action!(pegged.peg.and!(wx, pegged.peg.literal!("alias"), GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";")), Parser.aliasDecl)), "ReplParse.AliasDecl"), "AliasDecl")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.action!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("alias"), GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";"))), Parser.aliasDecl)), "ReplParse.AliasDecl"), "AliasDecl")(TParseTree("", false,[], s));
     }
     static string AliasDecl(GetName g)
     {

@@ -4,7 +4,7 @@ module util;
 import std.conv : to;
 
 import
-    repl;
+    defs;
 
 extern(C) void* gc_getProxy();
 
@@ -99,36 +99,11 @@ string genHeader()
 
     struct _REPL
     {
-        static struct Symbol
-        {
-            string name;
-            string type;
-            string current;
-            string checkType;
-            bool valid = false;
-            void* addr;
-        }
-
-        static struct Vtbl
-        {
-            string name;
-            void*[] vtbl;
-        }
-
-        struct ReplContext
-        {
-            string filename = "replDll";
-            string[] imports;
-            string[] userTypes;
-            string[] aliasDecls;
-            Symbol[] symbols;
-            int[string] symbolSet;
-            Vtbl[] vtbls;
-            string[] includes;
-            void* gc;
-        }
-
-        static void fixUp()
+        static:
+    `
+    ~ sharedDefs ~
+    `
+        void fixUp()
         {
             import core.sys.windows.threadaux : getTEB;
 
@@ -163,40 +138,40 @@ string genHeader()
             _tls_index ++;
         }
 
-        static T* newType(T)(ref _REPL.ReplContext repl, size_t index)
+        T* newType(T)(ref _REPL.ReplContext repl, size_t index)
         {
             T t = T.init;
             auto ptr = heap(t);
-            repl.symbols[index].addr = ptr;
+            repl.symbols[index].v.addr = ptr;
             return ptr;
         }
 
-        static auto newExpr(string S, E)(ref _REPL.ReplContext repl, size_t index, lazy E expr)
+        auto newExpr(string S, E)(ref _REPL.ReplContext repl, size_t index, lazy E expr)
         {
             static if (__traits(compiles, mixin("{ auto _ = new " ~ S ~ ";}")))
             {
                 mixin("auto ptr = new " ~ S ~ ";");
-                repl.symbols[index].addr = ptr;
+                repl.symbols[index].v.addr = ptr;
                 return ptr;
             }
             else
             {
                 typeof(expr) t = expr();
                 auto ptr = heap(t);
-                repl.symbols[index].addr = ptr;
+                repl.symbols[index].v.addr = ptr;
                 return ptr;
             }
         }
 
-        static auto newExpr(string S, T...)(ref _REPL.ReplContext repl, size_t index, T _t) // for tuples
+        auto newExpr(string S, T...)(ref _REPL.ReplContext repl, size_t index, T _t) // for tuples
         {
             mixin("Tuple!" ~ T.stringof ~ " t;");
             auto ptr = heap(t);
-            repl.symbols[index].addr = ptr;
+            repl.symbols[index].v.addr = ptr;
             return ptr;
         }
 
-        static T* heap(T)(T init)
+        T* heap(T)(T init)
         {
             import core.memory, std.c.string;
             auto ptr = GC.calloc(T.sizeof);
@@ -206,7 +181,7 @@ string genHeader()
             return cast(T*)ptr;
         }
 
-        static string NewTypeof(string S, E)(lazy E expr)
+        string NewTypeof(string S, E)(lazy E expr)
         {
             import std.traits;
             alias ReturnType!expr RT;
@@ -216,17 +191,17 @@ string genHeader()
                 return "typeof(" ~ S ~ ")";
         }
 
-        static string NewTypeof(string S, T...)(T t) // for tuples
+        string NewTypeof(string S, T...)(T t) // for tuples
         {
             return "Tuple!" ~ T.stringof;
         }
 
-        static T* getVar(T)(_REPL.ReplContext repl, size_t index)
+        T* getVar(T)(_REPL.ReplContext repl, size_t index)
         {
-            return cast(T*)repl.symbols[index].addr;
+            return cast(T*)repl.symbols[index].v.addr;
         }
 
-        static string exprResult(E)(lazy E expr)
+        string exprResult(E)(lazy E expr)
         {
             static if (__traits(compiles, typeof(expr)))
             {
@@ -243,7 +218,7 @@ string genHeader()
             }
         }
 
-        static string currentVal(T)(ref T val)
+        string currentVal(T)(ref T val)
         {
             import std.traits;
 
@@ -287,14 +262,6 @@ string genHeader()
             }
             return current.idup;
         }
-
-
-        static void hookNewClass(TypeInfo_Class ti, void* cptr)
-        {
-            alias extern(C) void function(TypeInfo_Class, void*, _REPL.ReplContext*, bool) cb;
-            auto fp = cast(cb)(0x` ~ (&hookNewClass).to!string ~ `);
-            fp(ti, cptr, null, false);
-        }
     }
 
     extern (C) Object _d_newclass(const ClassInfo ci)
@@ -330,8 +297,10 @@ string genHeader()
             (cast(byte*) p)[0 .. ci.init.length] = ci.init[];
 
             auto obj = cast(Object) p;
-            _REPL.hookNewClass(typeid(obj), p);
 
+            alias extern(C) void function(TypeInfo_Class, void*, _REPL.ReplContext*, bool) cb;
+            auto fp = cast(cb)(0x` ~ (&hookNewClass).to!string ~ `);
+            fp(typeid(obj), p, null, false);
             return obj;
         }
     }
