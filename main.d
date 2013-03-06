@@ -63,10 +63,6 @@ ReplContext run(string[] code)
     return repl;
 }
 
-import std.conv;
-
-
-
 void main()
 {
     auto repl = newContext();

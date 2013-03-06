@@ -9,6 +9,7 @@ ReplParse:
     Match <- Comment
            / String
            / Import
+           / AliasDecl
            / UserType
            / Var
            / Statement
@@ -51,6 +52,8 @@ ReplParse:
     With <- wx 'with' wx BwParens(VarRewrite/.)
 
     Import <- (wx "import" wx Seq( (~Seq(Ident, '.')){Parser.addImport}, ',') ';'){Parser.clear}
+
+    AliasDecl  <~ (wx 'alias' GrabToColon(VarRewrite/.) ';') {Parser.aliasDecl}
 
     UserType <-( EnumDecl
               /  StructDecl
@@ -250,6 +253,7 @@ struct GenericReplParse(TParseTree)
         rules["Switch"] = toDelegate(&ReplParse.Switch);
         rules["With"] = toDelegate(&ReplParse.With);
         rules["Import"] = toDelegate(&ReplParse.Import);
+        rules["AliasDecl"] = toDelegate(&ReplParse.AliasDecl);
         rules["UserType"] = toDelegate(&ReplParse.UserType);
         rules["Var"] = toDelegate(&ReplParse.Var);
         rules["EnumDecl"] = toDelegate(&ReplParse.EnumDecl);
@@ -381,16 +385,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree Match(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(Comment, String, Import, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match")(p);
+            return         pegged.peg.named!(pegged.peg.or!(Comment, String, Import, AliasDecl, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(Comment, String, Import, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match"), "Match")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.or!(Comment, String, Import, AliasDecl, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match"), "Match")(p);
     }
     static TParseTree Match(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(Comment, String, Import, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.or!(Comment, String, Import, AliasDecl, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(Comment, String, Import, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match"), "Match")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.or!(Comment, String, Import, AliasDecl, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match"), "Match")(TParseTree("", false,[], s));
     }
     static string Match(GetName g)
     {
@@ -680,6 +684,25 @@ struct GenericReplParse(TParseTree)
     static string Import(GetName g)
     {
         return "ReplParse.Import";
+    }
+
+    static TParseTree AliasDecl(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.action!(pegged.peg.and!(wx, pegged.peg.literal!("alias"), GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";")), Parser.aliasDecl)), "ReplParse.AliasDecl")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.action!(pegged.peg.and!(wx, pegged.peg.literal!("alias"), GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";")), Parser.aliasDecl)), "ReplParse.AliasDecl"), "AliasDecl")(p);
+    }
+    static TParseTree AliasDecl(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.action!(pegged.peg.and!(wx, pegged.peg.literal!("alias"), GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";")), Parser.aliasDecl)), "ReplParse.AliasDecl")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.action!(pegged.peg.and!(wx, pegged.peg.literal!("alias"), GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";")), Parser.aliasDecl)), "ReplParse.AliasDecl"), "AliasDecl")(TParseTree("", false,[], s));
+    }
+    static string AliasDecl(GetName g)
+    {
+        return "ReplParse.AliasDecl";
     }
 
     static TParseTree UserType(TParseTree p)

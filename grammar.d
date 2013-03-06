@@ -12,6 +12,7 @@ ReplParse:
     Match <- Comment
            / String
            / Import
+           / AliasDecl
            / UserType
            / Var
            / Statement
@@ -54,6 +55,8 @@ ReplParse:
     With <- wx 'with' wx BwParens(VarRewrite/.)
 
     Import <- (wx "import" wx Seq( (~Seq(Ident, '.')){Parser.addImport}, ',') ';'){Parser.clear}
+
+    AliasDecl  <~ (wx 'alias' GrabToColon(VarRewrite/.) ';') {Parser.aliasDecl}
 
     UserType <-( EnumDecl
               /  StructDecl

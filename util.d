@@ -120,6 +120,7 @@ string genHeader()
             string filename = "replDll";
             string[] imports;
             string[] userTypes;
+            string[] aliasDecls;
             Symbol[] symbols;
             int[string] symbolSet;
             Vtbl[] vtbls;

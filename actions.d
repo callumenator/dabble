@@ -148,6 +148,17 @@ struct Parser
     }
 
     /**
+    * Handle alias declarations
+    */
+    static T aliasDecl(T)(T t)
+    {
+        if (t.successful)
+            repl.aliasDecls ~= t.matches[0];
+
+        return t;
+    }
+
+    /**
     * Dup a string onto the heap.
     */
     static T dupString(T)(T t)
