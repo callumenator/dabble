@@ -71,7 +71,7 @@ struct Parser
             if (idx < stop) // var is not new, grab it from ReplContext
                 ptemp ~= "auto "~sym.name~" = _REPL.getVar!("~sym.checkType~")(_repl_,"~idx.to!string~");\n";
 
-            stemp ~= "_repl_.symbols["~idx.to!string~"].current = to!string(*"~sym.name~").idup;\n";
+            stemp ~= "_repl_.symbols["~idx.to!string~"].current = _REPL.currentVal(*"~sym.name~");\n";
         }
         prefix = ptemp ~ prefix;
         suffix = stemp ~ suffix;

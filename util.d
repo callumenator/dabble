@@ -125,12 +125,6 @@ string genHeader()
             Vtbl[] vtbls;
             string[] includes;
             void* gc;
-
-            ref ReplContext init()
-            {
-                gc = gc_getProxy();
-                return this;
-            }
         }
 
         static void fixUp()
@@ -247,6 +241,52 @@ string genHeader()
                 }
             }
         }
+
+        static string currentVal(T)(ref T val)
+        {
+            import std.traits;
+
+            string current;
+            static if (is(T _ : U[], U))
+            {
+                static if (isSomeString!T)
+                {
+                    if (val.length <= 50)
+                        current = val.to!string;
+                    else
+                    {
+                        auto start = val[0..20].to!string;
+                        auto end = val[$-20..$].to!string;
+                        current = "\""
+                                ~ start[0..$-1]
+                                ~ " ... "
+                                ~ end[1..$]
+                                ~ "\"";
+                    }
+                }
+                else
+                {
+                    if (val.length <= 12)
+                        current = val.to!string;
+                    else
+                    {
+                        auto start = val[0..4].to!string;
+                        auto end = val[$-4..$].to!string;
+                        current = start[0..$-1]
+                                ~ ", ..("
+                                ~ (val.length - 8).to!string
+                                ~ " elements).. ,"
+                                ~ end[1..$];
+                    }
+                }
+            }
+            else
+            {
+                current = val.to!string;
+            }
+            return current.idup;
+        }
+
 
         static void hookNewClass(TypeInfo_Class ti, void* cptr)
         {

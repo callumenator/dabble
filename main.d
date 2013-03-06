@@ -43,13 +43,15 @@ ReplContext stress(ref ReplContext repl)
     "writeln(app.data);",
     "import std.container;",
     "ar = Array!int(4, 6, 2, 3, 8, 0, 2);",
-    "foreach(val; ar[]){ writeln(val); }"
+    "foreach(val; ar[]){ writeln(val); }",
+    "int foo(int i) { return 5*i + 1; }",
+    "foo(100);"
     ]);
 }
 
 ReplContext run(string[] code)
 {
-    auto repl = ReplContext().init();
+    auto repl = newContext();
 
     string err;
     foreach(i, c; code)
@@ -61,11 +63,13 @@ ReplContext run(string[] code)
     return repl;
 }
 
+import std.conv;
+
 
 
 void main()
 {
-    auto repl = ReplContext().init();
+    auto repl = newContext();
 
     //repl = run(["struct S { int a; float b; }","S s;", "a = s.tupleof;"]);
     //repl = stress(repl);

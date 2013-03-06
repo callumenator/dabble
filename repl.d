@@ -47,12 +47,14 @@ struct ReplContext
     Vtbl[] vtbls;
     string[] includes;
     void* gc;
+}
 
-    ref ReplContext init()
-    {
-        gc = gc_getProxy();
-        return this;
-    }
+ReplContext newContext(string filename = "replDll")
+{
+    ReplContext repl;
+    repl.filename = filename;
+    repl.gc = gc_getProxy();
+    return repl;
 }
 
 /**
