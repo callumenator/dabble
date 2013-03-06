@@ -242,12 +242,8 @@ void deadSymbols(ref ReplContext repl)
 {
     Symbol[] keep;
     foreach(sym; repl.symbols)
-    {
         if (sym.valid)
             keep ~= sym;
-        else
-            debug { writeln("KILLED SYMBOL: ", sym.current); }
-    }
     repl.symbols = keep;
 }
 

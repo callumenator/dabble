@@ -30,7 +30,8 @@ enum Debug
 void loop(ref ReplContext repl,
           Debug flag = Debug.none)
 {
-    writeln("DABBLE:");
+    import std.compiler;
+    writeln("DABBLE: (DMD ", version_major, ".", version_minor, ")");
 
     string error;
     char[] lineBuffer;
