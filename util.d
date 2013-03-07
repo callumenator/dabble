@@ -4,6 +4,7 @@ module util;
 import std.conv : to;
 
 import
+    actions,
     defs;
 
 extern(C) void* gc_getProxy();
@@ -49,6 +50,7 @@ extern(C) void hookNewClass(TypeInfo_Class ti, void* cptr, ReplContext* repl, bo
             {
                 repl.vtbls ~= Vtbl(i.name, i.vtbl);
                 index = repl.vtbls.length - 1;
+                Parser.addFixup(i.name, index);
             }
 
             vtblPtr = repl.vtbls[index].vtbl.ptr;

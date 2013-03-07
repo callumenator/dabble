@@ -13,10 +13,13 @@ import
 
 struct Parser
 {
+
+static:
+
     /**
     * Start parsing.
     */
-    static string go(string input, ref ReplContext _repl)
+    string go(string input, ref ReplContext _repl)
     {
         repl = &_repl;
 
@@ -39,7 +42,7 @@ struct Parser
 
                "void _main2(ref _REPL.ReplContext _repl_) {\n" ~
                "\nstring _expressionResult = ``;\n" ~
-               "\n" ~ genFixups() ~
+               "\n" ~ vtblFixup ~
                "\n" ~ code.prefix.data ~
                "\n" ~ makeCode(p) ~
                "\n" ~ code.suffix.data ~
@@ -50,7 +53,7 @@ struct Parser
     /**
     * Concat the code that remains in the parse tree.
     */
-    static string makeCode(T)(T t)
+    string makeCode(T)(T t)
     {
         return std.array.join(t.matches);
     }
@@ -58,20 +61,16 @@ struct Parser
     /**
     * Generate code to copy new vtables over heap copies.
     */
-    static string genFixups()
+    void addFixup(string name, size_t index)
     {
-        string fixup;
-
-        foreach(i, v; repl.vtbls)
-            fixup ~= "memcpy(_repl_.vtbls["~i.to!string~"].vtbl.ptr, typeid("~v.name~").vtbl.ptr, "
-                   ~ "typeid("~v.name~").vtbl.length * (void*).sizeof);\n";
-        return fixup;
+        vtblFixup ~= "memcpy(_repl_.vtbls["~index.to!string~"].vtbl.ptr, typeid("~name~").vtbl.ptr, "
+                   ~ "typeid("~name~").vtbl.length * (void*).sizeof);\n";
     }
 
     /**
     * Clear the matches for this rule.
     */
-    static T clear(T)(T t)
+    T clear(T)(T t)
     {
         if (t.successful)
             t.matches.clear;
@@ -82,7 +81,7 @@ struct Parser
     /**
     * A new import has been added.
     */
-    static T addImport(T)(T t)
+    T addImport(T)(T t)
     {
         if (t.successful) {
             auto imp = removechars(t.matches[0], " ");
@@ -97,7 +96,7 @@ struct Parser
     /**
     * A new enum has been defined
     */
-    static T enumDecl(T)(T t)
+    T enumDecl(T)(T t)
     {
         if (t.successful) {
             repl.symbols ~= Symbol(Enum(t.matches[0]));
@@ -109,7 +108,7 @@ struct Parser
     /**
     * A new user type has been defined.
     */
-    static T userType(T)(T t)
+    T userType(T)(T t)
     {
         if (t.successful) {
             repl.symbols ~= Symbol(UserType(t.matches[0]));
@@ -121,7 +120,7 @@ struct Parser
     /**
     * Handle alias declarations
     */
-    static T aliasDecl(T)(T t)
+    T aliasDecl(T)(T t)
     {
         if (t.successful)
         {
@@ -134,7 +133,7 @@ struct Parser
     /**
     * Dup a string onto the heap.
     */
-    static T dupString(T)(T t)
+    T dupString(T)(T t)
     {
         if (t.successful) {
             t.matches[0] ~= ".idup";
@@ -145,7 +144,7 @@ struct Parser
     /**
     * Wrap a template argument....
     */
-    static T wrapInstanceType(T)(T t)
+    T wrapInstanceType(T)(T t)
     {
         if (t.successful) {
             t.matches[0] = "(" ~ t.matches[0] ~ ")";
@@ -156,7 +155,7 @@ struct Parser
     /**
     * Wrap an expression in the code needed to return its result as a string.
     */
-    static T wrapShowType(T)(T t)
+    T wrapShowType(T)(T t)
     {
         if (t.successful)
         {
@@ -170,7 +169,7 @@ struct Parser
     /**
     * Re-direct a symbol to its pointer.
     */
-    static T varRewrite(T)(T t)
+    T varRewrite(T)(T t)
     {
         if (t.successful)
         {
@@ -184,7 +183,7 @@ struct Parser
     /**
     * Handle variable assignments that may also be declarations.
     */
-    static T autoVarDecl(T)(T p)
+    T autoVarDecl(T)(T p)
     {
         if (p.successful)
         {
@@ -207,7 +206,7 @@ struct Parser
     /**
     * Handle three type of variable declaration/initialization.
     */
-    static T varDecl(T)(T p)
+    T varDecl(T)(T p)
     {
         if (p.successful)
         {
@@ -235,12 +234,14 @@ struct Parser
     /**
     * Dumb linear search through defined symbols.
     */
-    static bool isDefined(string name)
+    bool isDefined(string name)
     {
         return canFind!("a.type == a.Type.Var && a.v.name == b")(repl.symbols, name);
     }
 
-    static ReplContext* repl;
+    ReplContext* repl;
+    string vtblFixup;
+
 }
 
 /**
