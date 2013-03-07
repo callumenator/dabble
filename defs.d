@@ -159,6 +159,11 @@ struct Symbol
         }
     }
 
+    void toString(scope void delegate(const(char)[]) sink)
+    {
+        if (type == Type.Var)
+            v.toString(sink);
+    }
 }
 
 struct Vtbl
