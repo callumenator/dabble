@@ -245,7 +245,8 @@ static:
 
     T incBraceCount(T)(T t)
     {
-        braceCount++;
+        if (t.successful)
+            braceCount++;
         return t;
     }
 
