@@ -166,6 +166,8 @@ ReplParse:
         BwBrackets(T=.) <- Nested('[', Comment / String / CharLiteral / T, ']')
         Nested(L,Items,R) <- ^L (!R (Nested(L,Items,R) / blank / Items))* ^R
 
+        BalancedBraces <~ (~Until(LBrace, .) (eoi / (~BwBraces){Parser.incBraceCount} ))+
+
         ## NOTE: These are not inclusive of the terminator
         GrabToColon(T=.) <~ (!(';'/eoi) (String/CharLiteral/Comment/FuncBlock/T))*
         GrabToComma(T=.) <~ (!(','/eoi) (String/CharLiteral/Comment/FuncBlock/ArrayLit/T))*

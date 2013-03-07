@@ -92,7 +92,7 @@ static:
             repl.symbols ~= Symbol(Import(imp));
 
             //if (splitter(imp, ".").front != "std")
-             //   repl.includes ~= imp.replace(`.`, `\`);
+            //   repl.includes ~= imp.replace(`.`, `\`);
         }
         return t;
     }
@@ -243,7 +243,14 @@ static:
         return canFind!("a.type == a.Type.Var && a.v.name == b")(repl.symbols, name);
     }
 
+    T incBraceCount(T)(T t)
+    {
+        braceCount++;
+        return t;
+    }
+
     ReplContext* repl;
+    uint braceCount;
 }
 
 /**

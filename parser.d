@@ -163,6 +163,8 @@ ReplParse:
         BwBrackets(T=.) <- Nested('[', Comment / String / CharLiteral / T, ']')
         Nested(L,Items,R) <- ^L (!R (Nested(L,Items,R) / blank / Items))* ^R
 
+        BalancedBraces <~ (~Until(LBrace, .) (eoi / (~BwBraces){Parser.incBraceCount} ))+
+
         ## NOTE: These are not inclusive of the terminator
         GrabToColon(T=.) <~ (!(';'/eoi) (String/CharLiteral/Comment/FuncBlock/T))*
         GrabToComma(T=.) <~ (!(','/eoi) (String/CharLiteral/Comment/FuncBlock/ArrayLit/T))*
@@ -290,6 +292,7 @@ struct GenericReplParse(TParseTree)
         rules["RBracket"] = toDelegate(&ReplParse.RBracket);
         rules["LBrace"] = toDelegate(&ReplParse.LBrace);
         rules["RBrace"] = toDelegate(&ReplParse.RBrace);
+        rules["BalancedBraces"] = toDelegate(&ReplParse.BalancedBraces);
         rules["NestItems"] = toDelegate(&ReplParse.NestItems);
         rules["String"] = toDelegate(&ReplParse.String);
         rules["StringNoDup"] = toDelegate(&ReplParse.StringNoDup);
@@ -1587,6 +1590,25 @@ struct GenericReplParse(TParseTree)
     }
 
     }
+    static TParseTree BalancedBraces(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.oneOrMore!(pegged.peg.and!(pegged.peg.fuse!(Until!(LBrace, pegged.peg.any)), pegged.peg.or!(eoi, pegged.peg.action!(pegged.peg.fuse!(BwBraces), Parser.incBraceCount))))), "ReplParse.BalancedBraces")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.oneOrMore!(pegged.peg.and!(pegged.peg.fuse!(Until!(LBrace, pegged.peg.any)), pegged.peg.or!(eoi, pegged.peg.action!(pegged.peg.fuse!(BwBraces), Parser.incBraceCount))))), "ReplParse.BalancedBraces"), "BalancedBraces")(p);
+    }
+    static TParseTree BalancedBraces(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.oneOrMore!(pegged.peg.and!(pegged.peg.fuse!(Until!(LBrace, pegged.peg.any)), pegged.peg.or!(eoi, pegged.peg.action!(pegged.peg.fuse!(BwBraces), Parser.incBraceCount))))), "ReplParse.BalancedBraces")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.oneOrMore!(pegged.peg.and!(pegged.peg.fuse!(Until!(LBrace, pegged.peg.any)), pegged.peg.or!(eoi, pegged.peg.action!(pegged.peg.fuse!(BwBraces), Parser.incBraceCount))))), "ReplParse.BalancedBraces"), "BalancedBraces")(TParseTree("", false,[], s));
+    }
+    static string BalancedBraces(GetName g)
+    {
+        return "ReplParse.BalancedBraces";
+    }
+
     template GrabToColon(alias T = pegged.peg.any)
     {
     static TParseTree GrabToColon(TParseTree p)

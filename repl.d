@@ -34,12 +34,14 @@ void loop(ref ReplContext repl,
     writeln("DABBLE: (DMD ", version_major, ".", version_minor, ")");
 
     string error;
-    char[] lineBuffer;
-    stdin.readln(lineBuffer);
+    char[] inBuffer, codeBuffer;
+    stdin.readln(inBuffer);
+    bool multiLine = false;
 
-    while (strip(lineBuffer) != "exit")
+    while (strip(inBuffer) != "exit")
     {
-        switch(strip(lineBuffer))
+        inBuffer = strip(inBuffer);
+        switch(inBuffer)
         {
             case "print":
             {
@@ -51,11 +53,32 @@ void loop(ref ReplContext repl,
             }
             default:
             {
-                eval(lineBuffer.to!string, repl, error, flag);
+                codeBuffer ~= inBuffer;
+
+                if (!multiLine && inBuffer[$-1] == ';')
+                {
+                    eval(codeBuffer.to!string, repl, error, flag);
+                    codeBuffer.clear;
+                }
+                else
+                    multiLine = true;
+
+                if (multiLine)
+                {
+                    Parser.braceCount = 0;
+                    auto test = ReplParse.BalancedBraces(codeBuffer.to!string);
+                    if ( (test.successful && Parser.braceCount > 0) ||
+                         (test.successful && Parser.braceCount == 0 && inBuffer[$-1] == ';'))
+                    {
+                        eval(codeBuffer.to!string, repl, error, flag);
+                        codeBuffer.clear;
+                        multiLine = false;
+                    }
+                }
             }
         }
 
-        stdin.readln(lineBuffer);
+        stdin.readln(inBuffer);
     }
     return;
 }

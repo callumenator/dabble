@@ -5,6 +5,7 @@ import
     std.stdio;
 
 import
+    parser,
     repl;
 
 ReplContext stress(ref ReplContext repl)
@@ -67,13 +68,12 @@ ReplContext run(string[] code)
 
 void main()
 {
-
     auto repl = newContext();
 
     //repl = run(["struct S { int a; float b; }","S s;", "a = s.tupleof;"]);
-    repl = stress(repl);
+    //repl = stress(repl);
 
-    //loop(repl);
+    loop(repl);
 
     return;
 }
