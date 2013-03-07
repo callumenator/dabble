@@ -85,6 +85,10 @@ bool eval(string code,
                 write(", call: ", times.call);
                 writeln(", TOTAL: ", times.parse + times.build + times.call);
             }
+            else
+            {
+                writeln();
+            }
         }
     }
 
@@ -109,7 +113,7 @@ bool eval(string code,
 
     if (!build)
     {
-        writeln("Error: " ~ error);
+        writeln("Error: ", error);
         deadSymbols(repl);
         return false;
     }

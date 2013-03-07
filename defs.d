@@ -18,6 +18,12 @@ struct Var
     bool first = true;
     void* addr;
 
+    void put(T...)(ref Appender!string app, T items)
+    {
+        foreach(i; items)
+            app.put(i);
+    }
+
     void generate(ref Code c, size_t index)
     {
         if (first)
@@ -28,30 +34,34 @@ struct Var
             {
                 assert(init.length > 0, "Auto var without initializer");
 
-                c.prefix.put("auto " ~ name ~ " = _REPL.newExpr!(q\"#"~init~"#\")(_repl_,"
-                             ~ index.to!string ~ "," ~ init ~ ");\n");
+                put(c.prefix, "auto ", name, " = _REPL.newExpr!(q\"#", init,
+                    "#\")(_repl_,", index.to!string, ", ", init, ");\n");
 
-                c.prefix.put("_repl_.symbols[" ~ index.to!string ~ "].v.type = _REPL.NewTypeof!(q\"#"
-                             ~ init ~ "#\")(" ~ init ~ ").idup;\n");
+                put(c.prefix, "_repl_.symbols[", index.to!string, "].v.type = _REPL.NewTypeof!(q\"#",
+                    init, "#\")(", init, ").idup;\n");
+
             }
             else if (init.length > 0) // has type and initializer
             {
-                c.prefix.put(type~"* "~name~" = cast("~type~"*)_REPL.newExpr!(q\"#"~init~"#\")(_repl_,"
-                             ~index.to!string~","~init~");\n");
+                put(c.prefix, type, "* ", name, " = cast(", type, "*)_REPL.newExpr!(q\"#",
+                    init, "#\")(_repl_,", index.to!string, ",", init, ");\n");
             }
             else // just has type
             {
-                c.prefix.put(type~"* "~name~" = _REPL.newType!("~type~")(_repl_,"~index.to!string~");\n");
+                put(c.prefix, type, "* ", name, " = _REPL.newType!(", type, ")(_repl_,",
+                    index.to!string, ");\n");
             }
 
-            c.prefix.put("_repl_.symbols["~index.to!string~"].v.displayType = typeof(*"~name~").stringof.idup;\n");
+            put(c.prefix, "_repl_.symbols[", index.to!string, "].v.displayType = typeof(*",
+                name, ").stringof.idup;\n");
         }
         else // var has already been created, just grab it
         {
-            c.prefix.put("auto "~name~" = _REPL.getVar!("~type~")(_repl_,"~index.to!string~");\n");
+            put(c.prefix, "auto ", name, " = _REPL.getVar!(", type, ")(_repl_,",
+                index.to!string, ");\n");
         }
 
-        c.suffix.put("_repl_.symbols["~index.to!string~"].v.current = _REPL.currentVal(*"~name~");\n");
+        put(c.suffix, "_repl_.symbols[", index.to!string, "].v.current = _REPL.currentVal(*", name, ");\n");
     }
 
     void toString(scope void delegate(const(char)[]) sink)
@@ -145,10 +155,10 @@ struct Symbol
     {
         final switch(type)
         {
-            case Type.Var: v.generate(c, index); break;
-            case Type.Alias: a.generate(c, index); break;
-            case Type.Import: i.generate(c, index); break;
-            case Type.Enum: e.generate(c, index); break;
+            case Type.Var:      v.generate(c, index); break;
+            case Type.Alias:    a.generate(c, index); break;
+            case Type.Import:   i.generate(c, index); break;
+            case Type.Enum:     e.generate(c, index); break;
             case Type.UserType: u.generate(c, index); break;
         }
 
