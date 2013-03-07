@@ -53,6 +53,15 @@ struct Var
 
         c.suffix.put("_repl_.symbols["~index.to!string~"].v.current = _REPL.currentVal(*"~name~");\n");
     }
+
+    void toString(scope void delegate(const(char)[]) sink)
+    {
+        sink(name);
+        sink(" (");
+        sink(displayType);
+        sink(") = ");
+        sink(current);
+    }
 }
 
 struct Alias
@@ -98,6 +107,7 @@ struct UserType
 struct Symbol
 {
     enum Type { Var, Alias, Import, Enum, UserType }
+
     union
     {
         Var v;
@@ -106,34 +116,26 @@ struct Symbol
         Enum e;
         UserType u;
     }
+
     Type type;
     bool valid = false;
     bool first = true;
 
     this(T)(T _x)
     {
-        static if (is(T == Var))
-        {
+        static if (is(T == Var)) {
             v = _x;
             type = Type.Var;
-        }
-        else static if (is(T == Alias))
-        {
+        } else static if (is(T == Alias)) {
             a = _x;
             type = Type.Alias;
-        }
-        else static if (is(T == Import))
-        {
+        } else static if (is(T == Import)) {
             i = _x;
             type = Type.Import;
-        }
-        else static if (is(T == Enum))
-        {
+        } else static if (is(T == Enum)) {
             e = _x;
             type = Type.Enum;
-        }
-        else static if (is(T == UserType))
-        {
+        } else static if (is(T == UserType)) {
             u = _x;
             type = Type.UserType;
         }

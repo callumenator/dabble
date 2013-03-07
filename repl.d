@@ -45,7 +45,7 @@ void loop(ref ReplContext repl,
             {
                 foreach(val; repl.symbols)
                     if (val.type == Symbol.Type.Var)
-                        writeln(val.v.name, " (", val.v.displayType, ") = ", val.v.current);
+                        writeln(val);
 
                 break;
             }
