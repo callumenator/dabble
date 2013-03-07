@@ -169,8 +169,9 @@ struct ReplContext
 {
     string filename;
     Symbol[] symbols;
-    Vtbl[] vtbls;
     int[string] symbolSet;
+    Vtbl[] vtbls;
+    string vtblFixup;
     void* gc;
 }
 

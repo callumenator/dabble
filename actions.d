@@ -42,9 +42,9 @@ static:
 
                "void _main2(ref _REPL.ReplContext _repl_) {\n" ~
                "\nstring _expressionResult = ``;\n" ~
-               "\n" ~ vtblFixup ~
+               "\n" ~ repl.vtblFixup ~
                "\n" ~ code.prefix.data ~
-               "\n" ~ makeCode(p) ~
+               "\n" ~ genCode(p) ~
                "\n" ~ code.suffix.data ~
                "\nif (_expressionResult.length != 0) writeln(`=> `, _expressionResult);\n" ~
                "}\n";
@@ -53,7 +53,7 @@ static:
     /**
     * Concat the code that remains in the parse tree.
     */
-    string makeCode(T)(T t)
+    string genCode(T)(T t)
     {
         return std.array.join(t.matches);
     }
@@ -61,10 +61,10 @@ static:
     /**
     * Generate code to copy new vtables over heap copies.
     */
-    void addFixup(string name, size_t index)
+    string genFixup(string name, size_t index)
     {
-        vtblFixup ~= "memcpy(_repl_.vtbls["~index.to!string~"].vtbl.ptr, typeid("~name~").vtbl.ptr, "
-                   ~ "typeid("~name~").vtbl.length * (void*).sizeof);\n";
+        return "memcpy(_repl_.vtbls["~index.to!string~"].vtbl.ptr, typeid("~name~").vtbl.ptr, "
+             ~ "typeid("~name~").vtbl.length * (void*).sizeof);\n";
     }
 
     /**
@@ -240,8 +240,6 @@ static:
     }
 
     ReplContext* repl;
-    string vtblFixup;
-
 }
 
 /**

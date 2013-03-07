@@ -50,7 +50,7 @@ extern(C) void hookNewClass(TypeInfo_Class ti, void* cptr, ReplContext* repl, bo
             {
                 repl.vtbls ~= Vtbl(i.name, i.vtbl);
                 index = repl.vtbls.length - 1;
-                Parser.addFixup(i.name, index);
+                repl.vtblFixup ~= Parser.genFixup(i.name, index);
             }
 
             vtblPtr = repl.vtbls[index].vtbl.ptr;
