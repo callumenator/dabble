@@ -58,11 +58,11 @@ ReplParse:
 
     AliasDecl  <- wx (~('alias' GrabToColon(VarRewrite/.) ';')) {Parser.aliasDecl}
 
-    UserType <-( EnumDecl
-              /  StructDecl
-              /  UnionDecl
-              /  ClassDecl
-              /  FunctionDecl ) {Parser.userType}
+    UserType <-  EnumDecl {Parser.enumDecl}
+              /  ( StructDecl
+                 /  UnionDecl
+                 /  ClassDecl
+                 /  FunctionDecl ) {Parser.userType}
 
     Var <~( AutoVarDeclInit {Parser.autoVarDecl}
          /  VarDeclInit  {Parser.varDecl}

@@ -55,11 +55,11 @@ ReplParse:
 
     AliasDecl  <- wx (~('alias' GrabToColon(VarRewrite/.) ';')) {Parser.aliasDecl}
 
-    UserType <-( EnumDecl
-              /  StructDecl
-              /  UnionDecl
-              /  ClassDecl
-              /  FunctionDecl ) {Parser.userType}
+    UserType <-  EnumDecl {Parser.enumDecl}
+              /  ( StructDecl
+                 /  UnionDecl
+                 /  ClassDecl
+                 /  FunctionDecl ) {Parser.userType}
 
     Var <~( AutoVarDeclInit {Parser.autoVarDecl}
          /  VarDeclInit  {Parser.varDecl}
@@ -708,16 +708,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree UserType(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.action!(pegged.peg.or!(EnumDecl, StructDecl, UnionDecl, ClassDecl, FunctionDecl), Parser.userType), "ReplParse.UserType")(p);
+            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.action!(EnumDecl, Parser.enumDecl), pegged.peg.action!(pegged.peg.or!(StructDecl, UnionDecl, ClassDecl, FunctionDecl), Parser.userType)), "ReplParse.UserType")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.action!(pegged.peg.or!(EnumDecl, StructDecl, UnionDecl, ClassDecl, FunctionDecl), Parser.userType), "ReplParse.UserType"), "UserType")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.action!(EnumDecl, Parser.enumDecl), pegged.peg.action!(pegged.peg.or!(StructDecl, UnionDecl, ClassDecl, FunctionDecl), Parser.userType)), "ReplParse.UserType"), "UserType")(p);
     }
     static TParseTree UserType(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.action!(pegged.peg.or!(EnumDecl, StructDecl, UnionDecl, ClassDecl, FunctionDecl), Parser.userType), "ReplParse.UserType")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.action!(EnumDecl, Parser.enumDecl), pegged.peg.action!(pegged.peg.or!(StructDecl, UnionDecl, ClassDecl, FunctionDecl), Parser.userType)), "ReplParse.UserType")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.action!(pegged.peg.or!(EnumDecl, StructDecl, UnionDecl, ClassDecl, FunctionDecl), Parser.userType), "ReplParse.UserType"), "UserType")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.action!(EnumDecl, Parser.enumDecl), pegged.peg.action!(pegged.peg.or!(StructDecl, UnionDecl, ClassDecl, FunctionDecl), Parser.userType)), "ReplParse.UserType"), "UserType")(TParseTree("", false,[], s));
     }
     static string UserType(GetName g)
     {

@@ -75,7 +75,7 @@ struct Import
     }
 }
 
-struct UserType
+struct Enum
 {
     string decl;
 
@@ -85,14 +85,25 @@ struct UserType
     }
 }
 
+struct UserType
+{
+    string decl;
+
+    void generate(ref Code c, size_t index)
+    {
+        c.header.put(decl ~ "\n");
+    }
+}
+
 struct Symbol
 {
-    enum Type { Var, Alias, Import, UserType }
+    enum Type { Var, Alias, Import, Enum, UserType }
     union
     {
         Var v;
         Alias a;
         Import i;
+        Enum e;
         UserType u;
     }
     Type type;
@@ -116,6 +127,11 @@ struct Symbol
             i = _x;
             type = Type.Import;
         }
+        else static if (is(T == Enum))
+        {
+            e = _x;
+            type = Type.Enum;
+        }
         else static if (is(T == UserType))
         {
             u = _x;
@@ -130,6 +146,7 @@ struct Symbol
             case Type.Var: v.generate(c, index); break;
             case Type.Alias: a.generate(c, index); break;
             case Type.Import: i.generate(c, index); break;
+            case Type.Enum: e.generate(c, index); break;
             case Type.UserType: u.generate(c, index); break;
         }
 

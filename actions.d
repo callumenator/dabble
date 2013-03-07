@@ -95,6 +95,18 @@ struct Parser
     }
 
     /**
+    * A new enum has been defined
+    */
+    static T enumDecl(T)(T t)
+    {
+        if (t.successful) {
+            repl.symbols ~= Symbol(Enum(t.matches[0]));
+            t.matches.clear;
+        }
+        return t;
+    }
+
+    /**
     * A new user type has been defined.
     */
     static T userType(T)(T t)
