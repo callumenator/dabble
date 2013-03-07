@@ -30,24 +30,28 @@ static:
         foreach(idx, ref sym; repl.symbols)
             sym.generate(code, idx);
 
-        return code.header.data ~
+        return
+            code.header.data ~ "\n\n" ~
 
-               "export extern(C) int _main(ref _REPL.ReplContext _repl_) {\n" ~
-               "   gc_setProxy(_repl_.gc);\n" ~
-               "   import std.exception;\n" ~
-               "   auto e = collectException!Throwable(_main2(_repl_));\n" ~
-               "   if (e) { writeln(e.msg); return -1; }\n" ~
-               "   return 0;\n" ~
-               "}\n\n" ~
+            "export extern(C) int _main(ref _REPL.ReplContext _repl_)\n"
+            "{\n" ~
+            "    gc_setProxy(_repl_.gc);\n" ~
+            "    import std.exception;\n" ~
+            "    auto e = collectException!Throwable(_main2(_repl_));\n" ~
+            "    if (e) { writeln(e.msg); return -1; }\n" ~
+            "    return 0;\n" ~
+            "}\n\n" ~
 
-               "void _main2(ref _REPL.ReplContext _repl_) {\n" ~
-               "\nstring _expressionResult = ``;\n" ~
-               "\n" ~ repl.vtblFixup ~
-               "\n" ~ code.prefix.data ~
-               "\n" ~ genCode(p) ~
-               "\n" ~ code.suffix.data ~
-               "\nif (_expressionResult.length != 0) writeln(`=> `, _expressionResult);\n" ~
-               "}\n";
+            "void _main2(ref _REPL.ReplContext _repl_)\n" ~
+            "{\n" ~
+            "string _expressionResult;\n" ~
+            repl.vtblFixup ~
+            code.prefix.data ~
+            genCode(p) ~
+            code.suffix.data ~
+            "if (_expressionResult.length != 0) writeln(`=> `, _expressionResult);\n" ~
+            "}";
+
     }
 
     /**
