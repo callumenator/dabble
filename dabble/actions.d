@@ -1,4 +1,5 @@
-module actions;
+
+module dabble.actions;
 
 import
     std.datetime,
@@ -9,8 +10,8 @@ import
     std.string;
 
 import
-    parser,
-    defs;
+    dabble.parser,
+    dabble.defs;
 
 struct Parser
 {

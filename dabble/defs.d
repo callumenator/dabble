@@ -1,5 +1,5 @@
 
-module defs;
+module dabble.defs;
 
 enum sharedDefs = q{
 

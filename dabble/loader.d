@@ -27,6 +27,8 @@
 // disable warnings about pointer <. DWORD conversions
 //#pragma warning( disable : 4311 4312 )
 
+module dabble.loader;
+
 import
     std.c.string,
     std.c.stdlib,

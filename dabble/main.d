@@ -1,13 +1,13 @@
 
-module main;
+module dabble.main;
 
 import
     std.stdio;
 
 import
-    actions,
-    parser,
-    repl;
+    dabble.actions,
+    dabble.parser,
+    dabble.repl;
 
 ReplContext stress(ref ReplContext repl)
 {

@@ -1,4 +1,4 @@
-module grammar;
+module dabble.grammar;
 
 import
     pegged.peg,
@@ -440,5 +440,5 @@ ReplParse:
 
 void main()
 {
-    asModule!(Memoization.no)("parser", "parser", grammar, "import actions, std.stdio;");
+    asModule!(Memoization.no)("dabble.parser", "parser", grammar, "import dabble.actions, std.stdio;");
 }

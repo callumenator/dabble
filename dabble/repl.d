@@ -1,18 +1,18 @@
 
-module repl;
+module dabble.repl;
 
 import
     std.algorithm,
     std.stdio;
 
 import
-    actions,
-    loader,
-    parser,
-    sharedlib,
-    util;
+    dabble.actions,
+    dabble.loader,
+    dabble.parser,
+    dabble.sharedlib,
+    dabble.util;
 
-public import defs;
+public import dabble.defs;
 
 
 enum Debug

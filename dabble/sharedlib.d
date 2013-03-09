@@ -1,5 +1,5 @@
 
-module sharedlib;
+module dabble.sharedlib;
 
 /**
 * Encapsulate shared lib functions.
@@ -8,7 +8,7 @@ version(Windows)
 {
     import std.file : read;
     import std.string : toStringz;
-    import loader;
+    import dabble.loader;
 
     struct SharedLib
     {

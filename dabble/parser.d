@@ -218,9 +218,9 @@ ReplParse:
 
 
 +/
-module parser;
+module dabble.parser;
 
-import actions, std.stdio;
+import dabble.actions, std.stdio;
 
 public import pegged.peg;
 import std.algorithm: startsWith;
