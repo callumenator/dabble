@@ -128,6 +128,12 @@ bool eval(string code,
     if (text.length == 0)
         return true;
 
+    if (Parser.error.length != 0)
+    {
+        writeln(error);
+        return false;
+    }
+
     debug { writeln("BUILD..."); }
 
     sw.reset();
@@ -136,7 +142,7 @@ bool eval(string code,
 
     if (!build)
     {
-        writeln("Error: ", error);
+        writeln("Error:\n", error);
         deadSymbols(repl);
         return false;
     }
@@ -203,7 +209,7 @@ bool build(string code,
         catch(Exception e)
         {
             if (exists("errout.txt"))
-                err = parseError(readText("errout.txt"));
+                err = parseError(repl, readText("errout.txt"));
             return false;
         }
     }
@@ -300,31 +306,32 @@ CallResult call(ref ReplContext repl,
 /**
 * Do some processing on errors returned by DMD.
 */
-string parseError(string error)
+import std.range;
+string parseError(ReplContext repl, string error)
 {
     import std.string : splitLines;
+    import std.regex;
 
     if (error.length == 0)
         return "";
+
+    error = replace(error, regex(repl.filename ~ ".", "g"), "");
 
     string res;
     auto lines = splitLines(error);
     foreach(line; lines)
     {
-        auto r = error.splitter(":");
+        if (strip(line).length == 0)
+            continue;
 
-        if (r.empty)
-            res ~= line;
-        else
-        {
-            string tmp;
-            while(!r.empty)
-            {
-                tmp = r.front;
-                r.popFront();
-            }
-            res ~= tmp;
-        }
+        // Get line number
+        string lineNumber;
+        auto lnum = match(line, regex(`\([0-9]+\)`, "g"));
+        if (!lnum.empty)
+            lineNumber = lnum.front.hit();
+
+        auto r = splitter(line, regex(":", "g")).array();
+        res ~= "  " ~ lineNumber ~ ": " ~ r[$-1] ~ "\n";
     }
     return res;
 }

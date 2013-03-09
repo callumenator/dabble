@@ -229,7 +229,7 @@ static:
             else if (_ptr && *_ptr != parseID)
             {
                 // redifinition, user defined variable more than once
-                writeln("Error: redifinition of ", name, " not allowed");
+                parseError("Error: redifinition of " ~ name ~ " not allowed");
                 p.matches.clear;
             }
             else
@@ -264,8 +264,14 @@ static:
         return t;
     }
 
+    void parseError(string msg)
+    {
+        error ~= msg ~ "\n";
+    }
+
     ReplContext* repl;
     long parseID;
+    string error;
     uint braceCount;
 }
 
