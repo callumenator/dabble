@@ -5,6 +5,7 @@ import
     std.stdio;
 
 import
+    actions,
     parser,
     repl;
 
@@ -68,6 +69,7 @@ ReplContext run(string[] code)
 
 void main()
 {
+
     auto repl = newContext();
 
     //repl = run(["struct S { int a; float b; }","S s;", "a = s.tupleof;"]);

@@ -53,7 +53,7 @@ void loop(ref ReplContext repl,
             }
             default:
             {
-                codeBuffer ~= inBuffer;
+                codeBuffer ~= inBuffer ~ "\n";
 
                 if (!multiLine && inBuffer[$-1] == ';')
                 {

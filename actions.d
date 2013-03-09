@@ -51,7 +51,7 @@ static:
             code.prefix.data ~
             genCode(p) ~
             code.suffix.data ~
-            "if (_expressionResult.length != 0) writeln(`=> `, _expressionResult);\n" ~
+            "if (_expressionResult.length == 0) _expressionResult = `OK`; writeln(`=> `, _expressionResult);\n" ~
             "}";
 
     }
