@@ -1,6 +1,7 @@
 module actions;
 
 import
+    std.datetime,
     std.algorithm,
     std.array,
     std.stdio,
@@ -21,6 +22,7 @@ static:
     */
     string go(string input, ref ReplContext _repl)
     {
+        parseID = Clock.currSystemTick().msecs();
         repl = &_repl;
 
         auto p = ReplParse.Search(input);
@@ -161,7 +163,7 @@ static:
     */
     T wrapShowType(T)(T t)
     {
-        if (t.successful)
+        if (t.successful && t.matches.length)
         {
             t = ReplParse.decimateTree(t);
             t.matches[0] = "_expressionResult = _REPL.exprResult("~t.matches[0]~");";
@@ -217,8 +219,19 @@ static:
             auto type = strip(p.children[0].matches[0]);
             auto name = strip(p.children[1].matches[0]);
 
-            if (isDefined(name))
-            {} // redifinition, pegged calling actions more than once
+            auto _ptr = name in repl.symbolSet;
+
+            if (_ptr && *_ptr == parseID)
+            {
+                // redifinition, pegged calling actions more than once
+                p.matches.clear;
+            }
+            else if (_ptr && *_ptr != parseID)
+            {
+                // redifinition, user defined variable more than once
+                writeln("Error: redifinition of ", name, " not allowed");
+                p.matches.clear;
+            }
             else
             {
                 p.matches[0] = "(*" ~ p.matches[2] ~ ")";
@@ -228,7 +241,7 @@ static:
                 if (p.name == "ReplParse.VarDeclInit")
                     init = strip(p.children[$-1].matches[0]);
 
-                repl.symbolSet[name] = 1;
+                repl.symbolSet[name] = parseID;
                 repl.symbols ~= Symbol(Var(name, type, init));
             }
         }
@@ -240,7 +253,8 @@ static:
     */
     bool isDefined(string name)
     {
-        return canFind!("a.type == a.Type.Var && a.v.name == b")(repl.symbols, name);
+        auto ptr = name in repl.symbolSet;
+        return ptr !is null;
     }
 
     T incBraceCount(T)(T t)
@@ -251,6 +265,7 @@ static:
     }
 
     ReplContext* repl;
+    long parseID;
     uint braceCount;
 }
 

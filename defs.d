@@ -186,7 +186,7 @@ struct ReplContext
 {
     string filename;
     Symbol[] symbols;
-    int[string] symbolSet;
+    long[string] symbolSet;
     Vtbl[] vtbls;
     string vtblFixup;
     void* gc;
