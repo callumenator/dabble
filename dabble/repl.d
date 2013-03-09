@@ -41,8 +41,11 @@ void loop(ref ReplContext repl,
     while (strip(inBuffer) != "exit")
     {
         inBuffer = strip(inBuffer);
+
         switch(inBuffer)
         {
+            case "": break;
+
             case "print":
             {
                 foreach(val; repl.symbols)
@@ -51,6 +54,7 @@ void loop(ref ReplContext repl,
 
                 break;
             }
+
             default:
             {
                 codeBuffer ~= inBuffer ~ "\n";
