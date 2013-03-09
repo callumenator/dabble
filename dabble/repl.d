@@ -35,6 +35,8 @@ void loop(ref ReplContext repl,
 
     string error;
     char[] inBuffer, codeBuffer;
+
+    write(prompt());
     stdin.readln(inBuffer);
     bool multiLine = false;
 
@@ -82,10 +84,21 @@ void loop(ref ReplContext repl,
             }
         }
 
+        write(prompt());
         stdin.readln(inBuffer);
     }
     return;
 }
+
+
+/**
+* Return a command input prompt.
+*/
+string prompt()
+{
+    return ": ";
+}
+
 
 /**
 * Evaluate code in the context of the supplied ReplContext.
@@ -173,6 +186,7 @@ bool eval(string code,
     assert(false);
 }
 
+
 /**
 * Build a shared lib from supplied code.
 */
@@ -236,6 +250,7 @@ bool build(string code,
     return true;
 }
 
+
 /**
 * Cleanup some dmd outputs in a another thread.
 */
@@ -264,6 +279,7 @@ enum CallResult
     loadError,
     runtimeError
 }
+
 
 /**
 * Load the shared lib, and call the _main function. Free the lib on exit.
@@ -306,6 +322,7 @@ CallResult call(ref ReplContext repl,
 
     return CallResult.success;
 }
+
 
 /**
 * Do some processing on errors returned by DMD.
