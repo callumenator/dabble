@@ -65,11 +65,10 @@ ReplContext run(string[] code)
     return repl;
 }
 
-
+import std.regex;
 
 void main()
 {
-
     auto repl = newContext();
 
     //repl = stress(repl);

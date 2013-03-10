@@ -23,6 +23,8 @@ static:
     */
     string go(string input, ref ReplContext _repl)
     {
+        inputCopy = input;
+        lineCount = 0;
         parseID = Clock.currSystemTick().msecs();
         repl = &_repl;
 
@@ -149,6 +151,23 @@ static:
     }
 
     /**
+    * Add debug line info to generated code.
+    */
+    T genDebug(T)(T t) // not used for now
+    {
+        if (t.successful)
+        {
+            auto lines = splitLines(t.matches[0]);
+            foreach(index, ref line; lines)
+                line ~= " /** debug: " ~ (lineCount + index).to!string ~ " **/";
+
+            lineCount += t.matches[0].count("\n");
+            t.matches[0] = std.array.join(lines, "\n");
+        }
+        return t;
+    }
+
+    /**
     * Wrap a template argument....
     */
     T wrapInstanceType(T)(T t)
@@ -167,7 +186,7 @@ static:
         if (t.successful && t.matches.length)
         {
             t = ReplParse.decimateTree(t);
-            t.matches[0] = "_expressionResult = _REPL.exprResult("~t.matches[0]~");";
+            t.matches[0] = "_expressionResult = _REPL.exprResult(\n"~t.matches[0]~"\n);\n";
         }
 
         return t;
@@ -272,7 +291,9 @@ static:
 
     ReplContext* repl;
     long parseID;
+    string inputCopy;
     string error;
+    uint lineCount; // for debug
     uint braceCount;
 }
 

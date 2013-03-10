@@ -331,12 +331,24 @@ import std.range;
 string parseError(ReplContext repl, string error)
 {
     import std.string : splitLines;
+    import std.file : readText;
     import std.regex;
 
     if (error.length == 0)
         return "";
 
+    // Remove * from user defined vars.
+    string deDereference(string s, bool parens = true) @safe
+    {
+        if (parens)
+            return replace(s, regex(`(\(\*)([_a-zA-Z][_0-9a-zA-Z]*)(\))`, "g"), "$2");
+        else
+            return replace(s, regex(`(\*)([_a-zA-Z][_0-9a-zA-Z]*)`, "g"), "$2");
+    }
+
     error = replace(error, regex(repl.filename ~ ".", "g"), "");
+
+    auto code = splitLines(readText(repl.filename ~ ".d"));
 
     string res;
     auto lines = splitLines(error);
@@ -345,14 +357,16 @@ string parseError(ReplContext repl, string error)
         if (strip(line).length == 0)
             continue;
 
-        // Get line number
+        // Get line number - TODO make this number meaningful - comment gen'd code with line nums from input
         string lineNumber;
         auto lnum = match(line, regex(`\([0-9]+\)`, "g"));
         if (!lnum.empty)
-            lineNumber = lnum.front.hit();
+            lineNumber = lnum.front.hit()[1..$-1];
 
         auto r = splitter(line, regex(":", "g")).array();
-        res ~= "  " ~ lineNumber ~ ": " ~ r[$-1] ~ "\n";
+        res ~= " < " ~ deDereference(code[(lineNumber.to!uint) - 1]) ~ " >\n";
+        res ~= "   " ~ deDereference(r[$-1], false) ~ "\n";
+
     }
     return res;
 }
