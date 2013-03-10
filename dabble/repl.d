@@ -19,7 +19,8 @@ enum Debug
 {
     none        = 0x00, /// no debug output
     times       = 0x01, /// display time to parse, build and call
-    parseOnly   = 0x02  /// show parse tree and return
+    parseOnly   = 0x02, /// show parse tree and return
+    print       = 0x04  /// add writelns to end of every line
 }
 
 
@@ -138,11 +139,11 @@ bool eval(string code,
 
     if (flag & Debug.parseOnly)
     {
-        writeln(text);
+        writeln(text[0]~text[1]);
         return true;
     }
 
-    if (text.length == 0)
+    if (text[0].length == 0 && text[1].length == 0)
         return true;
 
     if (Parser.error.length != 0)
@@ -150,6 +151,21 @@ bool eval(string code,
         writeln(error);
         return false;
     }
+
+/++
+    if (text[1].length && flag & Debug.print)
+    {
+        auto lines = splitter(text[1], ";");
+        string str;
+        uint index;
+        while(!lines.empty)
+        {
+            str ~= lines.front ~ "; writeln(q\"#" ~ lines.front ~ "#\");";
+            lines.popFront();
+        }
+        text[1] = str;
+    }
+++/
 
     debug { writeln("BUILD..."); }
 
@@ -190,7 +206,8 @@ bool eval(string code,
 /**
 * Build a shared lib from supplied code.
 */
-bool build(string code,
+import std.typecons;
+bool build(Tuple!(string,string) code,
            ref ReplContext repl,
            out string error)
 {
@@ -198,8 +215,24 @@ bool build(string code,
     import std.process : shell;
     import std.parallelism : task;
 
+    auto text =
+        code[0] ~
+        "export extern(C) int _main(ref _REPL.ReplContext _repl_)\n"
+        "{\n" ~
+        "    gc_setProxy(_repl_.gc);\n" ~
+        "    import std.exception;\n" ~
+        "    auto e = collectException!Throwable(_main2(_repl_));\n" ~
+        "    if (e) { writeln(e.msg); return -1; }\n" ~
+        "    return 0;\n" ~
+        "}\n\n" ~
+
+        "void _main2(ref _REPL.ReplContext _repl_)\n" ~
+        "{\n" ~
+        code[1] ~
+        "}\n";
+
     auto file = File(repl.filename ~ ".d", "w");
-    file.write(genHeader() ~ code);
+    file.write(genHeader() ~ text);
     file.close();
 
     scope(exit) task!cleanup(repl).executeInNewThread();

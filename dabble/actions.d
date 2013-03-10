@@ -7,7 +7,8 @@ import
     std.array,
     std.stdio,
     std.conv,
-    std.string;
+    std.string,
+    std.typecons;
 
 import
     dabble.parser,
@@ -21,7 +22,7 @@ static:
     /**
     * Start parsing.
     */
-    string go(string input, ref ReplContext _repl)
+    Tuple!(string,string) go(string input, ref ReplContext _repl)
     {
         inputCopy = input;
         lineCount = 0;
@@ -35,28 +36,15 @@ static:
         foreach(idx, ref sym; repl.symbols)
             sym.generate(code, idx);
 
-        return
-            code.header.data ~ "\n\n" ~
-
-            "export extern(C) int _main(ref _REPL.ReplContext _repl_)\n"
-            "{\n" ~
-            "    gc_setProxy(_repl_.gc);\n" ~
-            "    import std.exception;\n" ~
-            "    auto e = collectException!Throwable(_main2(_repl_));\n" ~
-            "    if (e) { writeln(e.msg); return -1; }\n" ~
-            "    return 0;\n" ~
-            "}\n\n" ~
-
-            "void _main2(ref _REPL.ReplContext _repl_)\n" ~
-            "{\n" ~
+        auto inBody =
             "string _expressionResult;\n" ~
             repl.vtblFixup ~
             code.prefix.data ~
             genCode(p) ~
             code.suffix.data ~
-            "if (_expressionResult.length == 0) _expressionResult = `OK`; writeln(`=> `, _expressionResult);\n" ~
-            "}";
+            "if (_expressionResult.length == 0) _expressionResult = `OK`; writeln(`=> `, _expressionResult);\n";
 
+        return tuple(code.header.data, inBody);
     }
 
     /**

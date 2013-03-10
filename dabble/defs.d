@@ -9,7 +9,9 @@ extern(C) void* gc_getProxy();
 
 struct Code
 {
-    Appender!string header, prefix, suffix;
+    Appender!string header,
+                    prefix,
+                    suffix;
 }
 
 struct Var
@@ -34,17 +36,17 @@ struct Var
             {
                 assert(init.length > 0, "Auto var without initializer");
 
-                put(c.prefix, "auto ", name, " = _REPL.newExpr!(q\"#", init,
-                    "#\")(_repl_,", index.to!string, ", ", init, ");\n");
+                put(c.prefix, "auto ", name, " = _REPL.newExpr!(q{", init,
+                    "})(_repl_,", index.to!string, ", ", init, ");\n");
 
-                put(c.prefix, "_repl_.symbols[", index.to!string, "].v.type = _REPL.NewTypeof!(q\"#",
-                    init, "#\")(", init, ").idup;\n");
+                put(c.prefix, "_repl_.symbols[", index.to!string, "].v.type = _REPL.NewTypeof!(q{",
+                    init, "})(", init, ").idup;\n");
 
             }
             else if (init.length > 0) // has type and initializer
             {
-                put(c.prefix, type, "* ", name, " = cast(", type, "*)_REPL.newExpr!(q\"#",
-                    init, "#\")(_repl_,", index.to!string, ",", init, ");\n");
+                put(c.prefix, type, "* ", name, " = cast(", type, "*)_REPL.newExpr!(q{",
+                    init, "})(_repl_,", index.to!string, ",", init, ");\n");
             }
             else // just has type
             {
