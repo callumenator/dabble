@@ -152,7 +152,6 @@ bool eval(string code,
         return false;
     }
 
-/++
     if (text[1].length && flag & Debug.print)
     {
         auto lines = splitter(text[1], ";");
@@ -160,12 +159,11 @@ bool eval(string code,
         uint index;
         while(!lines.empty)
         {
-            str ~= lines.front ~ "; writeln(q\"#" ~ lines.front ~ "#\");";
+            str ~= lines.front ~ "; writeln(q{" ~ lines.front ~ "});";
             lines.popFront();
         }
         text[1] = str;
     }
-++/
 
     debug { writeln("BUILD..."); }
 

@@ -65,14 +65,15 @@ ReplContext run(string[] code)
     return repl;
 }
 
+import std.regex, std.conv;
 
 void main()
 {
-
     auto repl = newContext();
 
     //repl = stress(repl);
-    loop(repl, Debug.print);
+    //loop(repl, Debug.print);
+    run(["import std.regex;", "r = regex(`[a-zA-Z]`, `g`);", "b = match(`hello`, r);", "c=5;"]);
 
     return;
 }

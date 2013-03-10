@@ -260,6 +260,9 @@ string genHeader()
             }
             else
             {
+                auto fout = File("errout.txt", "w");
+                fout.write(val);
+                fout.close();
                 current = val.to!string;
             }
             return current.idup;
