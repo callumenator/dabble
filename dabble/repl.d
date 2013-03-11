@@ -61,8 +61,10 @@ void loop(ref ReplContext repl,
             default:
             {
                 codeBuffer ~= inBuffer ~ "\n";
+                Parser.braceCount = 0;
+                auto balanced = ReplParse.BalancedBraces(codeBuffer.to!string);
 
-                if (!multiLine && inBuffer[$-1] == ';')
+                if (!multiLine && balanced.successful && inBuffer[$-1] == ';')
                 {
                     eval(codeBuffer.to!string, repl, error, flag);
                     codeBuffer.clear;
@@ -72,10 +74,8 @@ void loop(ref ReplContext repl,
 
                 if (multiLine)
                 {
-                    Parser.braceCount = 0;
-                    auto test = ReplParse.BalancedBraces(codeBuffer.to!string);
-                    if ( (test.successful && Parser.braceCount > 0) ||
-                         (test.successful && Parser.braceCount == 0 && inBuffer[$-1] == ';'))
+                    if ( (balanced.successful && Parser.braceCount > 0) ||
+                         (balanced.successful && Parser.braceCount == 0 && inBuffer[$-1] == ';'))
                     {
                         eval(codeBuffer.to!string, repl, error, flag);
                         codeBuffer.clear;
