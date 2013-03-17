@@ -167,6 +167,9 @@ bool eval(string code,
 
     debug { writeln("BUILD..."); }
 
+    //foreach(s; repl.symbols)
+    //    writeln(s, ", ", s.valid);
+
     sw.reset();
     auto build = build(text, repl, error);
     times.build = sw.peek().msecs();

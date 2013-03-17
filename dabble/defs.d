@@ -32,7 +32,7 @@ struct Var
         {
             first = false;
 
-            if (type == "auto") // has initializer
+            if (type == "auto") // has initializer but no type
             {
                 assert(init.length > 0, "Auto var without initializer");
 
@@ -45,8 +45,11 @@ struct Var
             }
             else if (init.length > 0) // has type and initializer
             {
-                put(c.prefix, type, "* ", name, " = cast(", type, "*)_REPL.newExpr!(q{",
-                    init, "})(_repl_,", index.to!string, ",", init, ");\n");
+                //put(c.prefix, type, "* ", name, " = cast(", type, "*)_REPL.newExpr!(q{",
+                //    init, "})(_repl_,", index.to!string, ",", init, ");\n");
+                put(c.prefix, type, "* ", name, " = _REPL.newType!(", type, ")(_repl_,",
+                    index.to!string, ");\n");
+                put(c.prefix, "(*", name, ") = ", init, ";\n");
             }
             else // just has type
             {
