@@ -70,7 +70,9 @@ void loop(ref ReplContext repl,
                     codeBuffer.clear;
                 }
                 else
+                {
                     multiLine = true;
+                }
 
                 if (multiLine)
                 {
