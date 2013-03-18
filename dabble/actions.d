@@ -139,30 +139,13 @@ static:
     }
 
     /**
-    * Add debug line info to generated code.
-    */
-    T genDebug(T)(T t) // not used for now
-    {
-        if (t.successful)
-        {
-            auto lines = splitLines(t.matches[0]);
-            foreach(index, ref line; lines)
-                line ~= " /** debug: " ~ (lineCount + index).to!string ~ " **/";
-
-            lineCount += t.matches[0].count("\n");
-            t.matches[0] = std.array.join(lines, "\n");
-        }
-        return t;
-    }
-
-    /**
     * Wrap a template argument....
     */
     T wrapInstanceType(T)(T t)
     {
-        if (t.successful) {
+        if (t.successful)
             t.matches[0] = "(" ~ t.matches[0] ~ ")";
-        }
+
         return t;
     }
 
@@ -176,7 +159,6 @@ static:
             t = ReplParse.decimateTree(t);
             t.matches[0] = "_expressionResult = _REPL.exprResult(\n"~t.matches[0]~"\n);\n";
         }
-
         return t;
     }
 
@@ -190,7 +172,6 @@ static:
             if (t.matches[0] in repl.symbolSet)
                 t.matches[0] = "(*" ~ t.matches[0] ~ ")";
         }
-
         return t;
     }
 
@@ -291,6 +272,17 @@ static:
 */
 void deadSymbols(ref ReplContext repl)
 {
-    repl.symbols = filter!"a.valid"(repl.symbols).array();
+    Symbol[] keep;
+    foreach(s; repl.symbols)
+    {
+        if (s.valid)
+            keep ~= s;
+        else
+        {
+            if (s.type == Symbol.Type.Var)
+                repl.symbolSet.remove(s.v.name);
+        }
+    }
+    repl.symbols = keep;
 }
 
