@@ -71,7 +71,7 @@ void main()
 
     auto repl = newContext();
 
-    //repl = stress(repl);
+    repl = stress(repl);
 
     //repl = run([
     //"j = 45;",

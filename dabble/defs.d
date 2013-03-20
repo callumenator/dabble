@@ -125,6 +125,7 @@ struct Var
 struct Alias
 {
     string decl;
+    bool global = false;
 
     void generate(ref Code c, size_t index)
     {

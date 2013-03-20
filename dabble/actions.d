@@ -90,26 +90,25 @@ static:
     }
 
     /**
+    * Handle alias declarations
+    */
+    T aliasDecl(T)(T t)
+    {
+        if (repl && t.successful)
+        {
+            repl.symbols ~= Symbol(Alias(t.matches[0], isGlobal(t.matches[0])));
+            t.matches.clear;
+        }
+        return t;
+    }
+
+    /**
     * A new enum has been defined
     */
     T enumDecl(T)(T t)
     {
-        import std.regex;
-
         if (repl && t.successful) {
-
-            bool global = true;
-            auto r = regex(`(\(\*)([_a-zA-Z][_0-9a-zA-Z]*)(\))`, "g");
-            foreach(m; match(t.matches[0], r))
-            {
-                if (isDefined(m.captures[2]))
-                {
-                    global = false;
-                    break;
-                }
-            }
-
-            repl.symbols ~= Symbol(Enum(t.matches[0], global));
+            repl.symbols ~= Symbol(Enum(t.matches[0], isGlobal(t.matches[0])));
             t.matches.clear;
         }
         return t;
@@ -122,19 +121,6 @@ static:
     {
         if (repl && t.successful) {
             repl.symbols ~= Symbol(UserType(t.matches[0]));
-            t.matches.clear;
-        }
-        return t;
-    }
-
-    /**
-    * Handle alias declarations
-    */
-    T aliasDecl(T)(T t)
-    {
-        if (repl && t.successful)
-        {
-            repl.symbols ~= Symbol(Alias(t.matches[0]));
             t.matches.clear;
         }
         return t;
@@ -256,6 +242,21 @@ static:
     {
         auto ptr = name in repl.symbolSet;
         return ptr !is null;
+    }
+
+    /**
+    * Return true if input does not reference any local vars (i.e. can be
+    * put in code header.
+    */
+    bool isGlobal(string input)
+    {
+        import std.regex;
+
+        auto r = regex(`(\(\*)([_a-zA-Z][_0-9a-zA-Z]*)(\))`, "g");
+        foreach(m; match(input, r))
+            if (isDefined(m.captures[2]))
+               return false;
+        return true;
     }
 
     T incBraceCount(T)(T t)
