@@ -129,7 +129,10 @@ struct Alias
 
     void generate(ref Code c, size_t index)
     {
-        c.prefix.put(decl ~ "\n");
+        if (global)
+            c.header.put(decl ~ "\n");
+        else
+            c.prefix.put(decl ~ "\n");
     }
 }
 
