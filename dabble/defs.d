@@ -18,6 +18,7 @@ struct Var
 {
     string name, type, init, current, displayType;
     bool first = true;
+    bool func = false;
     void* addr;
 
     void put(T...)(ref Appender!string app, T items)
@@ -31,42 +32,66 @@ struct Var
         if (first)
         {
             first = false;
+            string test;
 
             if (type == "auto") // has initializer but no type
             {
                 assert(init.length > 0, "Auto var without initializer");
 
-                put(c.prefix, "auto ", name, " = _REPL.newExpr!(q{", init,
-                    "})(_repl_,", index.to!string, ", ", init, ");\n");
+                test = "static if (__traits(compiles, { auto " ~ name ~ " = " ~ init ~ ";}))";
 
-                put(c.prefix, "_repl_.symbols[", index.to!string, "].v.type = _REPL.NewTypeof!(q{",
+                put(c.prefix,
+                    test, "{\n",
+                    "  auto ", name, " = _REPL.newExpr!(q{", init, "})(_repl_,", index.to!string, ", ", init, ");\n",
+                    "} else {\n",
+                    "  auto ", name, " = ", init, ";\n",
+                    "}\n");
+
+                    //"static if (isFunctionPointer!(", init, ")) {\n",
+                    //"_repl_.symbols[", index.to!string, "].v.func = true;\n",
+                    //"typeof(", init, ")* ", name, ";\n",
+                    //"{\n auto _temp = ", init, ";\n",
+                    //name, " = &_temp;\n}} else {\n",
+
+                put(c.prefix, test, "\n  _repl_.symbols[", index.to!string, "].v.type = _REPL.NewTypeof!(q{",
                     init, "})(", init, ").idup;\n");
 
             }
             else if (init.length > 0) // has type and initializer
             {
-                //put(c.prefix, type, "* ", name, " = cast(", type, "*)_REPL.newExpr!(q{",
-                //    init, "})(_repl_,", index.to!string, ",", init, ");\n");
-                put(c.prefix, type, "* ", name, " = _REPL.newType!(", type, ")(_repl_,",
-                    index.to!string, ");\n");
-                put(c.prefix, "(*", name, ") = ", init, ";\n");
+                test = "static if (__traits(compiles, { " ~ type ~ " " ~ name ~ " = " ~ init ~ ";}))";
+
+                put(c.prefix, test, "{\n",
+                    "  ", type, "* ", name, " = _REPL.newType!(", type, ")(_repl_,", index.to!string, ");\n",
+                    "  (*", name, ") = ", init, ";\n",
+                    "} else {\n",
+                    "  ", type, " ", name, " = ", init, ";\n",
+                    "}\n");
             }
             else // just has type
             {
+                test = "static if (true)";
+
                 put(c.prefix, type, "* ", name, " = _REPL.newType!(", type, ")(_repl_,",
                     index.to!string, ");\n");
             }
 
-            put(c.prefix, "_repl_.symbols[", index.to!string, "].v.displayType = typeof(*",
-                name, ").stringof.idup;\n");
+            put(c.prefix, test, "{\n",
+                "  _repl_.symbols[", index.to!string, "].v.displayType = typeof(*", name, ").stringof.idup;\n",
+                "  _expressionResult = _REPL.exprResult(\n*"~name~"\n);\n",
+                "}\n");
+
+            put(c.suffix, test, "\n  _repl_.symbols[", index.to!string,
+                "].v.current = _REPL.currentVal(*", name, ");\n");
+
         }
         else // var has already been created, just grab it
         {
             put(c.prefix, "auto ", name, " = _REPL.getVar!(", type, ")(_repl_,",
                 index.to!string, ");\n");
-        }
 
-        put(c.suffix, "_repl_.symbols[", index.to!string, "].v.current = _REPL.currentVal(*", name, ");\n");
+            put(c.suffix, "_repl_.symbols[", index.to!string, "].v.current = _REPL.currentVal(*", name, ");\n");
+        }
     }
 
     void toString(scope void delegate(const(char)[]) sink)

@@ -393,15 +393,19 @@ string parseError(ReplContext repl, string error)
         if (strip(line).length == 0)
             continue;
 
-        // Get line number - TODO make this number meaningful - comment gen'd code with line nums from input
-        string lineNumber;
+        auto r = splitter(line, regex(":", "g")).array();
+
         auto lnum = match(line, regex(`\([0-9]+\)`, "g"));
         if (!lnum.empty)
-            lineNumber = lnum.front.hit()[1..$-1];
+        {
+            auto lineNumber = lnum.front.hit()[1..$-1].to!int - 1;
+            if (lineNumber > 0 && lineNumber < code.length)
+                res ~= " < " ~ strip(deDereference(code[lineNumber])) ~ " >\n";
+            else
+                writeln(error);
+        }
 
-        auto r = splitter(line, regex(":", "g")).array();
-        res ~= " < " ~ deDereference(code[(lineNumber.to!uint) - 1]) ~ " >\n";
-        res ~= "   " ~ deDereference(r[$-1], false) ~ "\n";
+        res ~= "   " ~ strip(deDereference(r[$-1], false)) ~ "\n";
 
     }
     return res;

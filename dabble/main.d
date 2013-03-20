@@ -71,6 +71,12 @@ void main()
     auto repl = newContext();
 
     //repl = stress(repl);
+
+
+    //auto repl = run(
+    //["a = (int i){return i;};"]
+    //);
+
     loop(repl);
 
 

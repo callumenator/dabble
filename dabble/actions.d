@@ -223,8 +223,7 @@ static:
             }
             else
             {
-                p.matches[0] = "(*" ~ p.matches[2] ~ ")";
-                p.matches = p.matches[0..1];
+                p.matches.clear;
 
                 string init;
                 if (p.name == "ReplParse.VarDeclInit")

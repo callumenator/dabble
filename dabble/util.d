@@ -260,7 +260,7 @@ string genHeader()
             }
             else
             {
-                auto fout = File("errout.txt", "w");
+                auto fout = File("hackout.txt", "w");
                 fout.write(val);
                 fout.close();
                 current = val.to!string;

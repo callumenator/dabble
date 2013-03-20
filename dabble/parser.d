@@ -17,7 +17,7 @@ ReplParse:
            / eoi
            / .
 
-    FuncBlock <~ wx BwParens(Import/UserType) wx BwBraces(Import/UserType)
+    FuncBlock <~ wx BwParens wx BwBraces(Import/UserType/.)
 
     ArrayLit <~ BwBrackets(VarRewrite/.)
 
@@ -63,7 +63,7 @@ ReplParse:
 
     Var <~( AutoVarDeclInit {Parser.autoVarDecl}
          /  VarDeclInit  {Parser.varDecl}
-         /  VarDecl      {Parser.varDecl} ) {Parser.wrapShowType}
+         /  VarDecl      {Parser.varDecl} )
 
 
     EnumDecl        <- wx ~("enum" ;ws ( ~Type ;ws Ident wx '=' GrabToColon ';'
@@ -407,16 +407,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree FuncBlock(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(wx, BwParens!(pegged.peg.or!(Import, UserType)), wx, BwBraces!(pegged.peg.or!(Import, UserType)))), "ReplParse.FuncBlock")(p);
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(wx, BwParens, wx, BwBraces!(pegged.peg.or!(Import, UserType, pegged.peg.any)))), "ReplParse.FuncBlock")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(wx, BwParens!(pegged.peg.or!(Import, UserType)), wx, BwBraces!(pegged.peg.or!(Import, UserType)))), "ReplParse.FuncBlock"), "FuncBlock")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(wx, BwParens, wx, BwBraces!(pegged.peg.or!(Import, UserType, pegged.peg.any)))), "ReplParse.FuncBlock"), "FuncBlock")(p);
     }
     static TParseTree FuncBlock(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(wx, BwParens!(pegged.peg.or!(Import, UserType)), wx, BwBraces!(pegged.peg.or!(Import, UserType)))), "ReplParse.FuncBlock")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(wx, BwParens, wx, BwBraces!(pegged.peg.or!(Import, UserType, pegged.peg.any)))), "ReplParse.FuncBlock")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(wx, BwParens!(pegged.peg.or!(Import, UserType)), wx, BwBraces!(pegged.peg.or!(Import, UserType)))), "ReplParse.FuncBlock"), "FuncBlock")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(wx, BwParens, wx, BwBraces!(pegged.peg.or!(Import, UserType, pegged.peg.any)))), "ReplParse.FuncBlock"), "FuncBlock")(TParseTree("", false,[], s));
     }
     static string FuncBlock(GetName g)
     {
@@ -730,16 +730,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree Var(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.action!(pegged.peg.or!(pegged.peg.action!(AutoVarDeclInit, Parser.autoVarDecl), pegged.peg.action!(VarDeclInit, Parser.varDecl), pegged.peg.action!(VarDecl, Parser.varDecl)), Parser.wrapShowType)), "ReplParse.Var")(p);
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.or!(pegged.peg.action!(AutoVarDeclInit, Parser.autoVarDecl), pegged.peg.action!(VarDeclInit, Parser.varDecl), pegged.peg.action!(VarDecl, Parser.varDecl))), "ReplParse.Var")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.action!(pegged.peg.or!(pegged.peg.action!(AutoVarDeclInit, Parser.autoVarDecl), pegged.peg.action!(VarDeclInit, Parser.varDecl), pegged.peg.action!(VarDecl, Parser.varDecl)), Parser.wrapShowType)), "ReplParse.Var"), "Var")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.or!(pegged.peg.action!(AutoVarDeclInit, Parser.autoVarDecl), pegged.peg.action!(VarDeclInit, Parser.varDecl), pegged.peg.action!(VarDecl, Parser.varDecl))), "ReplParse.Var"), "Var")(p);
     }
     static TParseTree Var(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.action!(pegged.peg.or!(pegged.peg.action!(AutoVarDeclInit, Parser.autoVarDecl), pegged.peg.action!(VarDeclInit, Parser.varDecl), pegged.peg.action!(VarDecl, Parser.varDecl)), Parser.wrapShowType)), "ReplParse.Var")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.or!(pegged.peg.action!(AutoVarDeclInit, Parser.autoVarDecl), pegged.peg.action!(VarDeclInit, Parser.varDecl), pegged.peg.action!(VarDecl, Parser.varDecl))), "ReplParse.Var")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.action!(pegged.peg.or!(pegged.peg.action!(AutoVarDeclInit, Parser.autoVarDecl), pegged.peg.action!(VarDeclInit, Parser.varDecl), pegged.peg.action!(VarDecl, Parser.varDecl)), Parser.wrapShowType)), "ReplParse.Var"), "Var")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.or!(pegged.peg.action!(AutoVarDeclInit, Parser.autoVarDecl), pegged.peg.action!(VarDeclInit, Parser.varDecl), pegged.peg.action!(VarDecl, Parser.varDecl))), "ReplParse.Var"), "Var")(TParseTree("", false,[], s));
     }
     static string Var(GetName g)
     {

@@ -20,7 +20,7 @@ ReplParse:
            / eoi
            / .
 
-    FuncBlock <~ wx BwParens(Import/UserType) wx BwBraces(Import/UserType)
+    FuncBlock <~ wx BwParens wx BwBraces(Import/UserType/.)
 
     ArrayLit <~ BwBrackets(VarRewrite/.)
 
@@ -66,7 +66,7 @@ ReplParse:
 
     Var <~( AutoVarDeclInit {Parser.autoVarDecl}
          /  VarDeclInit  {Parser.varDecl}
-         /  VarDecl      {Parser.varDecl} ) {Parser.wrapShowType}
+         /  VarDecl      {Parser.varDecl} )
 
 
     EnumDecl        <- wx ~("enum" ;ws ( ~Type ;ws Ident wx '=' GrabToColon ';'
