@@ -79,7 +79,7 @@ static:
     */
     T addImport(T)(T t)
     {
-        if (t.successful) {
+        if (repl && t.successful) {
             auto imp = removechars(t.matches[0], " ");
             repl.symbols ~= Symbol(Import(imp));
 
@@ -94,8 +94,22 @@ static:
     */
     T enumDecl(T)(T t)
     {
-        if (t.successful) {
-            repl.symbols ~= Symbol(Enum(t.matches[0]));
+        import std.regex;
+
+        if (repl && t.successful) {
+
+            bool global = true;
+            auto r = regex(`(\(\*)([_a-zA-Z][_0-9a-zA-Z]*)(\))`, "g");
+            foreach(m; match(t.matches[0], r))
+            {
+                if (isDefined(m.captures[2]))
+                {
+                    global = false;
+                    break;
+                }
+            }
+
+            repl.symbols ~= Symbol(Enum(t.matches[0], global));
             t.matches.clear;
         }
         return t;
@@ -106,7 +120,7 @@ static:
     */
     T userType(T)(T t)
     {
-        if (t.successful) {
+        if (repl && t.successful) {
             repl.symbols ~= Symbol(UserType(t.matches[0]));
             t.matches.clear;
         }
@@ -118,7 +132,7 @@ static:
     */
     T aliasDecl(T)(T t)
     {
-        if (t.successful)
+        if (repl && t.successful)
         {
             repl.symbols ~= Symbol(Alias(t.matches[0]));
             t.matches.clear;
@@ -166,7 +180,7 @@ static:
     */
     T varRewrite(T)(T t)
     {
-        if (t.successful)
+        if (repl && t.successful)
         {
             if (t.matches[0] in repl.symbolSet)
                 t.matches[0] = "(*" ~ t.matches[0] ~ ")";
@@ -179,7 +193,7 @@ static:
     */
     T autoVarDecl(T)(T p)
     {
-        if (p.successful)
+        if (repl && p.successful)
         {
             if (p.children[0].matches[0] !in repl.symbolSet)
             {
@@ -202,7 +216,7 @@ static:
     */
     T varDecl(T)(T p)
     {
-        if (p.successful)
+        if (repl && p.successful)
         {
             auto type = strip(p.children[0].matches[0]);
             auto name = strip(p.children[1].matches[0]);

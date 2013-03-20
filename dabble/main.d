@@ -68,14 +68,15 @@ ReplContext run(string[] code)
 
 void main()
 {
+
     auto repl = newContext();
 
-    repl = stress(repl);
+    //repl = stress(repl);
 
-
-    //auto repl = run(
-    //["a = (int i){return i;};"]
-    //);
+    //repl = run([
+    //"j = 45;",
+    //"a = (int i) { return j;};"
+    //]);
 
     loop(repl);
 

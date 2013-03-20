@@ -42,16 +42,18 @@ struct Var
 
                 put(c.prefix,
                     test, "{\n",
+                    "  static if ((__traits(compiles, isFunctionPointer!(typeof(", init, "))) && isFunctionPointer!(typeof(", init, ")))"
+                    " || is(typeof(", init, ") == delegate)) {\n",
+                    "    _repl_.symbols[", index.to!string, "].v.func = true;\n",
+                    "    typeof(", init, ")* ", name, ";\n",
+                    "    {\n",
+                    "      auto _temp = ", init, ";\n",
+                    "      ", name, " = &_temp;\n",
+                    "    }\n  } else {\n",
                     "  auto ", name, " = _REPL.newExpr!(q{", init, "})(_repl_,", index.to!string, ", ", init, ");\n",
-                    "} else {\n",
+                    "}} else {\n",
                     "  auto ", name, " = ", init, ";\n",
                     "}\n");
-
-                    //"static if (isFunctionPointer!(", init, ")) {\n",
-                    //"_repl_.symbols[", index.to!string, "].v.func = true;\n",
-                    //"typeof(", init, ")* ", name, ";\n",
-                    //"{\n auto _temp = ", init, ";\n",
-                    //name, " = &_temp;\n}} else {\n",
 
                 put(c.prefix, test, "\n  _repl_.symbols[", index.to!string, "].v.type = _REPL.NewTypeof!(q{",
                     init, "})(", init, ").idup;\n");
@@ -81,16 +83,32 @@ struct Var
                 "  _expressionResult = _REPL.exprResult(\n*"~name~"\n);\n",
                 "}\n");
 
-            put(c.suffix, test, "\n  _repl_.symbols[", index.to!string,
-                "].v.current = _REPL.currentVal(*", name, ");\n");
+            put(c.suffix, test, "{\n"
+                "  if (_repl_.symbols[", index.to!string, "].v.func) {\n"
+                "    _repl_.symbols[", index.to!string, "].v.current = q{", init, "}.idup;\n"
+                "  } else {\n"
+                "    _repl_.symbols[", index.to!string, "].v.current = _REPL.currentVal(*", name, ");\n"
+                "}}\n"
+                );
 
         }
         else // var has already been created, just grab it
         {
-            put(c.prefix, "auto ", name, " = _REPL.getVar!(", type, ")(_repl_,",
-                index.to!string, ");\n");
 
-            put(c.suffix, "_repl_.symbols[", index.to!string, "].v.current = _REPL.currentVal(*", name, ");\n");
+            if (func)
+            {
+                put(c.prefix,
+                    "typeof(", init, ")* ", name, ";\n",
+                    "{\n",
+                    "  auto _temp = ", init, ";\n",
+                    "  ", name, " = &_temp;\n",
+                    "}\n");
+            }
+            else
+            {
+                put(c.prefix, "auto ", name, " = _REPL.getVar!(", type, ")(_repl_,", index.to!string, ");\n");
+                put(c.suffix, "_repl_.symbols[", index.to!string, "].v.current = _REPL.currentVal(*", name, ");\n");
+            }
         }
     }
 
@@ -127,10 +145,14 @@ struct Import
 struct Enum
 {
     string decl;
+    bool global = false;
 
     void generate(ref Code c, size_t index)
     {
-        c.prefix.put(decl ~ "\n");
+        if (global)
+            c.header.put(decl ~ "\n");
+        else
+            c.prefix.put(decl ~ "\n");
     }
 }
 
