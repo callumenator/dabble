@@ -70,7 +70,7 @@ void main()
 {
     auto repl = newContext();
 
-    //repl = stress(repl);
+    repl = stress(repl);
 
 
     //auto repl = run(

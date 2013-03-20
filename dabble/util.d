@@ -102,6 +102,8 @@ string genHeader()
     struct _REPL
     {
         static:
+
+        char[1024] buffer;
     `
     ~ sharedDefs ~
     `
@@ -260,9 +262,11 @@ string genHeader()
             }
             else
             {
-                auto fout = File("hackout.txt", "w");
-                fout.write(val);
-                fout.close();
+                // Much hackish
+                stdout.flush();
+                stdout.setvbuf(_REPL.buffer);
+                stdout.writeln(val);
+                stdout.setvbuf(null, _IOLBF);
                 current = val.to!string;
             }
             return current.idup;

@@ -24,9 +24,8 @@ static:
     */
     Tuple!(string,string) go(string input, ref ReplContext _repl)
     {
-        inputCopy = input;
-        lineCount = 0;
         parseID = Clock.currSystemTick().msecs();
+        inputCopy = input;
         repl = &_repl;
 
         auto p = ReplParse.Search(input);
@@ -261,7 +260,6 @@ static:
     long parseID;
     string inputCopy;
     string error;
-    uint lineCount; // for debug
     uint braceCount;
 }
 
@@ -272,6 +270,7 @@ static:
 void deadSymbols(ref ReplContext repl)
 {
     Symbol[] keep;
+    keep.reserve(repl.symbols.length);
     foreach(s; repl.symbols)
     {
         if (s.valid)
