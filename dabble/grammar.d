@@ -130,6 +130,7 @@ ReplParse:
     TypeOfInner <- TypeOf / VarRewrite / .
 
     VarRewrite <- Skip / Ident {Parser.varRewrite} (wx '.' wx Ident)*
+    ExpRewrite <~ GrabToColon(VarRewrite/.) ';'
 
     VarSearch <- (!eoi (:TemplateArg / :FuncBlock / Ident {Parser.varRewrite} :(wx '.' wx Ident)* / .))*
 

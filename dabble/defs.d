@@ -34,6 +34,29 @@ struct Var
             first = false;
             string test;
 
+            string generateFuncLitSection(string useType)
+            {
+                if (init == "")
+                    init = "null";
+
+                string code =
+                    "  static if ((__traits(compiles, isFunctionPointer!(" ~ useType ~ ")) && isFunctionPointer!(" ~ useType ~ "))"
+                    "  || is(" ~ useType ~ " == delegate)) {\n"
+                    "    _repl_.symbols[" ~ index.to!string ~ "].v.func = true;\n"
+                    "    " ~ useType ~ "* " ~ name ~ ";\n";
+
+                if (init != "null")
+                    code ~=
+                    "    {\n"
+                    "      auto _temp = " ~ init ~ ";\n"
+                    "      " ~ name ~ " = &_temp;\n"
+                    "    }\n";
+
+                code ~= "}";
+                return code;
+            }
+
+
             if (type == "auto") // has initializer but no type
             {
                 assert(init.length > 0, "Auto var without initializer");
@@ -42,14 +65,7 @@ struct Var
 
                 put(c.prefix,
                     test, "{\n",
-                    "  static if ((__traits(compiles, isFunctionPointer!(typeof(", init, "))) && isFunctionPointer!(typeof(", init, ")))"
-                    " || is(typeof(", init, ") == delegate)) {\n",
-                    "    _repl_.symbols[", index.to!string, "].v.func = true;\n",
-                    "    typeof(", init, ")* ", name, ";\n",
-                    "    {\n",
-                    "      auto _temp = ", init, ";\n",
-                    "      ", name, " = &_temp;\n",
-                    "    }\n  } else {\n",
+                    generateFuncLitSection("typeof("~init~")"), " else {\n",
                     "  auto ", name, " = _REPL.newExpr!(q{", init, "})(_repl_,", index.to!string, ", ", init, ");\n",
                     "}} else {\n",
                     "  auto ", name, " = ", init, ";\n",
@@ -74,13 +90,16 @@ struct Var
             {
                 test = "static if (true)";
 
-                put(c.prefix, type, "* ", name, " = _REPL.newType!(", type, ")(_repl_,",
-                    index.to!string, ");\n");
+                put(c.prefix,
+                    generateFuncLitSection(type), " else {\n",
+                    type, "* ", name, " = _REPL.newType!(", type, ")(_repl_,",
+                    index.to!string, ");\n"
+                    "}\n");
             }
 
             put(c.prefix, test, "{\n",
                 "  _repl_.symbols[", index.to!string, "].v.displayType = typeof(*", name, ").stringof.idup;\n",
-                "  _expressionResult = _REPL.exprResult(\n*"~name~"\n);\n",
+                "  if (!_repl_.symbols[", index.to!string, "].v.func) _expressionResult = _REPL.exprResult(\n*"~name~"\n);\n",
                 "}\n");
 
             put(c.suffix, test, "{\n"
@@ -97,12 +116,13 @@ struct Var
 
             if (func)
             {
-                put(c.prefix,
-                    "typeof(", init, ")* ", name, ";\n",
-                    "{\n",
-                    "  auto _temp = ", init, ";\n",
-                    "  ", name, " = &_temp;\n",
-                    "}\n");
+                put(c.prefix, type, "* ", name, ";\n{\n");
+                if (init == "null")
+                    put(c.prefix, "  ", type, " _temp = cast(", type, ") null;\n");
+                else
+                    put(c.prefix, "  ", type, " _temp = ", init, ";\n");
+
+                put(c.prefix, "  ", name, " = &_temp;\n}\n");
             }
             else
             {

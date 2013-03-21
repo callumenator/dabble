@@ -168,7 +168,7 @@ static:
     {
         if (repl && t.successful)
         {
-            if (t.matches[0] in repl.symbolSet)
+            if (isDefined(t.matches[0]))
                 t.matches[0] = "(*" ~ t.matches[0] ~ ")";
         }
         return t;
@@ -181,7 +181,7 @@ static:
     {
         if (repl && p.successful)
         {
-            if (p.children[0].matches[0] !in repl.symbolSet)
+            if (!isDefined(p.children[0].matches[0]))
             {
                 p.name = "ReplParse.VarDeclInit";
                 p.matches = ["",""] ~ p.matches;
@@ -190,8 +190,34 @@ static:
             }
             else
             {
-                // If name was a known symbol, this is a simple assignment, not a new declaration
-                p.successful = false;
+                // If name was a known symbol, this is an assignment, not a new declaration
+
+                // Check for function types
+                auto name = p.children[0].matches[0];
+                size_t index = -1;
+                auto v = findVar(name, index);
+
+                if (v.func)
+                {
+                    auto all = join(p.matches) ~ ";";
+                    auto rewrite = ReplParse.ExpRewrite(all).matches[0];
+
+                    p.matches[0] =
+                        "//static if (__traits(compiles, {" ~ rewrite ~ "}))\n"
+                        " static if (__traits(compiles, {" ~ rewrite ~ "}))\n"
+                        " {\n"
+                        "   _repl_.symbols[" ~ index.to!string ~ "].v.init = q{" ~ p.matches[$-1] ~ "}.idup;\n"
+                        "   _repl_.symbols[" ~ index.to!string ~ "].v.current = q{" ~ p.matches[$-1] ~ "}.idup;\n"
+                        " } else {\n"
+                        "   " ~ rewrite ~ "\n"
+                        " }\n";
+                    p.matches = p.matches[0..1];
+                    p.successful = true;
+                }
+                else
+                {
+                    p.successful = false;
+                }
             }
         }
         return p;
@@ -242,6 +268,21 @@ static:
     {
         auto ptr = name in repl.symbolSet;
         return ptr !is null;
+    }
+
+    /**
+    * Find a Var by name.
+    */
+    Var findVar(string name, out size_t index)
+    {
+        foreach(s; repl.symbols)
+        {
+            if (s.type == Symbol.Type.Var && s.v.name == name)
+                return s.v;
+            ++index;
+        }
+
+        assert(false, "Tried to find un-defined variable " ~ name);
     }
 
     /**

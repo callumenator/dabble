@@ -68,15 +68,17 @@ ReplContext run(string[] code)
 
 void main()
 {
-
     auto repl = newContext();
+
+
 
     //repl = stress(repl);
 
-    //repl = run([
-    //"j = 45;",
-    //"a = (int i) { return j;};"
-    //]);
+    repl = run([
+    "a=(int i) { return i;};",
+    "typeof(a) b;",
+    "b=(int i) { return i;};"
+    ]);
 
     loop(repl);
 

@@ -127,6 +127,7 @@ ReplParse:
     TypeOfInner <- TypeOf / VarRewrite / .
 
     VarRewrite <- Skip / Ident {Parser.varRewrite} (wx '.' wx Ident)*
+    ExpRewrite <~ GrabToColon(VarRewrite/.) ';'
 
     VarSearch <- (!eoi (:TemplateArg / :FuncBlock / Ident {Parser.varRewrite} :(wx '.' wx Ident)* / .))*
 
@@ -284,6 +285,7 @@ struct GenericReplParse(TParseTree)
         rules["TypeOf"] = toDelegate(&ReplParse.TypeOf);
         rules["TypeOfInner"] = toDelegate(&ReplParse.TypeOfInner);
         rules["VarRewrite"] = toDelegate(&ReplParse.VarRewrite);
+        rules["ExpRewrite"] = toDelegate(&ReplParse.ExpRewrite);
         rules["VarSearch"] = toDelegate(&ReplParse.VarSearch);
         rules["Skip"] = toDelegate(&ReplParse.Skip);
         rules["TemplateArg"] = toDelegate(&ReplParse.TemplateArg);
@@ -1203,6 +1205,25 @@ struct GenericReplParse(TParseTree)
     static string VarRewrite(GetName g)
     {
         return "ReplParse.VarRewrite";
+    }
+
+    static TParseTree ExpRewrite(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";"))), "ReplParse.ExpRewrite")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";"))), "ReplParse.ExpRewrite"), "ExpRewrite")(p);
+    }
+    static TParseTree ExpRewrite(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";"))), "ReplParse.ExpRewrite")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";"))), "ReplParse.ExpRewrite"), "ExpRewrite")(TParseTree("", false,[], s));
+    }
+    static string ExpRewrite(GetName g)
+    {
+        return "ReplParse.ExpRewrite";
     }
 
     static TParseTree VarSearch(TParseTree p)
