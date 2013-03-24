@@ -112,15 +112,39 @@ string prompt() @safe pure nothrow
 */
 bool handleMetaCommand(ref ReplContext repl, ref const(char[]) inBuffer)
 {
-    switch(inBuffer)
-    {
-        case "": break;
+    auto parse = ReplParse.decimateTree(ReplParse.MetaCommand(inBuffer.to!string));
 
+    if (!parse.successful)
+        return false;
+
+    auto cmd = parse.children[0].matches[0];
+    string[] args;
+    if (parse.children.length == 2)
+    {
+        auto seq = parse.children[1].children;
+        args.length = seq.length;
+        foreach(i, p; seq)
+            args[i] = p.matches[0];
+    }
+
+    switch(cmd)
+    {
         case "print":
         {
-            foreach(val; repl.symbols)
-                if (val.type == Symbol.Type.Var)
+            if (canFind(args, "all")) // print all symbols
+            {
+                foreach(val; repl.symbols)
                     writeln(val);
+            }
+            else // print selected symbols
+            {
+                foreach(s; repl.symbols)
+                {
+                    if (s.type == Symbol.Type.Var && canFind(args, s.v.name))
+                        writeln(s);
+                }
+            }
+
             break;
         }
 

@@ -127,7 +127,6 @@ ReplParse:
     TypeOfInner <- TypeOf / VarRewrite / .
 
     VarRewrite <- Skip / Ident {Parser.varRewrite} (wx '.' wx Ident)*
-    ExpRewrite <~ GrabToColon(VarRewrite/.) ';'
 
     VarSearch <- (!eoi (:TemplateArg / :FuncBlock / Ident {Parser.varRewrite} :(wx '.' wx Ident)* / .))*
 
@@ -135,89 +134,97 @@ ReplParse:
     TemplateArg <- wx '!' wx (~Type)
                  / wx '!' wx BwParens((~Type)/.)
 
-    ### Helpers
+    # This is used in Actions when assignment to a function variable is detected
+    ExpRewrite <~ GrabToColon(VarRewrite/.) ';'
 
-        w   <- ' ' / '\t' / endOfLine
-        wx  <- ;(w?) :(w*)
-        ws  <- w :(w*)
-        wn  <- (:' ' / :'\t' / endOfLine)*
 
-        LBracket    <- '('
-        RBracket    <- ')'
-        LBrace      <- '{'
-        RBrace      <- '}'
+    MetaCommand <- MetaKeyword :w Seq(MetaArgument, ',')
 
-        Seq(T)      <- (wx T)+
-        Seq(T, Sep) <- wx T wx (Sep wx T wx)*
+    MetaKeyword <- 'print'
 
-        Until(T, U) <- (!(T/eoi) (Comment/String/CharLiteral/U))*
+    MetaArgument <- Ident
 
-        AllUntil(T)     <~ (!(T/eoi) ( Comment
-                                     / String
-                                     / CharLiteral
-                                     / AllBetween(LBracket,RBracket)
-                                     / AllBetween(LBrace,RBrace)
-                                     / .) )*
 
-        AllBetween(L,R) <~ NestedList(L, Comment / String, R)
 
-        BwBraces(T=.) <- Nested('{', Comment / String / CharLiteral / T, '}')
-        BwParens(T=.) <- Nested('(', Comment / String / CharLiteral / T, ')')
-        BwBrackets(T=.) <- Nested('[', Comment / String / CharLiteral / T, ']')
-        Nested(L,Items,R) <- ^L (!R (Nested(L,Items,R) / blank / Items))* ^R
+    w   <- ' ' / '\t' / endOfLine
+    wx  <- ;(w?) :(w*)
+    wxd  <- :(w*)
+    ws  <- w :(w*)
+    wn  <- (:' ' / :'\t' / endOfLine)*
 
-        BalancedBraces <~ (~Until(LBrace, .) (eoi / (~BwBraces){Parser.incBraceCount} ))+
+    LBracket    <- '('
+    RBracket    <- ')'
+    LBrace      <- '{'
+    RBrace      <- '}'
 
-        ## NOTE: These are not inclusive of the terminator
-        GrabToColon(T=.) <~ (!(';'/eoi) (String/CharLiteral/Comment/FuncBlock/T))*
-        GrabToComma(T=.) <~ (!(','/eoi) (String/CharLiteral/Comment/FuncBlock/ArrayLit/T))*
-        GrabToClosingParens(T=.) <~ (!(')'/eoi) (String/CharLiteral/Comment/FuncBlock/BwParens(T)/T))*
+    Seq(T)      <- (wxd T)+
+    Seq(T, Sep) <- wxd T wxd (Sep wxd T wxd)*
 
-        NestItems   <- Comment / String / CharLiteral
-        String      <- (WYSString / DBQString / TKNString / DLMString / StringOf) {Parser.dupString}
-        StringNoDup <- (WYSString / DBQString / TKNString / DLMString)
+    Until(T, U) <- (!(T/eoi) (Comment/String/CharLiteral/U))*
 
-        WYSString   <~ 'r' doublequote (!doublequote .)* doublequote /
-                       backquote (!backquote .)* backquote
+    AllUntil(T)     <~ (!(T/eoi) ( Comment
+                                 / String
+                                 / CharLiteral
+                                 / AllBetween(LBracket,RBracket)
+                                 / AllBetween(LBrace,RBrace)
+                                 / .) )*
 
-        DBQString   <~ doublequote (!doublequote Char)* doublequote
+    AllBetween(L,R) <~ NestedList(L, Comment / String, R)
 
-        TKNString   <~ (&'q{' ('q' NestedList('{',String,'}')))
+    BwBraces(T=.) <- Nested('{', Comment / String / CharLiteral / T, '}')
+    BwParens(T=.) <- Nested('(', Comment / String / CharLiteral / T, ')')
+    BwBrackets(T=.) <- Nested('[', Comment / String / CharLiteral / T, ']')
+    Nested(L,Items,R) <- ^L (!R (Nested(L,Items,R) / blank / Items))* ^R
 
-        DLMString   <~ ('q' doublequote) ( (&'{' NestedList('{',String,'}'))
-                                         / (&'[' NestedList('[',String,']'))
-                                         / (&'(' NestedList('(',String,')'))
-                                         / (&'<' NestedList('<',String,'>'))
-                                         ) doublequote
+    BalancedBraces <~ (~Until(LBrace, .) (eoi / (~BwBraces){Parser.incBraceCount} ))+
 
-        StringOf    <- (~(wx ;'.' wx 'stringof'))
+    ## NOTE: These are not inclusive of the terminator
+    GrabToColon(T=.) <~ (!(';'/eoi) (String/CharLiteral/Comment/FuncBlock/T))*
+    GrabToComma(T=.) <~ (!(','/eoi) (String/CharLiteral/Comment/FuncBlock/ArrayLit/T))*
+    GrabToClosingParens(T=.) <~ (!(')'/eoi) (String/CharLiteral/Comment/FuncBlock/BwParens(T)/T))*
 
-        Char <~ backslash ( quote / doublequote / backquote / backslash
-                          / '-' / '[' / ']'
-                          / [nrt]
-                          / [0-2][0-7][0-7] / [0-7][0-7]?
-                          / 'x' hexDigit hexDigit
-                          / 'u' hexDigit hexDigit hexDigit hexDigit
-                          / 'U' hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit
-                          )  / . # or anything else
+    NestItems   <- Comment / String / CharLiteral
+    String      <- (WYSString / DBQString / TKNString / DLMString / StringOf) {Parser.dupString}
+    StringNoDup <- (WYSString / DBQString / TKNString / DLMString)
 
-        CharLiteral <~ quote Char quote
+    WYSString   <~ 'r' doublequote (!doublequote .)* doublequote /
+                    backquote (!backquote .)* backquote
 
-        Comment             <~ (LineComment / BlockComment / NestingBlockComment)
+    DBQString   <~ doublequote (!doublequote Char)* doublequote
 
-        LineComment         <- "//" (!(endOfLine/eoi) .)* (endOfLine/eoi)
-        BlockComment        <- "/*" (!"*/" .)* "*/"
-        NestingBlockComment <- NestedList("/+","+/")
+    TKNString   <~ (&'q{' ('q' NestedList('{',String,'}')))
 
-        # Linear nested lists with and without special items
-        NestedList(L,Items,R)   <- ^L ( !(L/R/Items) . )* ( Items
-                                                          / NestedList(L,Items,R)
-                                                          / ( !(L/R/Items) . )*
-                                                          )* ( !(L/R/Items) . )* ^R
+    DLMString   <~ ('q' doublequote) ( (&'{' NestedList('{',String,'}'))
+                                        / (&'[' NestedList('[',String,']'))
+                                        / (&'(' NestedList('(',String,')'))
+                                        / (&'<' NestedList('<',String,'>'))
+                                        ) doublequote
 
-        NestedList(L,R)         <- ^L ( !(L/R) . )* (NestedList(L,R)
-                                                    / ( !(L/R) . )*
-                                                    )* ( !(L/R) . )* ^R
+    StringOf    <- (~(wx ;'.' wx 'stringof'))
+
+    Char <~ backslash ( quote / doublequote / backquote / backslash
+                        / '-' / '[' / ']'
+                        / [nrt]
+                        / [0-2][0-7][0-7] / [0-7][0-7]?
+                        / 'x' hexDigit hexDigit
+                        / 'u' hexDigit hexDigit hexDigit hexDigit
+                        / 'U' hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit
+                        )  / . # or anything else
+
+    CharLiteral <~ quote Char quote
+
+    Comment             <~ (LineComment / BlockComment / NestingBlockComment)
+    LineComment         <- "//" (!(endOfLine/eoi) .)* (endOfLine/eoi)
+    BlockComment        <- "/*" (!"*/" .)* "*/"
+    NestingBlockComment <- NestedList("/+","+/")
+
+    # Linear nested lists with and without special items
+    NestedList(L,Items,R)   <- ^L ( !(L/R/Items) . )* ( Items
+                                                        / NestedList(L,Items,R)
+                                                        / ( !(L/R/Items) . )*
+                                                        )* ( !(L/R/Items) . )* ^R
+
+    NestedList(L,R) <- ^L ( !(L/R) . )* (NestedList(L,R) / ( !(L/R) . )* )* ( !(L/R) . )* ^R
 
 
 +/
@@ -285,12 +292,16 @@ struct GenericReplParse(TParseTree)
         rules["TypeOf"] = toDelegate(&ReplParse.TypeOf);
         rules["TypeOfInner"] = toDelegate(&ReplParse.TypeOfInner);
         rules["VarRewrite"] = toDelegate(&ReplParse.VarRewrite);
-        rules["ExpRewrite"] = toDelegate(&ReplParse.ExpRewrite);
         rules["VarSearch"] = toDelegate(&ReplParse.VarSearch);
         rules["Skip"] = toDelegate(&ReplParse.Skip);
         rules["TemplateArg"] = toDelegate(&ReplParse.TemplateArg);
+        rules["ExpRewrite"] = toDelegate(&ReplParse.ExpRewrite);
+        rules["MetaCommand"] = toDelegate(&ReplParse.MetaCommand);
+        rules["MetaKeyword"] = toDelegate(&ReplParse.MetaKeyword);
+        rules["MetaArgument"] = toDelegate(&ReplParse.MetaArgument);
         rules["w"] = toDelegate(&ReplParse.w);
         rules["wx"] = toDelegate(&ReplParse.wx);
+        rules["wxd"] = toDelegate(&ReplParse.wxd);
         rules["ws"] = toDelegate(&ReplParse.ws);
         rules["wn"] = toDelegate(&ReplParse.wn);
         rules["LBracket"] = toDelegate(&ReplParse.LBracket);
@@ -1207,25 +1218,6 @@ struct GenericReplParse(TParseTree)
         return "ReplParse.VarRewrite";
     }
 
-    static TParseTree ExpRewrite(TParseTree p)
-    {
-        if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";"))), "ReplParse.ExpRewrite")(p);
-        else
-            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";"))), "ReplParse.ExpRewrite"), "ExpRewrite")(p);
-    }
-    static TParseTree ExpRewrite(string s)
-    {
-        if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";"))), "ReplParse.ExpRewrite")(TParseTree("", false,[], s));
-        else
-            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";"))), "ReplParse.ExpRewrite"), "ExpRewrite")(TParseTree("", false,[], s));
-    }
-    static string ExpRewrite(GetName g)
-    {
-        return "ReplParse.ExpRewrite";
-    }
-
     static TParseTree VarSearch(TParseTree p)
     {
         if(__ctfe)
@@ -1283,6 +1275,82 @@ struct GenericReplParse(TParseTree)
         return "ReplParse.TemplateArg";
     }
 
+    static TParseTree ExpRewrite(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";"))), "ReplParse.ExpRewrite")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";"))), "ReplParse.ExpRewrite"), "ExpRewrite")(p);
+    }
+    static TParseTree ExpRewrite(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";"))), "ReplParse.ExpRewrite")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any)), pegged.peg.literal!(";"))), "ReplParse.ExpRewrite"), "ExpRewrite")(TParseTree("", false,[], s));
+    }
+    static string ExpRewrite(GetName g)
+    {
+        return "ReplParse.ExpRewrite";
+    }
+
+    static TParseTree MetaCommand(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.and!(MetaKeyword, pegged.peg.discard!(w), Seq!(MetaArgument, pegged.peg.literal!(","))), "ReplParse.MetaCommand")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.and!(MetaKeyword, pegged.peg.discard!(w), Seq!(MetaArgument, pegged.peg.literal!(","))), "ReplParse.MetaCommand"), "MetaCommand")(p);
+    }
+    static TParseTree MetaCommand(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.and!(MetaKeyword, pegged.peg.discard!(w), Seq!(MetaArgument, pegged.peg.literal!(","))), "ReplParse.MetaCommand")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.and!(MetaKeyword, pegged.peg.discard!(w), Seq!(MetaArgument, pegged.peg.literal!(","))), "ReplParse.MetaCommand"), "MetaCommand")(TParseTree("", false,[], s));
+    }
+    static string MetaCommand(GetName g)
+    {
+        return "ReplParse.MetaCommand";
+    }
+
+    static TParseTree MetaKeyword(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.literal!("print"), "ReplParse.MetaKeyword")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.literal!("print"), "ReplParse.MetaKeyword"), "MetaKeyword")(p);
+    }
+    static TParseTree MetaKeyword(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.literal!("print"), "ReplParse.MetaKeyword")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.literal!("print"), "ReplParse.MetaKeyword"), "MetaKeyword")(TParseTree("", false,[], s));
+    }
+    static string MetaKeyword(GetName g)
+    {
+        return "ReplParse.MetaKeyword";
+    }
+
+    static TParseTree MetaArgument(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(Ident, "ReplParse.MetaArgument")(p);
+        else
+            return hooked!(pegged.peg.named!(Ident, "ReplParse.MetaArgument"), "MetaArgument")(p);
+    }
+    static TParseTree MetaArgument(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(Ident, "ReplParse.MetaArgument")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(Ident, "ReplParse.MetaArgument"), "MetaArgument")(TParseTree("", false,[], s));
+    }
+    static string MetaArgument(GetName g)
+    {
+        return "ReplParse.MetaArgument";
+    }
+
     static TParseTree w(TParseTree p)
     {
         if(__ctfe)
@@ -1319,6 +1387,25 @@ struct GenericReplParse(TParseTree)
     static string wx(GetName g)
     {
         return "ReplParse.wx";
+    }
+
+    static TParseTree wxd(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.discard!(pegged.peg.zeroOrMore!(w)), "ReplParse.wxd")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.discard!(pegged.peg.zeroOrMore!(w)), "ReplParse.wxd"), "wxd")(p);
+    }
+    static TParseTree wxd(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.discard!(pegged.peg.zeroOrMore!(w)), "ReplParse.wxd")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.discard!(pegged.peg.zeroOrMore!(w)), "ReplParse.wxd"), "wxd")(TParseTree("", false,[], s));
+    }
+    static string wxd(GetName g)
+    {
+        return "ReplParse.wxd";
     }
 
     static TParseTree ws(TParseTree p)
@@ -1440,16 +1527,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree Seq(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.oneOrMore!(pegged.peg.and!(wx, T)), "ReplParse.Seq!(" ~ pegged.peg.getName!(T) ~ ")")(p);
+            return         pegged.peg.named!(pegged.peg.oneOrMore!(pegged.peg.and!(wxd, T)), "ReplParse.Seq!(" ~ pegged.peg.getName!(T) ~ ")")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.oneOrMore!(pegged.peg.and!(wx, T)), "ReplParse.Seq!(" ~ pegged.peg.getName!(T) ~ ")"), "Seq_1")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.oneOrMore!(pegged.peg.and!(wxd, T)), "ReplParse.Seq!(" ~ pegged.peg.getName!(T) ~ ")"), "Seq_1")(p);
     }
     static TParseTree Seq(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.oneOrMore!(pegged.peg.and!(wx, T)), "ReplParse.Seq!(" ~ pegged.peg.getName!(T) ~ ")")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.oneOrMore!(pegged.peg.and!(wxd, T)), "ReplParse.Seq!(" ~ pegged.peg.getName!(T) ~ ")")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.oneOrMore!(pegged.peg.and!(wx, T)), "ReplParse.Seq!(" ~ pegged.peg.getName!(T) ~ ")"), "Seq_1")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.oneOrMore!(pegged.peg.and!(wxd, T)), "ReplParse.Seq!(" ~ pegged.peg.getName!(T) ~ ")"), "Seq_1")(TParseTree("", false,[], s));
     }
     static string Seq(GetName g)
     {
@@ -1462,16 +1549,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree Seq(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.and!(wx, T, wx, pegged.peg.zeroOrMore!(pegged.peg.and!(Sep, wx, T, wx))), "ReplParse.Seq!(" ~ pegged.peg.getName!(T)() ~ ", " ~ pegged.peg.getName!(Sep) ~ ")")(p);
+            return         pegged.peg.named!(pegged.peg.and!(wxd, T, wxd, pegged.peg.zeroOrMore!(pegged.peg.and!(Sep, wxd, T, wxd))), "ReplParse.Seq!(" ~ pegged.peg.getName!(T)() ~ ", " ~ pegged.peg.getName!(Sep) ~ ")")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.and!(wx, T, wx, pegged.peg.zeroOrMore!(pegged.peg.and!(Sep, wx, T, wx))), "ReplParse.Seq!(" ~ pegged.peg.getName!(T)() ~ ", " ~ pegged.peg.getName!(Sep) ~ ")"), "Seq_2")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.and!(wxd, T, wxd, pegged.peg.zeroOrMore!(pegged.peg.and!(Sep, wxd, T, wxd))), "ReplParse.Seq!(" ~ pegged.peg.getName!(T)() ~ ", " ~ pegged.peg.getName!(Sep) ~ ")"), "Seq_2")(p);
     }
     static TParseTree Seq(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.and!(wx, T, wx, pegged.peg.zeroOrMore!(pegged.peg.and!(Sep, wx, T, wx))), "ReplParse.Seq!(" ~ pegged.peg.getName!(T)() ~ ", " ~ pegged.peg.getName!(Sep) ~ ")")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.and!(wxd, T, wxd, pegged.peg.zeroOrMore!(pegged.peg.and!(Sep, wxd, T, wxd))), "ReplParse.Seq!(" ~ pegged.peg.getName!(T)() ~ ", " ~ pegged.peg.getName!(Sep) ~ ")")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.and!(wx, T, wx, pegged.peg.zeroOrMore!(pegged.peg.and!(Sep, wx, T, wx))), "ReplParse.Seq!(" ~ pegged.peg.getName!(T)() ~ ", " ~ pegged.peg.getName!(Sep) ~ ")"), "Seq_2")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.and!(wxd, T, wxd, pegged.peg.zeroOrMore!(pegged.peg.and!(Sep, wxd, T, wxd))), "ReplParse.Seq!(" ~ pegged.peg.getName!(T)() ~ ", " ~ pegged.peg.getName!(Sep) ~ ")"), "Seq_2")(TParseTree("", false,[], s));
     }
     static string Seq(GetName g)
     {

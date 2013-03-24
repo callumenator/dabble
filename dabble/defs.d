@@ -152,6 +152,11 @@ struct Alias
         else
             c.prefix.put(decl ~ "\n");
     }
+
+    void toString(scope void delegate(const(char)[]) sink)
+    {
+        sink(decl);
+    }
 }
 
 struct Import
@@ -176,6 +181,11 @@ struct Enum
         else
             c.prefix.put(decl ~ "\n");
     }
+
+    void toString(scope void delegate(const(char)[]) sink)
+    {
+        sink(decl);
+    }
 }
 
 struct UserType
@@ -185,6 +195,11 @@ struct UserType
     void generate(ref Code c, size_t index)
     {
         c.header.put(decl ~ "\n");
+    }
+
+    void toString(scope void delegate(const(char)[]) sink)
+    {
+        sink(decl);
     }
 }
 
@@ -204,6 +219,7 @@ struct Symbol
     Type type;
     bool valid = false;
     bool first = true;
+
 
     this(T)(T _x)
     {
@@ -245,8 +261,14 @@ struct Symbol
 
     void toString(scope void delegate(const(char)[]) sink)
     {
-        if (type == Type.Var)
-            v.toString(sink);
+        switch(type) with(Type)
+        {
+            case Var: v.toString(sink); break;
+            case Alias: a.toString(sink); break;
+            case Enum: e.toString(sink); break;
+            case UserType: u.toString(sink); break;
+            default: break;
+        }
     }
 }
 

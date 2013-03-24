@@ -130,7 +130,6 @@ ReplParse:
     TypeOfInner <- TypeOf / VarRewrite / .
 
     VarRewrite <- Skip / Ident {Parser.varRewrite} (wx '.' wx Ident)*
-    ExpRewrite <~ GrabToColon(VarRewrite/.) ';'
 
     VarSearch <- (!eoi (:TemplateArg / :FuncBlock / Ident {Parser.varRewrite} :(wx '.' wx Ident)* / .))*
 
@@ -138,93 +137,110 @@ ReplParse:
     TemplateArg <- wx '!' wx (~Type)
                  / wx '!' wx BwParens((~Type)/.)
 
-    ### Helpers
+    # This is used in Actions when assignment to a function variable is detected
+    ExpRewrite <~ GrabToColon(VarRewrite/.) ';'
+`;
 
-        w   <- ' ' / '\t' / endOfLine
-        wx  <- ;(w?) :(w*)
-        ws  <- w :(w*)
-        wn  <- (:' ' / :'\t' / endOfLine)*
 
-        LBracket    <- '('
-        RBracket    <- ')'
-        LBrace      <- '{'
-        RBrace      <- '}'
+enum string metaParser = `
 
-        Seq(T)      <- (wx T)+
-        Seq(T, Sep) <- wx T wx (Sep wx T wx)*
+    MetaCommand <- MetaKeyword :w Seq(MetaArgument, ',')
 
-        Until(T, U) <- (!(T/eoi) (Comment/String/CharLiteral/U))*
+    MetaKeyword <- 'print'
 
-        AllUntil(T)     <~ (!(T/eoi) ( Comment
-                                     / String
-                                     / CharLiteral
-                                     / AllBetween(LBracket,RBracket)
-                                     / AllBetween(LBrace,RBrace)
-                                     / .) )*
+    MetaArgument <- Ident
 
-        AllBetween(L,R) <~ NestedList(L, Comment / String, R)
+`;
 
-        BwBraces(T=.) <- Nested('{', Comment / String / CharLiteral / T, '}')
-        BwParens(T=.) <- Nested('(', Comment / String / CharLiteral / T, ')')
-        BwBrackets(T=.) <- Nested('[', Comment / String / CharLiteral / T, ']')
-        Nested(L,Items,R) <- ^L (!R (Nested(L,Items,R) / blank / Items))* ^R
 
-        BalancedBraces <~ (~Until(LBrace, .) (eoi / (~BwBraces){Parser.incBraceCount} ))+
+enum string parserUtils = `
 
-        ## NOTE: These are not inclusive of the terminator
-        GrabToColon(T=.) <~ (!(';'/eoi) (String/CharLiteral/Comment/FuncBlock/T))*
-        GrabToComma(T=.) <~ (!(','/eoi) (String/CharLiteral/Comment/FuncBlock/ArrayLit/T))*
-        GrabToClosingParens(T=.) <~ (!(')'/eoi) (String/CharLiteral/Comment/FuncBlock/BwParens(T)/T))*
+    w   <- ' ' / '\t' / endOfLine
+    wx  <- ;(w?) :(w*)
+    wxd  <- :(w*)
+    ws  <- w :(w*)
+    wn  <- (:' ' / :'\t' / endOfLine)*
 
-        NestItems   <- Comment / String / CharLiteral
-        String      <- (WYSString / DBQString / TKNString / DLMString / StringOf) {Parser.dupString}
-        StringNoDup <- (WYSString / DBQString / TKNString / DLMString)
+    LBracket    <- '('
+    RBracket    <- ')'
+    LBrace      <- '{'
+    RBrace      <- '}'
 
-        WYSString   <~ 'r' doublequote (!doublequote .)* doublequote /
-                       backquote (!backquote .)* backquote
+    Seq(T)      <- (wxd T)+
+    Seq(T, Sep) <- wxd T wxd (Sep wxd T wxd)*
 
-        DBQString   <~ doublequote (!doublequote Char)* doublequote
+    Until(T, U) <- (!(T/eoi) (Comment/String/CharLiteral/U))*
 
-        TKNString   <~ (&'q{' ('q' NestedList('{',String,'}')))
+    AllUntil(T)     <~ (!(T/eoi) ( Comment
+                                 / String
+                                 / CharLiteral
+                                 / AllBetween(LBracket,RBracket)
+                                 / AllBetween(LBrace,RBrace)
+                                 / .) )*
 
-        DLMString   <~ ('q' doublequote) ( (&'{' NestedList('{',String,'}'))
-                                         / (&'[' NestedList('[',String,']'))
-                                         / (&'(' NestedList('(',String,')'))
-                                         / (&'<' NestedList('<',String,'>'))
-                                         ) doublequote
+    AllBetween(L,R) <~ NestedList(L, Comment / String, R)
 
-        StringOf    <- (~(wx ;'.' wx 'stringof'))
+    BwBraces(T=.) <- Nested('{', Comment / String / CharLiteral / T, '}')
+    BwParens(T=.) <- Nested('(', Comment / String / CharLiteral / T, ')')
+    BwBrackets(T=.) <- Nested('[', Comment / String / CharLiteral / T, ']')
+    Nested(L,Items,R) <- ^L (!R (Nested(L,Items,R) / blank / Items))* ^R
 
-        Char <~ backslash ( quote / doublequote / backquote / backslash
-                          / '-' / '[' / ']'
-                          / [nrt]
-                          / [0-2][0-7][0-7] / [0-7][0-7]?
-                          / 'x' hexDigit hexDigit
-                          / 'u' hexDigit hexDigit hexDigit hexDigit
-                          / 'U' hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit
-                          )  / . # or anything else
+    BalancedBraces <~ (~Until(LBrace, .) (eoi / (~BwBraces){Parser.incBraceCount} ))+
 
-        CharLiteral <~ quote Char quote
+    ## NOTE: These are not inclusive of the terminator
+    GrabToColon(T=.) <~ (!(';'/eoi) (String/CharLiteral/Comment/FuncBlock/T))*
+    GrabToComma(T=.) <~ (!(','/eoi) (String/CharLiteral/Comment/FuncBlock/ArrayLit/T))*
+    GrabToClosingParens(T=.) <~ (!(')'/eoi) (String/CharLiteral/Comment/FuncBlock/BwParens(T)/T))*
 
-        Comment             <~ (LineComment / BlockComment / NestingBlockComment)
+    NestItems   <- Comment / String / CharLiteral
+    String      <- (WYSString / DBQString / TKNString / DLMString / StringOf) {Parser.dupString}
+    StringNoDup <- (WYSString / DBQString / TKNString / DLMString)
 
-        LineComment         <- "//" (!(endOfLine/eoi) .)* (endOfLine/eoi)
-        BlockComment        <- "/*" (!"*/" .)* "*/"
-        NestingBlockComment <- NestedList("/+","+/")
+    WYSString   <~ 'r' doublequote (!doublequote .)* doublequote /
+                    backquote (!backquote .)* backquote
 
-        # Linear nested lists with and without special items
-        NestedList(L,Items,R)   <- ^L ( !(L/R/Items) . )* ( Items
-                                                          / NestedList(L,Items,R)
-                                                          / ( !(L/R/Items) . )*
-                                                          )* ( !(L/R/Items) . )* ^R
+    DBQString   <~ doublequote (!doublequote Char)* doublequote
 
-        NestedList(L,R)         <- ^L ( !(L/R) . )* (NestedList(L,R)
-                                                    / ( !(L/R) . )*
-                                                    )* ( !(L/R) . )* ^R
+    TKNString   <~ (&'q{' ('q' NestedList('{',String,'}')))
+
+    DLMString   <~ ('q' doublequote) ( (&'{' NestedList('{',String,'}'))
+                                        / (&'[' NestedList('[',String,']'))
+                                        / (&'(' NestedList('(',String,')'))
+                                        / (&'<' NestedList('<',String,'>'))
+                                        ) doublequote
+
+    StringOf    <- (~(wx ;'.' wx 'stringof'))
+
+    Char <~ backslash ( quote / doublequote / backquote / backslash
+                        / '-' / '[' / ']'
+                        / [nrt]
+                        / [0-2][0-7][0-7] / [0-7][0-7]?
+                        / 'x' hexDigit hexDigit
+                        / 'u' hexDigit hexDigit hexDigit hexDigit
+                        / 'U' hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit hexDigit
+                        )  / . # or anything else
+
+    CharLiteral <~ quote Char quote
+
+    Comment             <~ (LineComment / BlockComment / NestingBlockComment)
+    LineComment         <- "//" (!(endOfLine/eoi) .)* (endOfLine/eoi)
+    BlockComment        <- "/*" (!"*/" .)* "*/"
+    NestingBlockComment <- NestedList("/+","+/")
+
+    # Linear nested lists with and without special items
+    NestedList(L,Items,R)   <- ^L ( !(L/R/Items) . )* ( Items
+                                                        / NestedList(L,Items,R)
+                                                        / ( !(L/R/Items) . )*
+                                                        )* ( !(L/R/Items) . )* ^R
+
+    NestedList(L,R) <- ^L ( !(L/R) . )* (NestedList(L,R) / ( !(L/R) . )* )* ( !(L/R) . )* ^R
 `;
 
 
 void main()
 {
-    asModule!(Memoization.no)("dabble.parser", "parser", grammar, "import dabble.actions, std.stdio;");
+    asModule!(Memoization.no)("dabble.parser",
+                              "parser",
+                              grammar ~ metaParser ~ parserUtils,
+                              "import dabble.actions, std.stdio;");
 }
