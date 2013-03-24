@@ -323,7 +323,7 @@ static:
 * Remove any symbols that do not have a current value string associated with
 * them. These are assumed to be dead, probably because compilation failed.
 */
-void deadSymbols(ref ReplContext repl)
+void pruneSymbols(ref ReplContext repl)
 {
     Symbol[] keep;
     keep.reserve(repl.symbols.length);

@@ -5,8 +5,6 @@ enum sharedDefs = q{
 
 import std.array, std.conv, std.stdio;
 
-extern(C) void* gc_getProxy();
-
 struct Code
 {
     Appender!string header,
@@ -260,7 +258,8 @@ struct Vtbl
 
 struct ReplContext
 {
-    string filename;
+    import std.typecons;
+    Tuple!(string,"filename",string,"tempPath",string,"fullName") paths;
     Symbol[] symbols;
     long[string] symbolSet;
     Vtbl[] vtbls;
@@ -271,14 +270,6 @@ struct ReplContext
 };
 
 mixin(sharedDefs);
-
-ReplContext newContext(string filename = "replDll")
-{
-    ReplContext repl;
-    repl.filename = filename;
-    repl.gc = gc_getProxy();
-    return repl;
-}
 
 
 

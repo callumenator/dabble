@@ -14,6 +14,7 @@ import
 
 public import dabble.defs;
 
+extern(C) void* gc_getProxy();
 
 enum Debug
 {
@@ -21,6 +22,22 @@ enum Debug
     times       = 0x01, /// display time to parse, build and call
     parseOnly   = 0x02, /// show parse tree and return
     print       = 0x04  /// add writelns to end of every line
+}
+
+
+/**
+* Build a default repl context.
+*/
+ReplContext newContext(string filename = "replDll")
+{
+    import std.path : dirSeparator;
+
+    ReplContext repl;
+    repl.paths.filename = filename;
+    repl.paths.tempPath = getTempDir() ~ dirSeparator;
+    repl.paths.fullName = repl.paths.tempPath ~ dirSeparator ~ filename;
+    repl.gc = gc_getProxy();
+    return repl;
 }
 
 
@@ -45,44 +62,31 @@ void loop(ref ReplContext repl,
     {
         inBuffer = strip(inBuffer);
 
-        switch(inBuffer)
+        // Try to handle meta command, else assume input is code
+        if (!handleMetaCommand(repl, inBuffer))
         {
-            case "": break;
+            codeBuffer ~= inBuffer ~ "\n";
+            Parser.braceCount = 0;
+            auto balanced = ReplParse.BalancedBraces(codeBuffer.to!string);
 
-            case "print":
+            if (!multiLine && balanced.successful && inBuffer[$-1] == ';')
             {
-                foreach(val; repl.symbols)
-                    if (val.type == Symbol.Type.Var)
-                        writeln(val);
-
-                break;
+                eval(codeBuffer.to!string, repl, error, flag);
+                codeBuffer.clear;
+            }
+            else
+            {
+                multiLine = true;
             }
 
-            default:
+            if (multiLine)
             {
-                codeBuffer ~= inBuffer ~ "\n";
-                Parser.braceCount = 0;
-                auto balanced = ReplParse.BalancedBraces(codeBuffer.to!string);
-
-                if (!multiLine && balanced.successful && inBuffer[$-1] == ';')
+                if ((balanced.successful && Parser.braceCount > 0) ||
+                    (balanced.successful && Parser.braceCount == 0 && inBuffer[$-1] == ';'))
                 {
                     eval(codeBuffer.to!string, repl, error, flag);
                     codeBuffer.clear;
-                }
-                else
-                {
-                    multiLine = true;
-                }
-
-                if (multiLine)
-                {
-                    if ( (balanced.successful && Parser.braceCount > 0) ||
-                         (balanced.successful && Parser.braceCount == 0 && inBuffer[$-1] == ';'))
-                    {
-                        eval(codeBuffer.to!string, repl, error, flag);
-                        codeBuffer.clear;
-                        multiLine = false;
-                    }
+                    multiLine = false;
                 }
             }
         }
@@ -97,9 +101,33 @@ void loop(ref ReplContext repl,
 /**
 * Return a command input prompt.
 */
-string prompt()
+string prompt() @safe pure nothrow
 {
     return ": ";
+}
+
+
+/**
+* Handle meta commands
+*/
+bool handleMetaCommand(ref ReplContext repl, ref const(char[]) inBuffer)
+{
+    switch(inBuffer)
+    {
+        case "": break;
+
+        case "print":
+        {
+            foreach(val; repl.symbols)
+                if (val.type == Symbol.Type.Var)
+                    writeln(val);
+            break;
+        }
+
+        default: return false;
+    }
+
+    return true;
 }
 
 
@@ -116,6 +144,7 @@ bool eval(string code,
 
     Tuple!(long,"parse",long,"build",long,"call") times;
     StopWatch sw;
+    sw.start();
 
     scope(success)
     {
@@ -135,9 +164,15 @@ bool eval(string code,
         }
     }
 
-    sw.start();
-    auto text = Parser.go(code, repl);
-    times.parse = sw.peek().msecs();
+    auto timeIt(alias fn, Args...)(ref Args args, ref StopWatch sw, ref long time)
+    {
+        sw.reset();
+        auto res = fn(args);
+        time = sw.peek().msecs();
+        return res;
+    }
+
+    auto text = timeIt!(Parser.go)(code, repl, sw, times.parse);
 
     if (flag & Debug.parseOnly)
     {
@@ -168,25 +203,20 @@ bool eval(string code,
     }
 
     debug { writeln("BUILD..."); }
-
-    sw.reset();
-    auto build = build(text, repl, error);
-    times.build = sw.peek().msecs();
+    auto build = timeIt!build(text, repl, error, sw, times.build);
 
     if (!build)
     {
         writeln("Error:\n", error);
-        deadSymbols(repl);
+        pruneSymbols(repl);
         return false;
     }
 
     debug { writeln("CALL..."); }
+    auto call = timeIt!call(repl, error, sw, times.call);
 
-    sw.reset();
-    auto call = call(repl, error);
-    times.call = sw.peek().msecs();
-
-    deadSymbols(repl);
+    // Prune any symbols not marked as valid
+    pruneSymbols(repl);
 
     final switch(call) with(CallResult)
     {
@@ -212,7 +242,8 @@ bool build(Tuple!(string,string) code,
            out string error)
 {
     import std.file : exists, readText;
-    import std.process : shell;
+    import std.path : dirSeparator;
+    import std.process : system, escapeShellFileName;
     import std.parallelism : task;
 
     auto text =
@@ -231,15 +262,15 @@ bool build(Tuple!(string,string) code,
         code[1] ~
         "}\n";
 
-    auto file = File(repl.filename ~ ".d", "w");
+    auto file = File(repl.paths.fullName ~ ".d", "w");
     file.write(genHeader() ~ text);
     file.close();
 
     scope(exit) task!cleanup(repl).executeInNewThread();
 
-    if (!exists(repl.filename ~ ".def"))
+    if (!exists(repl.paths.fullName ~ ".def"))
     {
-        file = File(repl.filename ~ ".def", "w");
+        file = File(repl.paths.fullName ~ ".def", "w");
 
         enum def = "LIBRARY replDll\n" ~
                    "DESCRIPTION 'replDll'\n" ~
@@ -251,21 +282,25 @@ bool build(Tuple!(string,string) code,
         file.close();
     }
 
+
     bool attempt(string cmd, out string err)
     {
-        try {
-            shell(cmd ~ " 2> errout.txt");
-            return true;
-        }
-        catch(Exception e)
+        auto res = system(cmd ~ " 2> errout.txt");
+
+        if (res != 0)
         {
-            if (exists("errout.txt"))
-                err = parseError(repl, readText("errout.txt"));
+            auto errFile = repl.paths.tempPath ~ "errout.txt";
+            if (exists(errFile))
+                err = parseError(repl, readText(errFile));
             return false;
         }
+
+        return true;
     }
 
-    string cmd = "dmd " ~ repl.filename ~ ".d " ~ repl.filename ~ ".def";
+    string cmd = "cd " ~ escapeShellFileName(repl.paths.tempPath) ~
+                 " & dmd " ~ repl.paths.filename ~ ".d " ~ repl.paths.filename ~ ".def";
+
     /++
     auto includes = std.array.join(repl.includes, ".d ");
     if (repl.includes.length > 0)
@@ -292,9 +327,9 @@ void cleanup(ReplContext repl)
     import std.file : exists, remove;
 
     auto clean = [
-        repl.filename ~ ".obj",
-        repl.filename ~ ".map",
-        "errout.txt"
+        repl.paths.fullName ~ ".obj",
+        repl.paths.fullName ~ ".map",
+        repl.paths.tempPath ~ "errout.txt"
     ];
 
     foreach(f; clean)
@@ -325,7 +360,8 @@ CallResult call(ref ReplContext repl,
     static SharedLib lastLib; // XP hack
 
     alias extern(C) int function(ref ReplContext) funcType;
-    auto lib = SharedLib(repl.filename ~ ".dll");
+
+    auto lib = SharedLib(repl.paths.fullName ~ ".dll");
 
     if (lastLib.handle !is null)
         lastLib.free(false);
@@ -379,9 +415,11 @@ string parseError(ReplContext repl, string error)
             return replace(s, regex(`(\*)([_a-zA-Z][_0-9a-zA-Z]*)`, "g"), "$2");
     }
 
-    error = replace(error, regex(repl.filename ~ ".", "g"), "");
+    // Remove any references to the filename
+    error = replace(error, regex(repl.paths.filename ~ ".", "g"), "");
 
-    auto code = splitLines(readText(repl.filename ~ ".d"));
+    // Read the code, so we can refer to lines
+    auto code = splitLines(readText(repl.paths.fullName ~ ".d"));
 
     string res;
     auto lines = splitLines(error);
@@ -403,7 +441,35 @@ string parseError(ReplContext repl, string error)
         }
 
         res ~= "   " ~ strip(deDereference(r[$-1], false)) ~ "\n";
-
     }
     return res;
+}
+
+
+/**
+* This is taken from RDMD
+*/
+private string getTempDir()
+{
+    import std.process, std.path, std.file, std.exception;
+
+    auto tmpRoot = std.process.getenv("TEMP");
+
+    if (tmpRoot)
+        tmpRoot = std.process.getenv("TMP");
+
+    if (!tmpRoot)
+        tmpRoot = buildPath(".", ".dabble");
+    else
+        tmpRoot ~= dirSeparator ~ ".dabble";
+
+    DirEntry tmpRootEntry;
+    const tmpRootExists = collectException(tmpRootEntry = dirEntry(tmpRoot)) is null;
+
+    if (!tmpRootExists)
+        mkdirRecurse(tmpRoot);
+    else
+        enforce(tmpRootEntry.isDir, "Entry `"~tmpRoot~"' exists but is not a directory.");
+
+    return tmpRoot;
 }
