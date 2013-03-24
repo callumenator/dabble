@@ -203,7 +203,6 @@ static:
                     auto rewrite = ReplParse.ExpRewrite(all).matches[0];
 
                     p.matches[0] =
-                        "//static if (__traits(compiles, {" ~ rewrite ~ "}))\n"
                         " static if (__traits(compiles, {" ~ rewrite ~ "}))\n"
                         " {\n"
                         "   _repl_.symbols[" ~ index.to!string ~ "].v.init = q{" ~ p.matches[$-1] ~ "}.idup;\n"
@@ -340,3 +339,17 @@ void pruneSymbols(ref ReplContext repl)
     repl.symbols = keep;
 }
 
+/**
+* Remove a variable with the given name.
+*/
+void deleteVar(ref ReplContext repl, string name)
+{
+    Symbol[] keep;
+    keep.reserve(repl.symbols.length);
+    foreach(s; repl.symbols)
+        if (s.type == Symbol.Type.Var && s.v.name == name)
+            repl.symbolSet.remove(s.v.name);
+        else
+            keep ~= s;
+    repl.symbols = keep;
+}

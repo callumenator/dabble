@@ -63,7 +63,11 @@ void loop(ref ReplContext repl,
         inBuffer = strip(inBuffer);
 
         // Try to handle meta command, else assume input is code
-        if (!handleMetaCommand(repl, inBuffer))
+        if (handleMetaCommand(repl, inBuffer))
+        {
+            codeBuffer.clear;
+        }
+        else
         {
             codeBuffer ~= inBuffer ~ "\n";
             Parser.braceCount = 0;
@@ -131,7 +135,7 @@ bool handleMetaCommand(ref ReplContext repl, ref const(char[]) inBuffer)
     {
         case "print":
         {
-            if (canFind(args, "all")) // print all symbols
+            if (args.length == 0 || canFind(args, "all")) // print all symbols
             {
                 foreach(val; repl.symbols)
                     writeln(val);
@@ -144,8 +148,21 @@ bool handleMetaCommand(ref ReplContext repl, ref const(char[]) inBuffer)
                         writeln(s);
                 }
             }
-
             break;
+        }
+
+        case "reset session":
+        {
+            repl.reset();
+            writeln("Session reset");
+            break;
+        }
+
+        case "delete":
+        {
+            if (args.length > 0)
+                foreach(a; args)
+                    deleteVar(repl, a);
         }
 
         default: return false;

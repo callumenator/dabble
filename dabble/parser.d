@@ -138,9 +138,11 @@ ReplParse:
     ExpRewrite <~ GrabToColon(VarRewrite/.) ';'
 
 
-    MetaCommand <- MetaKeyword :w Seq(MetaArgument, ',')
+    MetaCommand <- MetaKeyword (:w Seq(MetaArgument, ','))?
 
     MetaKeyword <- 'print'
+                 / 'delete'
+                 / ~('reset' wx 'session')
 
     MetaArgument <- Ident
 
@@ -1297,16 +1299,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree MetaCommand(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.and!(MetaKeyword, pegged.peg.discard!(w), Seq!(MetaArgument, pegged.peg.literal!(","))), "ReplParse.MetaCommand")(p);
+            return         pegged.peg.named!(pegged.peg.and!(MetaKeyword, pegged.peg.option!(pegged.peg.and!(pegged.peg.discard!(w), Seq!(MetaArgument, pegged.peg.literal!(","))))), "ReplParse.MetaCommand")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.and!(MetaKeyword, pegged.peg.discard!(w), Seq!(MetaArgument, pegged.peg.literal!(","))), "ReplParse.MetaCommand"), "MetaCommand")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.and!(MetaKeyword, pegged.peg.option!(pegged.peg.and!(pegged.peg.discard!(w), Seq!(MetaArgument, pegged.peg.literal!(","))))), "ReplParse.MetaCommand"), "MetaCommand")(p);
     }
     static TParseTree MetaCommand(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.and!(MetaKeyword, pegged.peg.discard!(w), Seq!(MetaArgument, pegged.peg.literal!(","))), "ReplParse.MetaCommand")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.and!(MetaKeyword, pegged.peg.option!(pegged.peg.and!(pegged.peg.discard!(w), Seq!(MetaArgument, pegged.peg.literal!(","))))), "ReplParse.MetaCommand")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.and!(MetaKeyword, pegged.peg.discard!(w), Seq!(MetaArgument, pegged.peg.literal!(","))), "ReplParse.MetaCommand"), "MetaCommand")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.and!(MetaKeyword, pegged.peg.option!(pegged.peg.and!(pegged.peg.discard!(w), Seq!(MetaArgument, pegged.peg.literal!(","))))), "ReplParse.MetaCommand"), "MetaCommand")(TParseTree("", false,[], s));
     }
     static string MetaCommand(GetName g)
     {
@@ -1316,16 +1318,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree MetaKeyword(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.literal!("print"), "ReplParse.MetaKeyword")(p);
+            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.literal!("print"), pegged.peg.literal!("delete"), pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("reset"), wx, pegged.peg.literal!("session")))), "ReplParse.MetaKeyword")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.literal!("print"), "ReplParse.MetaKeyword"), "MetaKeyword")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.literal!("print"), pegged.peg.literal!("delete"), pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("reset"), wx, pegged.peg.literal!("session")))), "ReplParse.MetaKeyword"), "MetaKeyword")(p);
     }
     static TParseTree MetaKeyword(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.literal!("print"), "ReplParse.MetaKeyword")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.literal!("print"), pegged.peg.literal!("delete"), pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("reset"), wx, pegged.peg.literal!("session")))), "ReplParse.MetaKeyword")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.literal!("print"), "ReplParse.MetaKeyword"), "MetaKeyword")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.literal!("print"), pegged.peg.literal!("delete"), pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("reset"), wx, pegged.peg.literal!("session")))), "ReplParse.MetaKeyword"), "MetaKeyword")(TParseTree("", false,[], s));
     }
     static string MetaKeyword(GetName g)
     {

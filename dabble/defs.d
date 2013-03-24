@@ -220,7 +220,6 @@ struct Symbol
     bool valid = false;
     bool first = true;
 
-
     this(T)(T _x)
     {
         static if (is(T == Var)) {
@@ -287,6 +286,14 @@ struct ReplContext
     Vtbl[] vtbls;
     string vtblFixup;
     void* gc;
+
+    void reset()
+    {
+        symbols.clear;
+        symbolSet.clear;
+        vtbls.clear;
+        vtblFixup.clear;
+    }
 }
 
 };
