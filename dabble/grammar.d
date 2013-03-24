@@ -144,13 +144,16 @@ ReplParse:
 
 enum string metaParser = `
 
-    MetaCommand <- MetaKeyword (:w Seq(MetaArgument, ','))?
+    MetaCommand <- MetaPrint (MetaArgs)?
+                 / MetaDelete MetaArgs
+                 / MetaReset MetaArgs
 
-    MetaKeyword <- 'print'
-                 / 'delete'
-                 / ~('reset' wx 'session')
+    MetaPrint  <- 'print'
+    MetaDelete <- 'delete'
+    MetaReset  <- 'reset'
 
-    MetaArgument <- Ident
+    MetaArgs <- (wxd Seq(MetaArg, ','))
+    MetaArg  <- Ident
 
 `;
 

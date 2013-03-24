@@ -125,10 +125,13 @@ bool handleMetaCommand(ref ReplContext repl, ref const(char[]) inBuffer)
     string[] args;
     if (parse.children.length == 2)
     {
-        auto seq = parse.children[1].children;
-        args.length = seq.length;
-        foreach(i, p; seq)
-            args[i] = p.matches[0];
+        if (parse.children[1].name == "ReplParse.MetaArgs")
+        {
+            auto seq = parse.children[1].children;
+            args.length = seq.length;
+            foreach(i, p; seq)
+                args[i] = p.matches[0];
+        }
     }
 
     switch(cmd)
@@ -151,10 +154,13 @@ bool handleMetaCommand(ref ReplContext repl, ref const(char[]) inBuffer)
             break;
         }
 
-        case "reset session":
+        case "reset":
         {
-            repl.reset();
-            writeln("Session reset");
+            if (canFind(args, "session"))
+            {
+                repl.reset();
+                writeln("Session reset");
+            }
             break;
         }
 

@@ -65,14 +65,21 @@ ReplContext run(string[] code)
     return repl;
 }
 
-void main()
+void main(char[][] args)
 {
-
     auto repl = newContext();
+    parseArgs(repl, args);
+
     //repl = stress(repl);
 
     loop(repl);
 
 
     return;
+}
+
+void parseArgs(char[][] args)
+{
+    foreach(arg; args)
+        writeln(arg);
 }

@@ -138,13 +138,16 @@ ReplParse:
     ExpRewrite <~ GrabToColon(VarRewrite/.) ';'
 
 
-    MetaCommand <- MetaKeyword (:w Seq(MetaArgument, ','))?
+    MetaCommand <- MetaPrint (MetaArgs)?
+                 / MetaDelete MetaArgs
+                 / MetaReset MetaArgs
 
-    MetaKeyword <- 'print'
-                 / 'delete'
-                 / ~('reset' wx 'session')
+    MetaPrint  <- 'print'
+    MetaDelete <- 'delete'
+    MetaReset  <- 'reset'
 
-    MetaArgument <- Ident
+    MetaArgs <- (wxd Seq(MetaArg, ','))
+    MetaArg  <- Ident
 
 
 
@@ -299,8 +302,11 @@ struct GenericReplParse(TParseTree)
         rules["TemplateArg"] = toDelegate(&ReplParse.TemplateArg);
         rules["ExpRewrite"] = toDelegate(&ReplParse.ExpRewrite);
         rules["MetaCommand"] = toDelegate(&ReplParse.MetaCommand);
-        rules["MetaKeyword"] = toDelegate(&ReplParse.MetaKeyword);
-        rules["MetaArgument"] = toDelegate(&ReplParse.MetaArgument);
+        rules["MetaPrint"] = toDelegate(&ReplParse.MetaPrint);
+        rules["MetaDelete"] = toDelegate(&ReplParse.MetaDelete);
+        rules["MetaReset"] = toDelegate(&ReplParse.MetaReset);
+        rules["MetaArgs"] = toDelegate(&ReplParse.MetaArgs);
+        rules["MetaArg"] = toDelegate(&ReplParse.MetaArg);
         rules["w"] = toDelegate(&ReplParse.w);
         rules["wx"] = toDelegate(&ReplParse.wx);
         rules["wxd"] = toDelegate(&ReplParse.wxd);
@@ -1299,58 +1305,115 @@ struct GenericReplParse(TParseTree)
     static TParseTree MetaCommand(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.and!(MetaKeyword, pegged.peg.option!(pegged.peg.and!(pegged.peg.discard!(w), Seq!(MetaArgument, pegged.peg.literal!(","))))), "ReplParse.MetaCommand")(p);
+            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs)), "ReplParse.MetaCommand")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.and!(MetaKeyword, pegged.peg.option!(pegged.peg.and!(pegged.peg.discard!(w), Seq!(MetaArgument, pegged.peg.literal!(","))))), "ReplParse.MetaCommand"), "MetaCommand")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs)), "ReplParse.MetaCommand"), "MetaCommand")(p);
     }
     static TParseTree MetaCommand(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.and!(MetaKeyword, pegged.peg.option!(pegged.peg.and!(pegged.peg.discard!(w), Seq!(MetaArgument, pegged.peg.literal!(","))))), "ReplParse.MetaCommand")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs)), "ReplParse.MetaCommand")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.and!(MetaKeyword, pegged.peg.option!(pegged.peg.and!(pegged.peg.discard!(w), Seq!(MetaArgument, pegged.peg.literal!(","))))), "ReplParse.MetaCommand"), "MetaCommand")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs)), "ReplParse.MetaCommand"), "MetaCommand")(TParseTree("", false,[], s));
     }
     static string MetaCommand(GetName g)
     {
         return "ReplParse.MetaCommand";
     }
 
-    static TParseTree MetaKeyword(TParseTree p)
+    static TParseTree MetaPrint(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.literal!("print"), pegged.peg.literal!("delete"), pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("reset"), wx, pegged.peg.literal!("session")))), "ReplParse.MetaKeyword")(p);
+            return         pegged.peg.named!(pegged.peg.literal!("print"), "ReplParse.MetaPrint")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.literal!("print"), pegged.peg.literal!("delete"), pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("reset"), wx, pegged.peg.literal!("session")))), "ReplParse.MetaKeyword"), "MetaKeyword")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.literal!("print"), "ReplParse.MetaPrint"), "MetaPrint")(p);
     }
-    static TParseTree MetaKeyword(string s)
+    static TParseTree MetaPrint(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.literal!("print"), pegged.peg.literal!("delete"), pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("reset"), wx, pegged.peg.literal!("session")))), "ReplParse.MetaKeyword")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.literal!("print"), "ReplParse.MetaPrint")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.literal!("print"), pegged.peg.literal!("delete"), pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("reset"), wx, pegged.peg.literal!("session")))), "ReplParse.MetaKeyword"), "MetaKeyword")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.literal!("print"), "ReplParse.MetaPrint"), "MetaPrint")(TParseTree("", false,[], s));
     }
-    static string MetaKeyword(GetName g)
+    static string MetaPrint(GetName g)
     {
-        return "ReplParse.MetaKeyword";
+        return "ReplParse.MetaPrint";
     }
 
-    static TParseTree MetaArgument(TParseTree p)
+    static TParseTree MetaDelete(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(Ident, "ReplParse.MetaArgument")(p);
+            return         pegged.peg.named!(pegged.peg.literal!("delete"), "ReplParse.MetaDelete")(p);
         else
-            return hooked!(pegged.peg.named!(Ident, "ReplParse.MetaArgument"), "MetaArgument")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.literal!("delete"), "ReplParse.MetaDelete"), "MetaDelete")(p);
     }
-    static TParseTree MetaArgument(string s)
+    static TParseTree MetaDelete(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(Ident, "ReplParse.MetaArgument")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.literal!("delete"), "ReplParse.MetaDelete")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(Ident, "ReplParse.MetaArgument"), "MetaArgument")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.literal!("delete"), "ReplParse.MetaDelete"), "MetaDelete")(TParseTree("", false,[], s));
     }
-    static string MetaArgument(GetName g)
+    static string MetaDelete(GetName g)
     {
-        return "ReplParse.MetaArgument";
+        return "ReplParse.MetaDelete";
+    }
+
+    static TParseTree MetaReset(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.literal!("reset"), "ReplParse.MetaReset")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.literal!("reset"), "ReplParse.MetaReset"), "MetaReset")(p);
+    }
+    static TParseTree MetaReset(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.literal!("reset"), "ReplParse.MetaReset")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.literal!("reset"), "ReplParse.MetaReset"), "MetaReset")(TParseTree("", false,[], s));
+    }
+    static string MetaReset(GetName g)
+    {
+        return "ReplParse.MetaReset";
+    }
+
+    static TParseTree MetaArgs(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.and!(wxd, Seq!(MetaArg, pegged.peg.literal!(","))), "ReplParse.MetaArgs")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.and!(wxd, Seq!(MetaArg, pegged.peg.literal!(","))), "ReplParse.MetaArgs"), "MetaArgs")(p);
+    }
+    static TParseTree MetaArgs(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.and!(wxd, Seq!(MetaArg, pegged.peg.literal!(","))), "ReplParse.MetaArgs")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.and!(wxd, Seq!(MetaArg, pegged.peg.literal!(","))), "ReplParse.MetaArgs"), "MetaArgs")(TParseTree("", false,[], s));
+    }
+    static string MetaArgs(GetName g)
+    {
+        return "ReplParse.MetaArgs";
+    }
+
+    static TParseTree MetaArg(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(Ident, "ReplParse.MetaArg")(p);
+        else
+            return hooked!(pegged.peg.named!(Ident, "ReplParse.MetaArg"), "MetaArg")(p);
+    }
+    static TParseTree MetaArg(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(Ident, "ReplParse.MetaArg")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(Ident, "ReplParse.MetaArg"), "MetaArg")(TParseTree("", false,[], s));
+    }
+    static string MetaArg(GetName g)
+    {
+        return "ReplParse.MetaArg";
     }
 
     static TParseTree w(TParseTree p)
