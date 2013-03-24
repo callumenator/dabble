@@ -147,10 +147,16 @@ enum string metaParser = `
     MetaCommand <- MetaPrint (MetaArgs)?
                  / MetaDelete MetaArgs
                  / MetaReset MetaArgs
+                 / MetaDebugOn MetaArgs
+                 / MetaDebugOff MetaArgs
+                 / MetaClear
 
-    MetaPrint  <- 'print'
-    MetaDelete <- 'delete'
-    MetaReset  <- 'reset'
+    MetaPrint    <- 'print'
+    MetaDelete   <- 'delete'
+    MetaReset    <- 'reset'
+    MetaDebugOn  <~ ('debug' wx 'on')
+    MetaDebugOff <~ ('debug' wx 'off')
+    MetaClear    <- 'clear'
 
     MetaArgs <- (wxd Seq(MetaArg, ','))
     MetaArg  <- Ident

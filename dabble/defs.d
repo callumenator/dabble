@@ -277,6 +277,15 @@ struct Vtbl
     void*[] vtbl;
 }
 
+enum Debug
+{
+    none        = 0x00, /// no debug output
+    times       = 0x01, /// display time to parse, build and call
+    stages      = 0x02, /// display parse, build, call messages
+    parseOnly   = 0x04, /// show parse tree and return
+    print       = 0x08  /// add writelns to end of every line
+}
+
 struct ReplContext
 {
     import std.typecons;
@@ -285,7 +294,9 @@ struct ReplContext
     long[string] symbolSet;
     Vtbl[] vtbls;
     string vtblFixup;
+    uint debugLevel = Debug.none;
     void* gc;
+
 
     void reset()
     {
@@ -299,7 +310,4 @@ struct ReplContext
 };
 
 mixin(sharedDefs);
-
-
-
 

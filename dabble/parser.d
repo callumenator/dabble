@@ -141,10 +141,16 @@ ReplParse:
     MetaCommand <- MetaPrint (MetaArgs)?
                  / MetaDelete MetaArgs
                  / MetaReset MetaArgs
+                 / MetaDebugOn MetaArgs
+                 / MetaDebugOff MetaArgs
+                 / MetaClear
 
-    MetaPrint  <- 'print'
-    MetaDelete <- 'delete'
-    MetaReset  <- 'reset'
+    MetaPrint    <- 'print'
+    MetaDelete   <- 'delete'
+    MetaReset    <- 'reset'
+    MetaDebugOn  <~ ('debug' wx 'on')
+    MetaDebugOff <~ ('debug' wx 'off')
+    MetaClear    <- 'clear'
 
     MetaArgs <- (wxd Seq(MetaArg, ','))
     MetaArg  <- Ident
@@ -305,6 +311,9 @@ struct GenericReplParse(TParseTree)
         rules["MetaPrint"] = toDelegate(&ReplParse.MetaPrint);
         rules["MetaDelete"] = toDelegate(&ReplParse.MetaDelete);
         rules["MetaReset"] = toDelegate(&ReplParse.MetaReset);
+        rules["MetaDebugOn"] = toDelegate(&ReplParse.MetaDebugOn);
+        rules["MetaDebugOff"] = toDelegate(&ReplParse.MetaDebugOff);
+        rules["MetaClear"] = toDelegate(&ReplParse.MetaClear);
         rules["MetaArgs"] = toDelegate(&ReplParse.MetaArgs);
         rules["MetaArg"] = toDelegate(&ReplParse.MetaArg);
         rules["w"] = toDelegate(&ReplParse.w);
@@ -1305,16 +1314,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree MetaCommand(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs)), "ReplParse.MetaCommand")(p);
+            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), MetaClear), "ReplParse.MetaCommand")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs)), "ReplParse.MetaCommand"), "MetaCommand")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), MetaClear), "ReplParse.MetaCommand"), "MetaCommand")(p);
     }
     static TParseTree MetaCommand(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs)), "ReplParse.MetaCommand")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), MetaClear), "ReplParse.MetaCommand")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs)), "ReplParse.MetaCommand"), "MetaCommand")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), MetaClear), "ReplParse.MetaCommand"), "MetaCommand")(TParseTree("", false,[], s));
     }
     static string MetaCommand(GetName g)
     {
@@ -1376,6 +1385,63 @@ struct GenericReplParse(TParseTree)
     static string MetaReset(GetName g)
     {
         return "ReplParse.MetaReset";
+    }
+
+    static TParseTree MetaDebugOn(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("debug"), wx, pegged.peg.literal!("on"))), "ReplParse.MetaDebugOn")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("debug"), wx, pegged.peg.literal!("on"))), "ReplParse.MetaDebugOn"), "MetaDebugOn")(p);
+    }
+    static TParseTree MetaDebugOn(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("debug"), wx, pegged.peg.literal!("on"))), "ReplParse.MetaDebugOn")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("debug"), wx, pegged.peg.literal!("on"))), "ReplParse.MetaDebugOn"), "MetaDebugOn")(TParseTree("", false,[], s));
+    }
+    static string MetaDebugOn(GetName g)
+    {
+        return "ReplParse.MetaDebugOn";
+    }
+
+    static TParseTree MetaDebugOff(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("debug"), wx, pegged.peg.literal!("off"))), "ReplParse.MetaDebugOff")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("debug"), wx, pegged.peg.literal!("off"))), "ReplParse.MetaDebugOff"), "MetaDebugOff")(p);
+    }
+    static TParseTree MetaDebugOff(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("debug"), wx, pegged.peg.literal!("off"))), "ReplParse.MetaDebugOff")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("debug"), wx, pegged.peg.literal!("off"))), "ReplParse.MetaDebugOff"), "MetaDebugOff")(TParseTree("", false,[], s));
+    }
+    static string MetaDebugOff(GetName g)
+    {
+        return "ReplParse.MetaDebugOff";
+    }
+
+    static TParseTree MetaClear(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.literal!("clear"), "ReplParse.MetaClear")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.literal!("clear"), "ReplParse.MetaClear"), "MetaClear")(p);
+    }
+    static TParseTree MetaClear(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.literal!("clear"), "ReplParse.MetaClear")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.literal!("clear"), "ReplParse.MetaClear"), "MetaClear")(TParseTree("", false,[], s));
+    }
+    static string MetaClear(GetName g)
+    {
+        return "ReplParse.MetaClear";
     }
 
     static TParseTree MetaArgs(TParseTree p)

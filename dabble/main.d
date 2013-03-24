@@ -53,13 +53,13 @@ ReplContext stress(ref ReplContext repl)
 
 ReplContext run(string[] code)
 {
-    auto repl = newContext();
+    auto repl = newContext("replDll", Debug.times);
 
     string err;
     foreach(i, c; code)
     {
         writeln("Line: ", i, " -> ", c);
-        eval(c, repl, err, Debug.times);
+        eval(c, repl, err);
     }
 
     return repl;
@@ -68,7 +68,8 @@ ReplContext run(string[] code)
 void main(char[][] args)
 {
     auto repl = newContext();
-    parseArgs(repl, args);
+
+    parseArgs(repl, args[1..$]);
 
     //repl = stress(repl);
 
@@ -78,8 +79,16 @@ void main(char[][] args)
     return;
 }
 
-void parseArgs(char[][] args)
+void parseArgs(ref ReplContext repl, char[][] args)
 {
     foreach(arg; args)
-        writeln(arg);
+    {
+        switch(arg)
+        {
+            case "--showTimes": repl.debugLevel |= Debug.times; break;
+            case "--showStages": repl.debugLevel |= Debug.stages; break;
+            case "--parseOnly": repl.debugLevel |= Debug.parseOnly; break;
+            default: writeln("Unrecognized argument: ", arg); break;
+        }
+    }
 }

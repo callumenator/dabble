@@ -16,19 +16,11 @@ public import dabble.defs;
 
 extern(C) void* gc_getProxy();
 
-enum Debug
-{
-    none        = 0x00, /// no debug output
-    times       = 0x01, /// display time to parse, build and call
-    parseOnly   = 0x02, /// show parse tree and return
-    print       = 0x04  /// add writelns to end of every line
-}
-
 
 /**
 * Build a default repl context.
 */
-ReplContext newContext(string filename = "replDll")
+ReplContext newContext(string filename = "replDll", uint debugLevel = Debug.none)
 {
     import std.path : dirSeparator;
 
@@ -36,6 +28,7 @@ ReplContext newContext(string filename = "replDll")
     repl.paths.filename = filename;
     repl.paths.tempPath = getTempDir() ~ dirSeparator;
     repl.paths.fullName = repl.paths.tempPath ~ dirSeparator ~ filename;
+    repl.debugLevel = debugLevel;
     repl.gc = gc_getProxy();
     return repl;
 }
@@ -45,8 +38,7 @@ ReplContext newContext(string filename = "replDll")
 * Main repl entry point. Keep reading lines from stdin, handle any
 * repl commands, pass the rest onto eval.
 */
-void loop(ref ReplContext repl,
-          Debug flag = Debug.none)
+void loop(ref ReplContext repl)
 {
     import std.compiler;
     writeln("DABBLE: (DMD ", version_major, ".", version_minor, ")");
@@ -63,11 +55,7 @@ void loop(ref ReplContext repl,
         inBuffer = strip(inBuffer);
 
         // Try to handle meta command, else assume input is code
-        if (handleMetaCommand(repl, inBuffer))
-        {
-            codeBuffer.clear;
-        }
-        else
+        if (!handleMetaCommand(repl, inBuffer, codeBuffer))
         {
             codeBuffer ~= inBuffer ~ "\n";
             Parser.braceCount = 0;
@@ -75,7 +63,7 @@ void loop(ref ReplContext repl,
 
             if (!multiLine && balanced.successful && inBuffer[$-1] == ';')
             {
-                eval(codeBuffer.to!string, repl, error, flag);
+                eval(codeBuffer.to!string, repl, error);
                 codeBuffer.clear;
             }
             else
@@ -88,7 +76,7 @@ void loop(ref ReplContext repl,
                 if ((balanced.successful && Parser.braceCount > 0) ||
                     (balanced.successful && Parser.braceCount == 0 && inBuffer[$-1] == ';'))
                 {
-                    eval(codeBuffer.to!string, repl, error, flag);
+                    eval(codeBuffer.to!string, repl, error);
                     codeBuffer.clear;
                     multiLine = false;
                 }
@@ -114,7 +102,9 @@ string prompt() @safe pure nothrow
 /**
 * Handle meta commands
 */
-bool handleMetaCommand(ref ReplContext repl, ref const(char[]) inBuffer)
+bool handleMetaCommand(ref ReplContext repl,
+                       ref const(char[]) inBuffer,
+                       ref char[] codeBuffer)
 {
     auto parse = ReplParse.decimateTree(ReplParse.MetaCommand(inBuffer.to!string));
 
@@ -127,7 +117,7 @@ bool handleMetaCommand(ref ReplContext repl, ref const(char[]) inBuffer)
     {
         if (parse.children[1].name == "ReplParse.MetaArgs")
         {
-            auto seq = parse.children[1].children;
+            auto seq = parse.children[1].children[0].children;
             args.length = seq.length;
             foreach(i, p; seq)
                 args[i] = p.matches[0];
@@ -138,10 +128,11 @@ bool handleMetaCommand(ref ReplContext repl, ref const(char[]) inBuffer)
     {
         case "print":
         {
-            if (args.length == 0 || canFind(args, "all")) // print all symbols
+            if (args.length == 0 || canFind(args, "all")) // print all vars
             {
                 foreach(val; repl.symbols)
-                    writeln(val);
+                    if (val.type == Symbol.Type.Var)
+                        writeln(val);
             }
             else // print selected symbols
             {
@@ -171,10 +162,57 @@ bool handleMetaCommand(ref ReplContext repl, ref const(char[]) inBuffer)
                     deleteVar(repl, a);
         }
 
+        case "debug on":
+        {
+            foreach(arg; args)
+                setDebugLevel!"on"(repl, arg);
+            break;
+        }
+
+        case "debug off":
+        {
+            foreach(arg; args)
+                setDebugLevel!"off"(repl, arg);
+            break;
+        }
+
+        case "clear":
+        {
+            codeBuffer.clear;
+            break;
+        }
+
         default: return false;
     }
 
+    // If we got to here, we successfully parsed a meta command, so
+    // clear the code buffer
+    codeBuffer.clear;
     return true;
+}
+
+
+/**
+* Turn a debug level on or off, using a string to identify the debug level.
+*/
+void setDebugLevel(string s)(ref ReplContext repl, string level) if (s == "on" || s == "off")
+{
+    static if (s == "on")
+        enum string op = "repl.debugLevel |= ";
+    else static if (s == "off")
+        enum string op = "repl.debugLevel &= ~";
+
+    switch(level)
+    {
+        case "times": goto case "showTimes";
+        case "showTimes": mixin(op ~ "Debug.times;"); break;
+
+        case "stages": goto case "showStages";
+        case "showStages": mixin(op ~ "Debug.stages;"); break;
+
+        case "parseOnly": mixin(op ~ "Debug.parseOnly;"); break;
+        default: break;
+    }
 }
 
 
@@ -183,8 +221,7 @@ bool handleMetaCommand(ref ReplContext repl, ref const(char[]) inBuffer)
 */
 bool eval(string code,
           ref ReplContext repl,
-          ref string error,
-          Debug flag = Debug.none)
+          ref string error)
 {
     import std.datetime : StopWatch;
     import std.typecons;
@@ -195,10 +232,10 @@ bool eval(string code,
 
     scope(success)
     {
-        if (flag & Debug.times)
+        if (repl.debugLevel & Debug.times)
         {
             write("TIMINGS: parse: ", times.parse);
-            if (!(flag & Debug.parseOnly))
+            if (!(repl.debugLevel & Debug.parseOnly))
             {
                 write(", build: ", times.build);
                 write(", call: ", times.call);
@@ -219,9 +256,12 @@ bool eval(string code,
         return res;
     }
 
+    if (repl.debugLevel & Debug.stages)
+        writeln("PARSE...");
+
     auto text = timeIt!(Parser.go)(code, repl, sw, times.parse);
 
-    if (flag & Debug.parseOnly)
+    if (repl.debugLevel & Debug.parseOnly)
     {
         writeln(text[0]~text[1]);
         return true;
@@ -236,7 +276,7 @@ bool eval(string code,
         return false;
     }
 
-    if (text[1].length && flag & Debug.print)
+    if (text[1].length && repl.debugLevel & Debug.print)
     {
         auto lines = splitter(text[1], ";");
         string str;
@@ -249,7 +289,9 @@ bool eval(string code,
         text[1] = str;
     }
 
-    debug { writeln("BUILD..."); }
+    if (repl.debugLevel & Debug.stages)
+        writeln("BUILD...");
+
     auto build = timeIt!build(text, repl, error, sw, times.build);
 
     if (!build)
@@ -259,7 +301,9 @@ bool eval(string code,
         return false;
     }
 
-    debug { writeln("CALL..."); }
+    if (repl.debugLevel & Debug.stages)
+        writeln("CALL...");
+
     auto call = timeIt!call(repl, error, sw, times.call);
 
     // Prune any symbols not marked as valid
@@ -341,7 +385,6 @@ bool build(Tuple!(string,string) code,
                 err = parseError(repl, readText(errFile));
             return false;
         }
-
         return true;
     }
 
