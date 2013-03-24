@@ -9,6 +9,35 @@ import
     dabble.parser,
     dabble.repl;
 
+
+void main(char[][] args)
+{
+    auto repl = newContext();
+
+    parseArgs(repl, args[1..$]);
+
+    //repl = stress(repl);
+
+    loop(repl);
+
+
+    return;
+}
+
+void parseArgs(ref ReplContext repl, char[][] args)
+{
+    foreach(arg; args)
+    {
+        switch(arg)
+        {
+            case "--showTimes": repl.debugLevel |= Debug.times; break;
+            case "--showStages": repl.debugLevel |= Debug.stages; break;
+            case "--parseOnly": repl.debugLevel |= Debug.parseOnly; break;
+            default: writeln("Unrecognized argument: ", arg); break;
+        }
+    }
+}
+
 ReplContext stress(ref ReplContext repl)
 {
     return run([
@@ -63,32 +92,4 @@ ReplContext run(string[] code)
     }
 
     return repl;
-}
-
-void main(char[][] args)
-{
-    auto repl = newContext();
-
-    parseArgs(repl, args[1..$]);
-
-    //repl = stress(repl);
-
-    loop(repl);
-
-
-    return;
-}
-
-void parseArgs(ref ReplContext repl, char[][] args)
-{
-    foreach(arg; args)
-    {
-        switch(arg)
-        {
-            case "--showTimes": repl.debugLevel |= Debug.times; break;
-            case "--showStages": repl.debugLevel |= Debug.stages; break;
-            case "--parseOnly": repl.debugLevel |= Debug.parseOnly; break;
-            default: writeln("Unrecognized argument: ", arg); break;
-        }
-    }
 }
