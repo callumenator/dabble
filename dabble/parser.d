@@ -195,7 +195,7 @@ ReplParse:
     GrabToClosingParens(T=.) <~ (!(')'/eoi) (String/CharLiteral/Comment/FuncBlock/BwParens(T)/T))*
 
     NestItems   <- Comment / String / CharLiteral
-    String      <- (WYSString / DBQString / TKNString / DLMString / StringOf) {Parser.dupString}
+    String      <- (WYSString / DBQString / TKNString / DLMString / StringOf) #{Parser.dupString}
     StringNoDup <- (WYSString / DBQString / TKNString / DLMString)
 
     WYSString   <~ 'r' doublequote (!doublequote .)* doublequote /
@@ -1958,16 +1958,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree String(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.action!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString, StringOf), Parser.dupString), "ReplParse.String")(p);
+            return         pegged.peg.named!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString, StringOf), "ReplParse.String")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.action!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString, StringOf), Parser.dupString), "ReplParse.String"), "String")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString, StringOf), "ReplParse.String"), "String")(p);
     }
     static TParseTree String(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.action!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString, StringOf), Parser.dupString), "ReplParse.String")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString, StringOf), "ReplParse.String")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.action!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString, StringOf), Parser.dupString), "ReplParse.String"), "String")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString, StringOf), "ReplParse.String"), "String")(TParseTree("", false,[], s));
     }
     static string String(GetName g)
     {

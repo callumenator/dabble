@@ -38,6 +38,7 @@ static:
 
         foreach(d; stringDups)
             code.suffix.put("_REPL.stringDup("~d~");\n");
+        writeln("DUPES:\n", stringDups);
 
         auto inBody =
             "string _expressionResult;\n" ~
@@ -173,7 +174,11 @@ static:
         if (repl && t.successful)
         {
             if (isDefined(t.matches[0]))
+            {
+                stringDups ~= t.matches[0];
                 t.matches[0] = "(*" ~ t.matches[0] ~ ")";
+            }
+
         }
         return t;
     }
@@ -219,7 +224,6 @@ static:
                 }
                 else
                 {
-                    stringDups ~= name;
                     p.successful = false;
                 }
             }
@@ -260,7 +264,6 @@ static:
 
                 repl.symbolSet[name] = parseID;
                 repl.symbols ~= Symbol(Var(name, type, init));
-
                 stringDups ~= name;
             }
         }
