@@ -14,6 +14,36 @@ The parsed/modified code is then written to a temporary .d file, and compiled in
 
 If the user's code resulted in a value, that value is printed to the screen. Else, 'OK' is printed to indicate success. The loop then continues.
 
+### Example session:
+A short example session might look like the snipped below.
+```
+DABBLE: (DMD 2.62)
+: a = 5;
+=> 5
+: b = [1,2,3,4];
+=> [1, 2, 3, 4]
+: import std.algorithm;  /// algorithm is actually imported by default...
+=> OK
+: b.reverse;
+=> [4, 3, 2, 1]
+: struct S {      /// multi-line input detected
+:    int a = 5;
+:    void foo() {
+:       writeln(a);
+:    }
+: }
+=> OK
+: s = S(67);
+=> S(67)
+: s.foo();
+67
+=> OK
+: print all    /// meta-command, to print all defined variables
+a (int) = 5
+b (int[]) = [4, 3, 2, 1]
+s (S) = S(67)
+```
+
 ### Limitations:
 - No static variables (TLS or standard globals) - in particular, static data used by imported modules will not work as expected, since these data are not preserved between DLL loads.
 - Taking the address of code or static data - the addresses will in general not stay the same between DLL loads. 
