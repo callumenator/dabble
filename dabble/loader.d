@@ -321,6 +321,18 @@ body
     return null;
 }
 
+
+void getImageBounds(HMEMORYMODULE mod, out void* start, out void* stop)
+{
+    auto pmod = cast(PMEMORYMODULE)mod;
+    PIMAGE_SECTION_HEADER section = IMAGE_FIRST_SECTION(pmod.headers);
+    size_t size = 0;
+    start = pmod.codeBase + section.VirtualAddress;
+    for (int i = 0; i < pmod.headers.FileHeader.NumberOfSections; i++, section++)
+        size += section.SizeOfRawData;
+    stop = start + size;
+}
+
 void CopySections(ubyte *data, PIMAGE_NT_HEADERS old_headers, PMEMORYMODULE modul)
 {
     int i, size;

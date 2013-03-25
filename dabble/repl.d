@@ -462,6 +462,8 @@ CallResult call(ref ReplContext repl,
     if (!lib.loaded)
         return CallResult.loadError;
 
+    repl.imageBounds = lib.bounds();
+
     auto funcPtr = lib.getFunction!(funcType)("_main");
 
     if (funcPtr is null)

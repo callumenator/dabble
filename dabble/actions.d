@@ -37,8 +37,7 @@ static:
             sym.generate(code, idx);
 
         foreach(d; stringDups)
-            code.suffix.put("_REPL.stringDup("~d~");\n");
-        writeln("DUPES:\n", stringDups);
+            code.suffix.put("_REPL.stringDup("~d~", _repl_.imageBounds[0], _repl_.imageBounds[1]);\n");
 
         auto inBody =
             "string _expressionResult;\n" ~

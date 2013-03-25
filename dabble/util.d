@@ -286,22 +286,23 @@ string genHeader()
                 enum needsDup = false;
         }
 
-        void stringDup(T)(ref T t)
+        void stringDup(T)(ref T t, void* start, void* stop)
         {
             static if (isSomeString!T)
             {
-                t = t.idup;
+                if (t.ptr >= start && t.ptr <= stop)
+                    t = t.idup;
             }
             else static if (isPointer!T)
             {
                 static if (needsDup!T)
-                    _REPL.stringDup(*t);
+                    _REPL.stringDup(*t, start, stop);
             }
             else static if (isArray!T)
             {
                 static if (needsDup!T)
                     foreach(ref elem; t)
-                        _REPL.stringDup(elem);
+                        _REPL.stringDup(elem, start, stop);
             }
             else static if (isAggregateType!T)
             {
@@ -317,7 +318,7 @@ string genHeader()
                 foreach(f; t.tupleof)
                 {
                     auto addr =  baseAddr + offset;
-                    _REPL.stringDup((*(cast(typeof(f)*)addr)));
+                    _REPL.stringDup((*(cast(typeof(f)*)addr)), start, stop);
                     offset += f.sizeof;
                 }
             }

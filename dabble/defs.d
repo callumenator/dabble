@@ -295,8 +295,8 @@ struct ReplContext
     Vtbl[] vtbls;
     string vtblFixup;
     uint debugLevel = Debug.none;
+    Tuple!(void*,void*) imageBounds; /// memory bounds of the dll image
     void* gc;
-
 
     void reset()
     {

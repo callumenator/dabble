@@ -8,6 +8,7 @@ version(Windows)
 {
     import std.file : read;
     import std.string : toStringz;
+    import std.typecons;
     import dabble.loader;
 
     struct SharedLib
@@ -42,6 +43,14 @@ version(Windows)
                 return;
 
             MemoryFreeLibrary(handle, callDetach);
+        }
+
+        Tuple!(void*,void*) bounds()
+        {
+            assert(handle !is null);
+            void* start, stop;
+            getImageBounds(handle, start, stop);
+            return tuple(start, stop);
         }
 
         T getFunction(T)(string name) in {assert(handle !is null, "Null handle");} body
