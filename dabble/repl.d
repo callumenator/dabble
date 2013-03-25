@@ -283,8 +283,9 @@ bool eval(string code,
         uint index;
         while(!lines.empty)
         {
-            str ~= lines.front ~ "; writeln(q{" ~ lines.front ~ "});";
+            str ~= lines.front ~ "; writeln(`" ~ index.to!string ~ "`);";
             lines.popFront();
+            index ++;
         }
         text[1] = str;
     }

@@ -10,6 +10,8 @@ import
     dabble.repl;
 
 
+
+
 void main(char[][] args)
 {
     auto repl = newContext();
@@ -19,7 +21,6 @@ void main(char[][] args)
     //repl = stress(repl);
 
     loop(repl);
-
 
     return;
 }
@@ -83,6 +84,7 @@ ReplContext stress(ref ReplContext repl)
 ReplContext run(string[] code)
 {
     auto repl = newContext("replDll", Debug.times);
+    //repl.debugLevel |= Debug.print;
 
     string err;
     foreach(i, c; code)

@@ -26,6 +26,7 @@ static:
     {
         parseID = Clock.currSystemTick().msecs();
         inputCopy = input;
+        stringDups.clear;
         repl = &_repl;
 
         auto p = ReplParse.Search(input);
@@ -34,6 +35,9 @@ static:
         Code code;
         foreach(idx, ref sym; repl.symbols)
             sym.generate(code, idx);
+
+        foreach(d; stringDups)
+            code.suffix.put("_REPL.stringDup("~d~");\n");
 
         auto inBody =
             "string _expressionResult;\n" ~
@@ -181,7 +185,8 @@ static:
     {
         if (repl && p.successful)
         {
-            if (!isDefined(p.children[0].matches[0]))
+            auto name = p.children[0].matches[0];
+            if (!isDefined(name))
             {
                 p.name = "ReplParse.VarDeclInit";
                 p.matches = ["",""] ~ p.matches;
@@ -193,7 +198,6 @@ static:
                 // If name was a known symbol, this is an assignment, not a new declaration
 
                 // Check for function types
-                auto name = p.children[0].matches[0];
                 size_t index = -1;
                 auto v = findVar(name, index);
 
@@ -215,6 +219,7 @@ static:
                 }
                 else
                 {
+                    stringDups ~= name;
                     p.successful = false;
                 }
             }
@@ -255,6 +260,8 @@ static:
 
                 repl.symbolSet[name] = parseID;
                 repl.symbols ~= Symbol(Var(name, type, init));
+
+                stringDups ~= name;
             }
         }
         return p;
@@ -315,6 +322,7 @@ static:
     long parseID;
     string inputCopy;
     string error;
+    string[] stringDups;
     uint braceCount;
 }
 

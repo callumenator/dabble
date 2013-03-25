@@ -271,6 +271,58 @@ string genHeader()
             }
             return current.idup;
         }
+
+        template needsDup(T)
+        {
+            static if (isSomeString!T)
+                enum needsDup = true;
+            else static if (isAggregateType!T)
+                enum needsDup = true;
+            else static if (isPointer!T && _REPL.needsDup!(PointerTarget!T))
+                enum needsDup = true;
+            else static if (isArray!T && _REPL.needsDup!(ForeachType!T))
+                enum needsDup = true;
+            else
+                enum needsDup = false;
+        }
+
+        void stringDup(T)(ref T t)
+        {
+            static if (isSomeString!T)
+            {
+                t = t.idup;
+            }
+            else static if (isPointer!T)
+            {
+                static if (needsDup!T)
+                    _REPL.stringDup(*t);
+            }
+            else static if (isArray!T)
+            {
+                static if (needsDup!T)
+                    foreach(ref elem; t)
+                        _REPL.stringDup(elem);
+            }
+            else static if (isAggregateType!T)
+            {
+                size_t offset;
+                void* baseAddr = &t;
+
+                static if (is(T == class))
+                {
+                    offset += 2*(void*).sizeof;
+                    baseAddr = cast(void*)t;
+                }
+
+                foreach(f; t.tupleof)
+                {
+                    auto addr =  baseAddr + offset;
+                    _REPL.stringDup((*(cast(typeof(f)*)addr)));
+                    offset += f.sizeof;
+                }
+            }
+        }
+
     }
 
     extern (C) Object _d_newclass(const ClassInfo ci)

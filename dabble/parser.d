@@ -90,13 +90,13 @@ ReplParse:
     BaseClassList   <- Seq(~Seq(TemplateInstance / Ident, '.'), ',')
 
     FunctionDecl    <- wx ~(~Type ws Ident wx ( ~ParameterList wx ~ParameterList
-                                            / ~ParameterList ) wx ~Constraint? wx AllBetween(LBrace,RBrace))
+                                              / ~ParameterList ) wx ~Constraint? wx AllBetween(LBrace,RBrace))
 
     ParameterList   <- BwParens(.)
 
     VarDecl         <- ~Type ;ws Ident wx ;';'
-    VarDeclInit     <- ~Type ;ws Ident wx ;'=' ~GrabToColon(VarRewrite/.) :';'
-    AutoVarDeclInit <- Ident wx ;'=' ~GrabToColon(VarRewrite/.) :';'
+    VarDeclInit     <- ~Type ;ws Ident wx ;'=' (~GrabToColon(VarRewrite/.)) :';'
+    AutoVarDeclInit <- Ident wx ;'=' (~GrabToColon(VarRewrite/.)) :';'
 
     Type <- Storage wx '(' wx Type wx ')' Seq(TypeSuffix)?
           / Storage ws Type Seq(TypeSuffix)?
