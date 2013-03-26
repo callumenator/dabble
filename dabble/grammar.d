@@ -204,7 +204,7 @@ enum string parserUtils = `
     GrabToClosingParens(T=.) <~ (!(')'/eoi) (String/CharLiteral/Comment/FuncBlock/BwParens(T)/T))*
 
     NestItems   <- Comment / String / CharLiteral
-    String      <- (WYSString / DBQString / TKNString / DLMString / StringOf) #{Parser.dupString}
+    String      <- (WYSString / DBQString / TKNString / DLMString / StringOf) {Parser.dupString}
     StringNoDup <- (WYSString / DBQString / TKNString / DLMString)
 
     WYSString   <~ 'r' doublequote (!doublequote .)* doublequote /

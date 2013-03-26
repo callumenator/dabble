@@ -291,7 +291,7 @@ string genHeader()
             static if (isSomeString!T)
             {
                 if (t.ptr >= start && t.ptr <= stop)
-                    t = t.idup;
+                    t = cast(T)t.idup;
             }
             else static if (isPointer!T)
             {

@@ -10,15 +10,13 @@ import
     dabble.repl;
 
 
-
-
 void main(char[][] args)
 {
     auto repl = newContext();
 
     parseArgs(repl, args[1..$]);
 
-    //repl = stress(repl);
+    repl = stress(repl);
 
     loop(repl);
 
