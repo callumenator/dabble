@@ -16,7 +16,7 @@ void main(char[][] args)
 
     parseArgs(repl, args[1..$]);
 
-    repl = stress(repl);
+    //repl = stress(repl);
 
     loop(repl);
 
@@ -79,16 +79,17 @@ ReplContext stress(ref ReplContext repl)
     ]);
 }
 
-ReplContext run(string[] code)
+ReplContext run(string[] code, uint debugLevel = 0)
 {
-    auto repl = newContext("replDll", Debug.times);
-    //repl.debugLevel |= Debug.print;
+    auto repl = newContext("replDll", debugLevel);
 
     string err;
     foreach(i, c; code)
     {
         writeln("Line: ", i, " -> ", c);
         eval(c, repl, err);
+        if (err.length != 0)
+            assert(false, err);
     }
 
     return repl;

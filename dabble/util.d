@@ -274,8 +274,11 @@ string genHeader()
 
         template needsDup(T)
         {
+            import std.typecons;
             static if (isSomeString!T)
                 enum needsDup = true;
+            else static if (is(T _ == RefCounted!U, U...))
+                enum needsDup = false;
             else static if (isAggregateType!T)
                 enum needsDup = true;
             else static if (isPointer!T && _REPL.needsDup!(PointerTarget!T))
@@ -288,6 +291,9 @@ string genHeader()
 
         void stringDup(T)(ref T t, void* start, void* stop)
         {
+            static if (!needsDup!T)
+                return;
+
             static if (isSomeString!T)
             {
                 if (t.ptr >= start && t.ptr <= stop)
