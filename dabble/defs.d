@@ -13,6 +13,14 @@ enum sharedDefs = q{
         std.traits,
         std.range;
 
+    /**
+    * Return the mixin string to access a symbol by index.
+    */
+    string sym(size_t index)
+    {
+        return "_repl_.symbols["~index.to!string~"]";
+    }
+
     struct Code
     {
         Appender!string header,
@@ -49,7 +57,7 @@ enum sharedDefs = q{
                     string code =
                     "  static if ((__traits(compiles, isFunctionPointer!(" ~ useType ~ ")) && isFunctionPointer!(" ~ useType ~ "))"
                     "  || is(" ~ useType ~ " == delegate)) {\n"
-                    "    _repl_.symbols[" ~ index.to!string ~ "].v.func = true;\n"
+                    "    " ~ sym(index) ~ ".v.func = true;\n"
                     "    " ~ useType ~ "* " ~ name ~ ";\n";
 
                     if (init != "null")
@@ -78,11 +86,8 @@ enum sharedDefs = q{
                     "  auto ", name, " = ", init, ";\n",
                     "}\n");
 
-                    put(c.prefix, test, "\n  _repl_.symbols[", index.to!string, "].v.type = _REPL.NewTypeof!(q{",
+                    put(c.prefix, test, "\n  " ~ sym(index) ~ ".v.type = _REPL.NewTypeof!(q{",
                         init, "})(", init, ").idup;\n");
-                    put(c.prefix, test, "\n  _repl_.symbols[", index.to!string, "].v.ty = _REPL.buildType!(typeof(*",
-                        name, "))(_repl_);\n");
-
                 }
                 else if (init.length > 0) // has type and initializer
                 {
@@ -100,29 +105,27 @@ enum sharedDefs = q{
                     test = "static if (true)";
 
                     put(c.prefix,
-                    generateFuncLitSection(type), " else {\n",
-                    type, "* ", name, " = _REPL.newType!(", type, ")(_repl_,",
-                    index.to!string, ");\n"
-                    "}\n");
+                        generateFuncLitSection(type), " else {\n",
+                        type, "* ", name, " = _REPL.newType!(", type, ")(_repl_,",
+                        index.to!string, ");\n"
+                        "}\n");
                 }
 
                 put(c.prefix, test, "{\n",
-                "  _repl_.symbols[", index.to!string, "].v.displayType = typeof(*", name, ").stringof.idup;\n",
-                "  if (!_repl_.symbols[", index.to!string, "].v.func) _expressionResult = _REPL.exprResult(\n*"~name~"\n);\n",
-                "}\n");
+                    "  " ~ sym(index) ~ ".v.displayType = typeof(*", name, ").stringof.idup;\n",
+                    "  if (!" ~ sym(index) ~ ".v.func) _expressionResult = _REPL.exprResult(\n*"~name~"\n);\n",
+                    "}\n");
 
                 put(c.suffix, test, "{\n"
-                "  if (_repl_.symbols[", index.to!string, "].v.func) {\n"
-                "    _repl_.symbols[", index.to!string, "].v.current = q{", init, "}.idup;\n"
-                "  } else {\n"
-                "    _repl_.symbols[", index.to!string, "].v.current = _REPL.currentVal(*", name, ");\n"
-                "}}\n"
-                   );
-
+                    "  if (" ~ sym(index) ~ ".v.func) {\n"
+                    "    " ~ sym(index) ~ ".v.current = q{", init, "}.idup;\n"
+                    "  } else {\n"
+                    "    " ~ sym(index) ~ ".v.ty = _REPL.buildType!(typeof(*",name, "))(_repl_);\n"
+                    "    " ~ sym(index) ~ ".v.current = _REPL.currentVal(*", name, ");\n"
+                    "}}\n");
             }
             else // var has already been created, just grab it
             {
-
                 if (func)
                 {
                     put(c.prefix, type, "* ", name, ";\n{\n");
@@ -136,7 +139,7 @@ enum sharedDefs = q{
                 else
                 {
                     put(c.prefix, "auto ", name, " = _REPL.getVar!(", type, ")(_repl_,", index.to!string, ");\n");
-                    put(c.suffix, "_repl_.symbols[", index.to!string, "].v.current = _REPL.currentVal(*", name, ");\n");
+                    put(c.suffix, sym(index) ~ ".v.current = _REPL.currentVal(*", name, ");\n");
                 }
             }
         }
@@ -233,28 +236,19 @@ enum sharedDefs = q{
 
         this(T)(T _x)
         {
-            static if (is(T == Var))
-            {
+            static if (is(T == Var)) {
                 v = _x;
                 type = Type.Var;
-            }
-            else static if (is(T == Alias))
-            {
+            } else static if (is(T == Alias)) {
                 a = _x;
                 type = Type.Alias;
-            }
-            else static if (is(T == Import))
-            {
+            } else static if (is(T == Import)) {
                 i = _x;
                 type = Type.Import;
-            }
-            else static if (is(T == Enum))
-            {
+            } else static if (is(T == Enum)) {
                 e = _x;
                 type = Type.Enum;
-            }
-            else static if (is(T == UserType))
-            {
+            } else static if (is(T == UserType)) {
                 u = _x;
                 type = Type.UserType;
             }
@@ -273,7 +267,7 @@ enum sharedDefs = q{
 
             if (first)
             {
-                c.suffix.put("_repl_.symbols["~index.to!string~"].valid = true;\n");
+                c.suffix.put(sym(index) ~ ".valid = true;\n");
                 first = false;
             }
         }
@@ -366,20 +360,7 @@ enum sharedDefs = q{
 
         Type* slice(ref void* absAddr, size_t a, size_t b)
         {
-            assert(isArray || isPointer);
-
-            if (isArray && a >= len(absAddr)) {
-                writeln("Out of bounds index: ", a);
-                return null;
-            }
-
-            if (isArray && b >= len(absAddr)) {
-                writeln("Out of bounds index: ", b);
-                return null;
-            }
-
-            absAddr = newBaseAddr(absAddr) + a * _ref.typeSize;
-            return _ref;
+            assert(false, "No support for slices.");
         }
 
         Type* member(ref void* absAddr, string name)
@@ -410,22 +391,53 @@ enum sharedDefs = q{
                 {
                     case Deref: currType = currType.deref(addr); break;
                     case Index: currType = currType.index(addr, i.val.to!size_t); break;
-                    case Slice: return null; break;
+                    case Slice: return ""; break;
                     case Member: currType = currType.member(addr, i.val); break;
-                    case Cast: currType = buildType(i.val, repl); if (!currType) return null; break;
+                    case Cast: currType = buildType(i.val, repl); if (currType is null) return "cast unsuccessful"; break;
                 }
             }
 
             if (currType !is null) {
-                if (trace) writeln("val: type is ", currType.toString());
+                if (trace) writeln("val: type is ", currType.typeName);
                 return currType.getMe(addr);
             }
             else
-                return "";
+                return "val: Null Type*";
+        }
+
+        string type(string expr, void* ptr, ref ReplContext repl)
+        {
+            string op;
+            return type(parseIt(expr, op), ptr, repl);
+        }
+
+        string type(Operation[] stack, void* ptr, ref ReplContext repl)
+        {
+            void* addr = null;
+            Type* currType = &this;
+            foreach(i; stack)
+            {
+                final switch(i.op) with(Op)
+                {
+                    case Deref: currType = currType.deref(addr); break;
+                    case Index: currType = currType.index(addr, i.val.to!size_t); break;
+                    case Slice: return ""; break;
+                    case Member: currType = currType.member(addr, i.val); break;
+                    case Cast: currType = buildType(i.val, repl); if (currType is null) return ""; break;
+                }
+            }
+
+            if (currType !is null) {
+                return currType.toString();
+            }
+            else
+                return "type: Null Type*";
         }
 
         string getMe(void* absAddr)
         {
+            if (trace) writeln("GetMe: ", this.typeName);
+
             enum types = ["byte", "ubyte", "char", "dchar", "wchar",
                           "short", "ushort", "int", "uint", "long", "ulong",
                           "float", "double", "real"];
@@ -452,12 +464,15 @@ enum sharedDefs = q{
 
                 if (trace) writeln("getMe: isAggregate, ", this.toString());
 
-                string s = typeName ~ "(";
-                auto keys = _object.keys;
-                auto vals = _object.values;
+                // these byKey, byVal version are necessary, probably a bug
+                auto keys = _object.byKey.array();
+                auto vals = _object.byValue.array();
+
+                // index the AA by increasing data offset
                 auto index = new size_t[vals.length];
                 makeIndex!("a.offset < b.offset")(vals, index);
 
+                string s = typeName ~ "(";
                 foreach(count, idx; index)
                 {
                     s ~= vals[idx].type.getMe(absAddr + vals[idx].offset);
@@ -512,8 +527,8 @@ enum sharedDefs = q{
                 if (expand)
                 {
                     s ~= "(";
-                    auto keys = _object.keys;
-                    auto vals = _object.values;
+                    auto keys = _object.byKey.array();
+                    auto vals = _object.byValue.array();
                     auto index = new size_t[vals.length];
                     makeIndex!("a.offset < b.offset")(vals, index);
 
@@ -760,7 +775,7 @@ enum sharedDefs = q{
 
     bool isIdentChar(dchar c)
     {
-        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+        return (c == '_') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
     }
 
     Operation[] parseIt(ref string s, out string operand)
@@ -825,7 +840,6 @@ enum sharedDefs = q{
         bool expect(ref string s, string e) {
             skipWhite(s);
             if (s.length < e.length) {
-                writeln("Expected ", e, " but input ended.");
                 return false;
             }
             else
@@ -883,8 +897,7 @@ enum sharedDefs = q{
 
                 case '.':
                     s.popFront();
-                    while(!s.empty && s.front == ' ')
-                        s.popFront();
+                    skipWhite(s);
                     if (!s.empty && !isIdentChar(s.front))
                         writeln("Error: expected ident after .");
                     else
@@ -936,16 +949,24 @@ enum sharedDefs = q{
     struct ReplContext
     {
         import std.typecons;
-        Tuple!(string,"filename",string,"tempPath",string,"fullName") paths;
+
+        Tuple!(string,"filename",
+               string,"tempPath",
+               string,"fullName") paths;
+
         Symbol[] symbols;
         long[string] symbolSet;
+
         Vtbl[] vtbls;
         string vtblFixup;
-        uint debugLevel = Debug.none;
-        Tuple!(void*,void*) imageBounds; /// memory bounds of the dll image
-        Type*[string] map;
-        void* gc;
 
+        uint debugLevel = Debug.none;
+
+        Tuple!(void*,void*) imageBounds; /// memory bounds of the dll image
+        Type*[string] map; /// map used by typeBuilder and friends
+        void* gc; /// host gc instance
+
+        /// Reset a REPL session
         void reset()
         {
             symbols.clear;
@@ -957,4 +978,5 @@ enum sharedDefs = q{
 };
 
 mixin(sharedDefs);
+
 

@@ -30,6 +30,9 @@ ReplContext newContext(string filename = "replDll", uint debugLevel = Debug.none
     repl.paths.fullName = repl.paths.tempPath ~ dirSeparator ~ filename;
     repl.debugLevel = debugLevel;
     repl.gc = gc_getProxy();
+
+    buildBasicTypes(repl);
+
     return repl;
 }
 
@@ -55,7 +58,7 @@ void loop(ref ReplContext repl)
         inBuffer = strip(inBuffer);
 
         // Try to handle meta command, else assume input is code
-        if (!handleMetaCommand(repl, inBuffer, codeBuffer))
+        if (inBuffer.length && !handleMetaCommand(repl, inBuffer, codeBuffer))
         {
             codeBuffer ~= inBuffer ~ "\n";
             Parser.braceCount = 0;
@@ -136,24 +139,29 @@ bool handleMetaCommand(ref ReplContext repl,
             }
             else // print selected symbols
             {
-                /++
-                foreach(s; repl.symbols)
+                foreach(a; args)
                 {
-                    if (s.type == Symbol.Type.Var && canFind(args, s.v.name))
-                        writeln(s.v.ty.val());
+                    string op;
+                    auto expr = parseIt(a, op);
+                    foreach(s; repl.symbols)
+                        if (s.type == Symbol.Type.Var && s.v.name == op)
+                            writeln(s.v.ty.val(expr, s.v.addr, repl));
                 }
-                ++/
+                break;
             }
             break;
         }
 
-        case "view":
+        case "type":
         {
-            string op;
-            auto expr = parseIt(parse.children[1].matches[0], op);
-            foreach(s; repl.symbols)
-                if (s.type == Symbol.Type.Var && s.v.name == op)
-                    writeln(s.v.ty.val(expr, s.v.addr, repl));
+            foreach(a; args)
+            {
+                string op;
+                auto expr = parseIt(a, op);
+                foreach(s; repl.symbols)
+                    if (s.type == Symbol.Type.Var && s.v.name == op)
+                        writeln(s.v.ty.type(expr, s.v.addr, repl));
+            }
             break;
         }
 
@@ -268,10 +276,15 @@ bool eval(string code,
         return res;
     }
 
-    if (repl.debugLevel & Debug.stages)
-        writeln("PARSE...");
+    if (repl.debugLevel & Debug.stages) writeln("PARSE...");
 
     auto text = timeIt!(Parser.go)(code, repl, sw, times.parse);
+
+    if (Parser.error.length != 0)
+    {
+        writeln(Parser.error);
+        return false;
+    }
 
     if (repl.debugLevel & Debug.parseOnly)
     {
@@ -281,12 +294,6 @@ bool eval(string code,
 
     if (text[0].length == 0 && text[1].length == 0)
         return true;
-
-    if (Parser.error.length != 0)
-    {
-        writeln(error);
-        return false;
-    }
 
     if (text[1].length && repl.debugLevel & Debug.print)
     {
@@ -302,8 +309,7 @@ bool eval(string code,
         text[1] = str;
     }
 
-    if (repl.debugLevel & Debug.stages)
-        writeln("BUILD...");
+    if (repl.debugLevel & Debug.stages) writeln("BUILD...");
 
     auto build = timeIt!build(text, repl, error, sw, times.build);
 
@@ -314,8 +320,7 @@ bool eval(string code,
         return false;
     }
 
-    if (repl.debugLevel & Debug.stages)
-        writeln("CALL...");
+    if (repl.debugLevel & Debug.stages) writeln("CALL...");
 
     auto call = timeIt!call(repl, error, sw, times.call);
 

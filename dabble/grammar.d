@@ -144,17 +144,16 @@ ReplParse:
 
 enum string metaParser = `
 
-    MetaCommand <- MetaPrint (MetaArgs)?
+    MetaCommand <- MetaPrint MetaArgs?
+                 / MetaType MetaArgs?
                  / MetaDelete MetaArgs
                  / MetaReset MetaArgs
                  / MetaDebugOn MetaArgs
                  / MetaDebugOff MetaArgs
                  / MetaClear
-                 / MetaView :wx MetaViewArg
 
     MetaPrint    <- 'print'
-    MetaView     <- 'view'
-    MetaViewArg  <- ~((!endOfLine .)*)
+    MetaType     <- 'type'
     MetaDelete   <- 'delete'
     MetaReset    <- 'reset'
     MetaDebugOn  <~ ('debug' wx 'on')
@@ -162,7 +161,7 @@ enum string metaParser = `
     MetaClear    <- 'clear'
 
     MetaArgs <- (wxd Seq(MetaArg, ','))
-    MetaArg  <- Ident
+    MetaArg  <- ~((!(endOfLine / ',') .)*)
 
 `;
 
