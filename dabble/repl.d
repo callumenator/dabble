@@ -136,12 +136,24 @@ bool handleMetaCommand(ref ReplContext repl,
             }
             else // print selected symbols
             {
+                /++
                 foreach(s; repl.symbols)
                 {
                     if (s.type == Symbol.Type.Var && canFind(args, s.v.name))
-                        writeln(s);
+                        writeln(s.v.ty.val());
                 }
+                ++/
             }
+            break;
+        }
+
+        case "view":
+        {
+            string op;
+            auto expr = parseIt(parse.children[1].matches[0], op);
+            foreach(s; repl.symbols)
+                if (s.type == Symbol.Type.Var && s.v.name == op)
+                    writeln(s.v.ty.val(expr, s.v.addr, repl));
             break;
         }
 

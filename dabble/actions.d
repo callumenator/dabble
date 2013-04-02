@@ -45,6 +45,7 @@ static:
             code.prefix.data ~
             genCode(p) ~
             code.suffix.data ~
+            "writeln(_repl_.map);" ~
             "if (_expressionResult.length == 0) _expressionResult = `OK`; writeln(`=> `, _expressionResult);\n";
 
         return tuple(code.header.data, inBody);

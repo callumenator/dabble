@@ -144,8 +144,11 @@ ReplParse:
                  / MetaDebugOn MetaArgs
                  / MetaDebugOff MetaArgs
                  / MetaClear
+                 / MetaView :wx MetaViewArg
 
     MetaPrint    <- 'print'
+    MetaView     <- 'view'
+    MetaViewArg  <- ~((!endOfLine .)*)
     MetaDelete   <- 'delete'
     MetaReset    <- 'reset'
     MetaDebugOn  <~ ('debug' wx 'on')
@@ -309,6 +312,8 @@ struct GenericReplParse(TParseTree)
         rules["ExpRewrite"] = toDelegate(&ReplParse.ExpRewrite);
         rules["MetaCommand"] = toDelegate(&ReplParse.MetaCommand);
         rules["MetaPrint"] = toDelegate(&ReplParse.MetaPrint);
+        rules["MetaView"] = toDelegate(&ReplParse.MetaView);
+        rules["MetaViewArg"] = toDelegate(&ReplParse.MetaViewArg);
         rules["MetaDelete"] = toDelegate(&ReplParse.MetaDelete);
         rules["MetaReset"] = toDelegate(&ReplParse.MetaReset);
         rules["MetaDebugOn"] = toDelegate(&ReplParse.MetaDebugOn);
@@ -1314,16 +1319,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree MetaCommand(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), MetaClear), "ReplParse.MetaCommand")(p);
+            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), MetaClear, pegged.peg.and!(MetaView, pegged.peg.discard!(wx), MetaViewArg)), "ReplParse.MetaCommand")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), MetaClear), "ReplParse.MetaCommand"), "MetaCommand")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), MetaClear, pegged.peg.and!(MetaView, pegged.peg.discard!(wx), MetaViewArg)), "ReplParse.MetaCommand"), "MetaCommand")(p);
     }
     static TParseTree MetaCommand(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), MetaClear), "ReplParse.MetaCommand")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), MetaClear, pegged.peg.and!(MetaView, pegged.peg.discard!(wx), MetaViewArg)), "ReplParse.MetaCommand")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), MetaClear), "ReplParse.MetaCommand"), "MetaCommand")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), MetaClear, pegged.peg.and!(MetaView, pegged.peg.discard!(wx), MetaViewArg)), "ReplParse.MetaCommand"), "MetaCommand")(TParseTree("", false,[], s));
     }
     static string MetaCommand(GetName g)
     {
@@ -1347,6 +1352,44 @@ struct GenericReplParse(TParseTree)
     static string MetaPrint(GetName g)
     {
         return "ReplParse.MetaPrint";
+    }
+
+    static TParseTree MetaView(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.literal!("view"), "ReplParse.MetaView")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.literal!("view"), "ReplParse.MetaView"), "MetaView")(p);
+    }
+    static TParseTree MetaView(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.literal!("view"), "ReplParse.MetaView")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.literal!("view"), "ReplParse.MetaView"), "MetaView")(TParseTree("", false,[], s));
+    }
+    static string MetaView(GetName g)
+    {
+        return "ReplParse.MetaView";
+    }
+
+    static TParseTree MetaViewArg(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(endOfLine), pegged.peg.any))), "ReplParse.MetaViewArg")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(endOfLine), pegged.peg.any))), "ReplParse.MetaViewArg"), "MetaViewArg")(p);
+    }
+    static TParseTree MetaViewArg(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(endOfLine), pegged.peg.any))), "ReplParse.MetaViewArg")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(endOfLine), pegged.peg.any))), "ReplParse.MetaViewArg"), "MetaViewArg")(TParseTree("", false,[], s));
+    }
+    static string MetaViewArg(GetName g)
+    {
+        return "ReplParse.MetaViewArg";
     }
 
     static TParseTree MetaDelete(TParseTree p)
