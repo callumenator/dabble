@@ -71,10 +71,14 @@ extern(C) void hookNewClass(TypeInfo_Class ti, void* cptr, ReplContext* repl, bo
 */
 string genHeader()
 {
-    void* prox = gc_getProxy();
-
     return
 `
+
+
+
+
+// ################################################################################
+
     import std.stdio, std.conv, std.range, std.algorithm, std.traits, std.typecons;
     import std.c.stdio, std.c.string, std.c.stdlib, std.c.windows.windows;
     import core.sys.windows.dll, core.runtime, core.memory;
@@ -330,7 +334,7 @@ string genHeader()
             }
         }
 
-    }
+    }  // end of _REPL struct
 
     extern (C) Object _d_newclass(const ClassInfo ci)
     {

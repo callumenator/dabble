@@ -355,7 +355,7 @@ bool build(Tuple!(string,string) code,
         "}\n";
 
     auto file = File(repl.paths.fullName ~ ".d", "w");
-    file.write(genHeader() ~ text);
+    file.write(text ~ genHeader());
     file.close();
 
     scope(exit) task!cleanup(repl).executeInNewThread();
