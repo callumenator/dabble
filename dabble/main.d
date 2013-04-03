@@ -12,11 +12,14 @@ import
 
 void main(char[][] args)
 {
+    auto a = RefCounted!int(5);
+
     auto repl = newContext();
 
     parseArgs(repl, args[1..$]);
 
-    //repl = stress(repl);
+    //repl = stress();
+    repl = run(["import std.typecons;", "auto a = RefCounted!int(5);", "writeln(a);"]);
 
     loop(repl);
 
@@ -37,7 +40,7 @@ void parseArgs(ref ReplContext repl, char[][] args)
     }
 }
 
-ReplContext stress(ref ReplContext repl)
+ReplContext stress()
 {
     return run([
     "err0 = `1.2`.to!int;",
@@ -82,7 +85,7 @@ ReplContext stress(ref ReplContext repl)
 ReplContext run(string[] code, uint debugLevel = 0)
 {
     auto repl = newContext("replDll", debugLevel);
-
+    repl.debugLevel |= Debug.print;
     string err;
     foreach(i, c; code)
     {

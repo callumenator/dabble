@@ -23,6 +23,7 @@ extern(C) void* gc_getProxy();
 ReplContext newContext(string filename = "replDll", uint debugLevel = Debug.none)
 {
     import std.path : dirSeparator;
+    import std.file : exists;
 
     ReplContext repl;
     repl.paths.filename = filename;
@@ -32,6 +33,12 @@ ReplContext newContext(string filename = "replDll", uint debugLevel = Debug.none
     repl.gc = gc_getProxy();
 
     buildBasicTypes(repl);
+
+    // Check for the defs.lib, build if absent
+    string error;
+    attempt(repl, "cd " ~ repl.paths.tempPath ~ " & "
+            "dmd -lib c:/cal/d/dsource/dabble/dabble/defs.d", error);
+
 
     return repl;
 }
@@ -217,12 +224,14 @@ bool handleMetaCommand(ref ReplContext repl,
 */
 void setDebugLevel(string s)(ref ReplContext repl, string level) if (s == "on" || s == "off")
 {
+    import std.string;
+
     static if (s == "on")
         enum string op = "repl.debugLevel |= ";
     else static if (s == "off")
         enum string op = "repl.debugLevel &= ~";
 
-    switch(level)
+    switch(toLower(level))
     {
         case "times": goto case "showTimes";
         case "showTimes": mixin(op ~ "Debug.times;"); break;
@@ -295,20 +304,6 @@ bool eval(string code,
     if (text[0].length == 0 && text[1].length == 0)
         return true;
 
-    if (text[1].length && repl.debugLevel & Debug.print)
-    {
-        auto lines = splitter(text[1], ";");
-        string str;
-        uint index;
-        while(!lines.empty)
-        {
-            str ~= lines.front ~ "; writeln(`" ~ index.to!string ~ "`);";
-            lines.popFront();
-            index ++;
-        }
-        text[1] = str;
-    }
-
     if (repl.debugLevel & Debug.stages) writeln("BUILD...");
 
     auto build = timeIt!build(text, repl, error, sw, times.build);
@@ -342,6 +337,24 @@ bool eval(string code,
 }
 
 
+bool attempt(ReplContext repl, string cmd, out string err)
+{
+    import std.process : system;
+    import std.file : exists, readText;
+
+    auto res = system(cmd ~ " 2> errout.txt");
+
+    if (res != 0)
+    {
+        auto errFile = repl.paths.tempPath ~ "errout.txt";
+        if (exists(errFile))
+            err = parseError(repl, readText(errFile));
+        return false;
+    }
+    return true;
+}
+
+
 /**
 * Build a shared lib from supplied code.
 */
@@ -355,9 +368,17 @@ bool build(Tuple!(string,string) code,
     import std.process : system, escapeShellFileName;
     import std.parallelism : task;
 
+    /++
+    if (defsText.length == 0)
+    {
+        defsText = readText("c:/cal/d/dsource/dabble/dabble/defs.d");
+        defsText = findSplitAfter(defsText, "//---// begin defs //---//")[1];
+        defsText = findSplitBefore(defsText, "//---// end defs //---//")[0];
+    }++/
+
     auto text =
         code[0] ~
-        "export extern(C) int _main(ref _REPL.ReplContext _repl_)\n"
+        "\n\nexport extern(C) int _main(ref _REPL.ReplContext _repl_)\n"
         "{\n" ~
         "    gc_setProxy(_repl_.gc);\n" ~
         "    import std.exception;\n" ~
@@ -391,23 +412,8 @@ bool build(Tuple!(string,string) code,
         file.close();
     }
 
-
-    bool attempt(string cmd, out string err)
-    {
-        auto res = system(cmd ~ " 2> errout.txt");
-
-        if (res != 0)
-        {
-            auto errFile = repl.paths.tempPath ~ "errout.txt";
-            if (exists(errFile))
-                err = parseError(repl, readText(errFile));
-            return false;
-        }
-        return true;
-    }
-
     string cmd = "cd " ~ escapeShellFileName(repl.paths.tempPath) ~
-                 " & dmd " ~ repl.paths.filename ~ ".d " ~ repl.paths.filename ~ ".def";
+                 " & dmd -Ic:/cal/d/dsource/dabble " ~ repl.paths.filename ~ ".d " ~ repl.paths.filename ~ ".def defs.lib";
 
     /++
     auto includes = std.array.join(repl.includes, ".d ");
@@ -420,7 +426,7 @@ bool build(Tuple!(string,string) code,
     }
     ++/
 
-    if (!attempt(cmd, error))
+    if (!attempt(repl, cmd, error))
         return false;
 
     return true;
@@ -466,7 +472,6 @@ CallResult call(ref ReplContext repl,
     import core.memory : GC;
 
     static SharedLib lastLib; // XP hack
-
     alias extern(C) int function(ref ReplContext) funcType;
 
     auto lib = SharedLib(repl.paths.fullName ~ ".dll");
