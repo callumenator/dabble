@@ -41,10 +41,10 @@ static:
 
         auto inBody =
             "string _expressionResult;\n" ~
-            repl.vtblFixup ~ "writeln(`A`);\n" ~
-            code.prefix.data ~ "writeln(_expressionResult);\n" ~
-            genCode(p) ~ "writeln(`C`);\n" ~
-            code.suffix.data ~ "writeln(`D`);\n" ~
+            repl.vtblFixup ~
+            code.prefix.data ~
+            genCode(p) ~
+            code.suffix.data ~
             "if (_expressionResult.length == 0) _expressionResult = `OK`; writeln(`=> `, _expressionResult);\n";
 
         return tuple(code.header.data, inBody);

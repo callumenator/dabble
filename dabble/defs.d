@@ -52,37 +52,27 @@ void fixUp()
     _tls_index ++;
 }
 
-T* newType(T)(ref ReplContext repl, size_t index)
+void* newType(T)(ref ReplContext repl, size_t index)
 {
     T t = T.init;
-    auto ptr = heap(t);
-    repl.symbols[index].v.addr = ptr;
-    return ptr;
+    return newExpr(t);
 }
 
-auto newExpr(string S, E)(ref ReplContext repl, size_t index, lazy E expr)
+void* newExpr(E)(lazy E expr)
 {
-    static if (__traits(compiles, mixin("{ auto _ = new " ~ S ~ ";}")))
+    static if (__traits(compiles, typeof(expr())))
     {
-        mixin("auto ptr = new " ~ S ~ ";");
-        repl.symbols[index].v.addr = ptr;
-        return ptr;
+        alias typeof(expr()) T;
+
+        static if (is(T == class))
+            auto mem = new void[](__traits(classInstanceSize, T));
+        else
+            auto mem = new void[](T.sizeof);
+
+        return mem;
     }
     else
-    {
-        typeof(expr) t = expr();
-        auto ptr = heap(t);
-        repl.symbols[index].v.addr = ptr;
-        return ptr;
-    }
-}
-
-auto newExpr(string S, T...)(ref ReplContext repl, size_t index, T _t) // for tuples
-{
-    mixin("Tuple!" ~ T.stringof ~ " t;");
-    auto ptr = heap(t);
-    repl.symbols[index].v.addr = ptr;
-    return ptr;
+        static assert(0);
 }
 
 T* heap(T)(T init)
@@ -117,7 +107,6 @@ T* getVar(T)(ReplContext repl, size_t index)
 
 string exprResult(E)(lazy E expr)
 {
-    writeln("ExprResult in");
     import std.container;
 
     static if (__traits(compiles, typeof(expr)))
@@ -142,8 +131,6 @@ string exprResult(E)(lazy E expr)
 string currentVal(T)(ref T val)
 {
     import std.traits;
-
-    writeln("Current val");
 
     string current;
     static if (is(T _ : U[], U))
@@ -210,8 +197,6 @@ template needsDup(T)
 
 void stringDup(T)(ref T t, void* start, void* stop)
 {
-    writeln("String dup, ", T.stringof);
-
     static if (!needsDup!T)
         return;
 
@@ -320,7 +305,14 @@ struct Var
                 put(c.prefix,
                     test, "{\n",
                     generateFuncLitSection("typeof("~init~")"), " else {\n",
-                    "  auto ", name, " = _REPL.newExpr!(q{", init, "})(_repl_,", index.to!string, ", ", init, ");\n",
+                    "    " ~ sym(index) ~ ".v.addr =  _REPL.newExpr(", init, ");\n",
+                    "    static if (__traits(compiles, ReturnType!(", init, "))) {\n"
+                    "      *cast(Unqual!(ReturnType!(",init,"))*)" ~ sym(index) ~ ".v.addr = ", init, ";\n"
+                    "      auto ", name, " = cast(ReturnType!(",init,")*)" ~ sym(index) ~ ".v.addr;\n"
+                    "    } else {\n"
+                    "      *cast(Unqual!(typeof(",init,"))*)" ~ sym(index) ~ ".v.addr = ", init, ";\n"
+                    "      auto ", name, " = cast(typeof(",init,")*)" ~ sym(index) ~ ".v.addr;\n"
+                    "    }\n"
                     "}} else {\n",
                     "  auto ", name, " = ", init, ";\n",
                     "}\n");
@@ -333,8 +325,9 @@ struct Var
                 test = "static if (__traits(compiles, { " ~ type ~ " " ~ name ~ " = " ~ init ~ ";}))";
 
                 put(c.prefix, test, "{\n",
-                    "  ", type, "* ", name, " = _REPL.newType!(", type, ")(_repl_,", index.to!string, ");\n",
-                    "  (*", name, ") = ", init, ";\n",
+                    "  " ~ sym(index) ~ ".v.addr =  _REPL.newExpr(", init, ");\n",
+                    "  *cast(Unqual!(", type, ")*)(" ~ sym(index) ~ ".v.addr) = ", init, ";\n"
+                    "  ", type, "* ", name, " = cast(", type, "*)" ~ sym(index) ~ ".v.addr;\n"
                     "} else {\n",
                     "  ", type, " ", name, " = ", init, ";\n",
                     "}\n");
@@ -345,7 +338,7 @@ struct Var
 
                 put(c.prefix,
                     generateFuncLitSection(type), " else {\n",
-                    type, "* ", name, " = _REPL.newType!(", type, ")(_repl_,",
+                    type, "* ", name, " = cast(", type, "*)_REPL.newType!(", type, ")(_repl_,",
                     index.to!string, ");\n"
                     "}\n");
             }

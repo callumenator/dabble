@@ -12,14 +12,13 @@ import
 
 void main(char[][] args)
 {
-    auto a = RefCounted!int(5);
 
     auto repl = newContext();
 
     parseArgs(repl, args[1..$]);
 
-    //repl = stress();
-    repl = run(["import std.typecons;", "auto a = RefCounted!int(5);", "writeln(a);"]);
+    repl = stress();
+    //repl = run(["import std.container;", "a = appender!string;"]);
 
     loop(repl);
 
@@ -58,7 +57,6 @@ ReplContext stress()
     "foreach(i; iota(150)) { s ~= `x`;}",
     "writeln(s);",
     "writeln(classC);",
-    "s_tuple = structS.tupleof;",
     "s = s[0..$-20];"
     "writeln(s);",
     "aa = [`one`:1, `two`:2, `three`:3, `four`:4];",

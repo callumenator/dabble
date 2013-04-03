@@ -75,7 +75,7 @@ string genHeader()
 `
 // ################################################################################
 
-    import std.stdio, std.conv, std.algorithm, std.range, std.typecons, std.typetuple;
+    import std.stdio, std.conv, std.algorithm, std.range, std.typecons, std.typetuple, std.traits;
     import core.sys.windows.dll, core.runtime, core.memory;
     import std.c.string, std.c.stdlib, std.c.windows.windows;
 
