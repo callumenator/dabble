@@ -145,7 +145,6 @@ static:
     {
         if (t.successful)
             t.matches[0] = "(" ~ t.matches[0] ~ ")";
-
         return t;
     }
 
@@ -157,7 +156,12 @@ static:
         if (t.successful && t.matches.length)
         {
             t = ReplParse.decimateTree(t);
-            t.matches[0] = "_expressionResult = _REPL.exprResult(\n"~t.matches[0]~"\n);\n";
+
+            t.matches[0] = "\nstatic if (__traits(compiles, typeof("~t.matches[0]~")) "
+                           "&& !is(typeof("~t.matches[0]~") == void))\n"
+                           "   _expressionResult = _REPL.exprResult(\n"~t.matches[0]~"\n);\n"
+                           "else\n"
+                           "   " ~ t.matches[0] ~ ";\n\n";
         }
         return t;
     }

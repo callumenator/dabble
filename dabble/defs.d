@@ -97,25 +97,8 @@ T* getVar(T)(ReplContext repl, size_t index)
 
 string exprResult(E)(lazy E expr)
 {
-    import std.container;
-
-    static if (__traits(compiles, typeof(expr)))
-    {
-        static if (is(typeof(expr) == void))
-        {
-            expr();
-            return "";
-        }
-        else
-        {
-            static if (is(typeof(expr()) _ == Array!U, U))
-                return "";
-            else {
-                auto temp = expr();
-                return temp.to!string;
-            }
-        }
-    }
+    auto temp = expr();
+    return temp.to!string;
 }
 
 string currentVal(T)(ref T val)
