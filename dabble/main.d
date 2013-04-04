@@ -9,17 +9,15 @@ import
     dabble.parser,
     dabble.repl;
 
+import std.container, std.traits;
 
 void main(char[][] args)
 {
-
     auto repl = newContext();
 
     parseArgs(repl, args[1..$]);
 
     repl = stress();
-    //repl = run(["import std.container;", "a = appender!string;"]);
-
     loop(repl);
 
     return;
@@ -45,45 +43,53 @@ ReplContext stress()
     "err0 = `1.2`.to!int;",
     "struct S {int x, y = 5; }",
     "structS = S();",
-    "a = [1,2,3,4];",
-    "b = a.sort;",
-    "c = b;",
-    "c.reverse;",
-    "foreach(ref i; c) i++;",
+    "arr0 = [1,2,3,4];",
+    "arr1 = arr0.sort;",
+    "arr2 = arr1;",
+    "arr2.reverse;",
+    "foreach(ref i; arr2) i++;",
+    "writeln(arr2);",
     "writeln(structS);",
     "class C { int a; string b; }",
     "classC = new C;",
-    "s = `hello there`;",
-    "foreach(i; iota(150)) { s ~= `x`;}",
-    "writeln(s);",
+    "str0 = `hello there`;",
+    "foreach(i; iota(150)) { str0 ~= `x`;}",
+    "writeln(str0);",
     "writeln(classC);",
-    "s = s[0..$-20];"
-    "writeln(s);",
-    "aa = [`one`:1, `two`:2, `three`:3, `four`:4];",
-    "writeln(aa[`two`]);",
-    "writeln(aa);",
-    "writeln(a);",
+    "str0 = str0[0..$-20];"
+    "writeln(str0);",
+    "aa0 = [`one`:1, `two`:2, `three`:3, `four`:4];",
+    "writeln(aa0[`two`]);",
+    "writeln(aa0);",
+    "writeln(arr0);",
     "enum Enum { one, two = 5, three = 7 }",
     "ee = Enum.two;",
     "write(ee, \"\n\");",
-    "ii = 0;",
-    "for(auto i=0; i<50; i++) ii++;",
+    "int0 = 0;",
+    "for(auto i=0; i<50; i++) int0++;",
     "import std.array;",
-    "app = appender!string;",
-    "for(auto i=0; i<50; i++) app.put(`blah`);",
-    "writeln(app.data);",
+    "app0 = appender!string;",
+    "for(auto i=0; i<50; i++) app0.put(`blah`);",
+    "writeln(app0.data);",
     "import std.container;",
-    "ar = Array!int(4, 6, 2, 3, 8, 0, 2);",
-    "foreach(val; ar[]){ writeln(val); }",
+    "arr3 = Array!int(4, 6, 2, 3, 8, 0, 2);",
+    "foreach(val; arr3[]){ writeln(val); }",
     "int foo(int i) { return 5*i + 1; }",
-    "foo(100);"
+    "foo(100);",
+    "immutable int int1 = 45;",
+    "const(int) int2 = foo(3);",
+    "Array!int arr4;",
+    "arr4 ~= [1,2,3,4];",
+    "writeln(arr4[]);",
+    "T boo(T)(T t) { return T.init; }",
+    "short0 = boo(cast(short)5);",
     ]);
 }
 
 ReplContext run(string[] code, uint debugLevel = 0)
 {
     auto repl = newContext("replDll", debugLevel);
-    repl.debugLevel |= Debug.print;
+    repl.debugLevel |= Debug.times;
     string err;
     foreach(i, c; code)
     {

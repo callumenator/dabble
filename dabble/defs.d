@@ -52,7 +52,7 @@ void fixUp()
     _tls_index ++;
 }
 
-void* newType(T)(ref ReplContext repl, size_t index)
+void* newType(T)()
 {
     T t = T.init;
     return newExpr(t);
@@ -73,16 +73,6 @@ void* newExpr(E)(lazy E expr)
     }
     else
         static assert(0);
-}
-
-T* heap(T)(T init)
-{
-    import core.memory, std.c.string;
-    auto ptr = GC.calloc(T.sizeof);
-    GC.disable();
-    memcpy(ptr, &init, T.sizeof);
-    GC.enable();
-    return cast(T*)ptr;
 }
 
 string NewTypeof(string S, E)(lazy E expr)
@@ -230,12 +220,29 @@ void stringDup(T)(ref T t, void* start, void* stop)
         foreach(f; t.tupleof)
         {
             auto addr =  baseAddr + offset;
-            stringDup((*(cast(typeof(f)*)addr)), start, stop);
+            static if ( (is(typeof(f) == class) || isPointer!(typeof(f))) )
+            {
+                if (f !is null)
+                    stringDup((*(cast(typeof(f)*)addr)), start, stop);
+            }
+            else
+            {
+                stringDup((*(cast(typeof(f)*)addr)), start, stop);
+            }
+
             offset += f.sizeof;
         }
     }
 }
 
+
+template TypeOf(T)
+{
+    static if (__traits(compiles, {ReturnType!T _;}))
+        alias ReturnType!T TypeOf;
+    else
+        alias T TypeOf;
+}
 
 /**
 * Return the mixin string to access a symbol by index.
@@ -306,13 +313,8 @@ struct Var
                     test, "{\n",
                     generateFuncLitSection("typeof("~init~")"), " else {\n",
                     "    " ~ sym(index) ~ ".v.addr =  _REPL.newExpr(", init, ");\n",
-                    "    static if (__traits(compiles, ReturnType!(", init, "))) {\n"
-                    "      *cast(Unqual!(ReturnType!(",init,"))*)" ~ sym(index) ~ ".v.addr = ", init, ";\n"
-                    "      auto ", name, " = cast(ReturnType!(",init,")*)" ~ sym(index) ~ ".v.addr;\n"
-                    "    } else {\n"
-                    "      *cast(Unqual!(typeof(",init,"))*)" ~ sym(index) ~ ".v.addr = ", init, ";\n"
-                    "      auto ", name, " = cast(typeof(",init,")*)" ~ sym(index) ~ ".v.addr;\n"
-                    "    }\n"
+                    "    *cast(Unqual!(_REPL.TypeOf!(typeof(",init,")))*)" ~ sym(index) ~ ".v.addr = ", init, ";\n"
+                    "    auto ", name, " = cast(_REPL.TypeOf!(typeof(",init,"))*)" ~ sym(index) ~ ".v.addr;\n"
                     "}} else {\n",
                     "  auto ", name, " = ", init, ";\n",
                     "}\n");
@@ -338,8 +340,8 @@ struct Var
 
                 put(c.prefix,
                     generateFuncLitSection(type), " else {\n",
-                    type, "* ", name, " = cast(", type, "*)_REPL.newType!(", type, ")(_repl_,",
-                    index.to!string, ");\n"
+                    type, "* ", name, " = cast(", type, "*)_REPL.newType!(", type, ");\n",
+                    sym(index) ~ ".v.addr = cast(void*)", name, ";\n"
                     "}\n");
             }
 
@@ -662,8 +664,8 @@ struct Type
         {
             final switch(i.op) with(Op)
             {
-                case Deref: currType = currType.deref(addr); break;
-                case Index: currType = currType.index(addr, i.val.to!size_t); break;
+                case Deref: currType = currType._ref; break;
+                case Index: currType = currType._ref; break;
                 case Slice: return ""; break;
                 case Member: currType = currType.member(addr, i.val); break;
                 case Cast: currType = buildType(i.val, repl); if (currType is null) return ""; break;
@@ -672,6 +674,7 @@ struct Type
 
         if (currType !is null)
         {
+            writeln(currType.typeName);
             return currType.toString();
         }
         else
@@ -1170,7 +1173,7 @@ Operation[] parseIt(ref string s, out string operand)
                 if (!s.empty && !isIdentChar(s.front))
                     writeln("Error: expected ident after .");
                 else
-                    flush(Operation(Op.Member, grabIdent(s, true)));
+                    flush(Operation(Op.Member, grabIdent(s)));
                 break;
 
             case '_':
