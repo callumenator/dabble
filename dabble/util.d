@@ -79,7 +79,7 @@ string genHeader()
     import core.sys.windows.dll, core.runtime, core.memory;
     import std.c.string, std.c.stdlib, std.c.windows.windows;
 
-    import _REPL = dabble.defs;
+    import _REPL = defs;
 
     extern (C) void gc_setProxy(void*);
 

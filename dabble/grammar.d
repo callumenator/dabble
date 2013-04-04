@@ -150,12 +150,14 @@ enum string metaParser = `
                  / MetaReset MetaArgs
                  / MetaDebugOn MetaArgs
                  / MetaDebugOff MetaArgs
+                 / MetaUse MetaArgs
                  / MetaClear
 
     MetaPrint    <- 'print'
     MetaType     <- 'type'
     MetaDelete   <- 'delete'
     MetaReset    <- 'reset'
+    MetaUse      <- 'use'
     MetaDebugOn  <~ ('debug' wx 'on')
     MetaDebugOff <~ ('debug' wx 'off')
     MetaClear    <- 'clear'

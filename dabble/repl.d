@@ -23,7 +23,7 @@ extern(C) void* gc_getProxy();
 ReplContext newContext(string filename = "replDll", uint debugLevel = Debug.none)
 {
     import std.path : dirSeparator;
-    import std.file : exists;
+    import std.file : readText, exists;
 
     ReplContext repl;
     repl.paths.filename = filename;
@@ -34,12 +34,10 @@ ReplContext newContext(string filename = "replDll", uint debugLevel = Debug.none
 
     buildBasicTypes(repl);
 
-    // Check for the defs.lib, build if absent
+    // Build defs.lib - always rebuilds, in case defs.lib has changed.
     string error;
-    attempt(repl, "cd " ~ repl.paths.tempPath ~ " & "
-            "dmd -lib c:/cal/d/dsource/dabble/dabble/defs.d", error);
-
-
+    dabble.defs.writeModule(repl.paths.tempPath ~ "defs.d");
+    attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -lib defs.d", error, repl.paths.tempPath ~ "defs.d");
     return repl;
 }
 
@@ -192,6 +190,19 @@ bool handleMetaCommand(ref ReplContext repl,
                     deleteVar(repl, a);
         }
 
+        case "use":
+        {
+            import std.path, std.datetime, std.traits;
+            import std.file : exists;
+            alias ElementType!(typeof(repl.userModules)) TupType;
+
+            foreach(a; args)
+                if (exists(a))
+                    repl.userModules ~= TupType(dirName(a), baseName(a), SysTime(0));
+                else
+                    writeln("Error: module ", a, " could not be found");
+        }
+
         case "debug on":
         {
             foreach(arg; args)
@@ -340,7 +351,7 @@ bool eval(string code,
 }
 
 
-bool attempt(ReplContext repl, string cmd, out string err)
+bool attempt(ReplContext repl, string cmd, out string err, string codeFilename)
 {
     import std.process : system;
     import std.file : exists, readText;
@@ -351,7 +362,7 @@ bool attempt(ReplContext repl, string cmd, out string err)
     {
         auto errFile = repl.paths.tempPath ~ "errout.txt";
         if (exists(errFile))
-            err = parseError(repl, readText(errFile));
+            err = parseError(repl, readText(errFile), codeFilename);
         return false;
     }
     return true;
@@ -370,14 +381,6 @@ bool build(Tuple!(string,string) code,
     import std.path : dirSeparator;
     import std.process : system, escapeShellFileName;
     import std.parallelism : task;
-
-    /++
-    if (defsText.length == 0)
-    {
-        defsText = readText("c:/cal/d/dsource/dabble/dabble/defs.d");
-        defsText = findSplitAfter(defsText, "//---// begin defs //---//")[1];
-        defsText = findSplitBefore(defsText, "//---// end defs //---//")[0];
-    }++/
 
     auto text =
         code[0] ~
@@ -415,23 +418,67 @@ bool build(Tuple!(string,string) code,
         file.close();
     }
 
-    string cmd = "cd " ~ escapeShellFileName(repl.paths.tempPath) ~
-                 " & dmd -Ic:/cal/d/dsource/dabble " ~ repl.paths.filename ~ ".d " ~ repl.paths.filename ~ ".def defs.lib";
+    auto dirChange = "cd " ~ escapeShellFileName(repl.paths.tempPath);
 
-    /++
-    auto includes = std.array.join(repl.includes, ".d ");
-    if (repl.includes.length > 0)
-    {
-        if (!attempt("dmd -lib -ofreplLib.lib " ~ includes, error))
-            return false;
+    string cmd = dirChange ~ " & dmd " ~ repl.paths.filename
+               ~ ".d " ~ repl.paths.filename ~ ".def defs.lib";
 
-        cmd ~= " replLib.lib";
-    }
-    ++/
-
-    if (!attempt(repl, cmd, error))
+    if (!buildUserModules(repl, error))
         return false;
 
+    if (repl.userModules.length > 0)
+    {
+        auto includePaths = repl.userModules.map!(a => "-I" ~ a[0]).join(" ");
+        cmd ~= " " ~ includePaths ~ " replLib.lib";
+    }
+
+    if (!attempt(repl, cmd, error, repl.paths.fullName ~ ".d"))
+        return false;
+
+    return true;
+}
+
+
+/**
+* Rebuild user modules into a lib to link with. Only rebuild files that have changed.
+*/
+bool buildUserModules(ReplContext repl,
+                      out string error)
+{
+    import std.datetime;
+    import std.path : dirSeparator, stripExtension;
+    import std.file : getTimes;
+
+    if (repl.userModules.length == 0)
+        return true;
+
+    auto allIncludes = repl.userModules.map!(a => "-I" ~ a[0]).join(" ");
+    bool rebuildLib = false;
+
+    foreach(ref m; repl.userModules)
+    {
+        auto fullPath = m[0]~dirSeparator~m[1];
+        SysTime access, modified;
+        getTimes(fullPath, access, modified);
+
+        if (modified == m.modified)
+            continue;
+
+        rebuildLib = true;
+        auto cmd = "cd " ~ repl.paths.tempPath ~ " & dmd -c " ~ allIncludes ~ " " ~ fullPath;
+
+        if (!attempt(repl, cmd, error, fullPath))
+            return false;
+
+        getTimes(fullPath, access, m.modified);
+    }
+
+    if (rebuildLib)
+    {
+        auto objs = repl.userModules.map!(a => stripExtension(a[1])~".obj").join(" ");
+        if (!attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -lib -ofreplLib.lib " ~ objs, error, ""))
+            return false;
+    }
     return true;
 }
 
@@ -515,11 +562,15 @@ CallResult call(ref ReplContext repl,
 * Do some processing on errors returned by DMD.
 */
 import std.range;
-string parseError(ReplContext repl, string error)
+string parseError(ReplContext repl, string error, string codeFilename)
 {
     import std.string : splitLines;
-    import std.file : readText;
+    import std.file : readText, exists;
     import std.regex;
+    import std.path : baseName;
+
+    if (!exists(codeFilename))
+        return error;
 
     if (error.length == 0)
         return "";
@@ -537,7 +588,12 @@ string parseError(ReplContext repl, string error)
     error = replace(error, regex(repl.paths.filename ~ ".", "g"), "");
 
     // Read the code, so we can refer to lines
-    auto code = splitLines(readText(repl.paths.fullName ~ ".d"));
+    auto code = splitLines(readText(codeFilename));
+
+
+    string filePrepend;
+    if (codeFilename != repl.paths.fullName ~ ".d")
+        filePrepend = "(" ~ baseName(codeFilename) ~ ")";
 
     string res;
     auto lines = splitLines(error);
@@ -553,7 +609,7 @@ string parseError(ReplContext repl, string error)
         {
             auto lineNumber = lnum.front.hit()[1..$-1].to!int - 1;
             if (lineNumber > 0 && lineNumber < code.length)
-                res ~= " < " ~ strip(deDereference(code[lineNumber])) ~ " >\n";
+                res ~= filePrepend ~ " < " ~ strip(deDereference(code[lineNumber])) ~ " >\n";
             else
                 writeln(error);
         }

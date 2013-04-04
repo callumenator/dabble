@@ -9,7 +9,6 @@ import
     dabble.parser,
     dabble.repl;
 
-import std.container, std.traits;
 
 void main(char[][] args)
 {
@@ -32,7 +31,9 @@ void parseArgs(ref ReplContext repl, char[][] args)
             case "--showTimes": repl.debugLevel |= Debug.times; break;
             case "--showStages": repl.debugLevel |= Debug.stages; break;
             case "--parseOnly": repl.debugLevel |= Debug.parseOnly; break;
-            default: writeln("Unrecognized argument: ", arg); break;
+            default:
+                writeln("Unrecognized argument: ", arg);
+                break;
         }
     }
 }

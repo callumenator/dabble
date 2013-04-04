@@ -14,6 +14,20 @@ import
 import std.c.string, std.c.stdlib, std.c.windows.windows;
 import core.sys.windows.dll, core.runtime, core.memory;
 
+/**
+* Output this module to another .d file
+*/
+void writeModule(string filename)
+{
+    import std.file : readText;
+    import std.algorithm : findSplitAfter;
+
+    auto text = "module defs;\n" ~ findSplitAfter(readText(__FILE__),
+                                                  "module dabble.defs;")[1];
+    auto f = File(filename, "w");
+    f.write(text);
+    f.close();
+}
 
 char[1024] buffer;
 
@@ -168,6 +182,9 @@ template needsDup(T)
         enum needsDup = false;
 }
 
+/**
+* Dup any strings in the code segment.
+*/
 void stringDup(T)(ref T t, void* start, void* stop)
 {
     static if (!needsDup!T)
@@ -218,6 +235,9 @@ void stringDup(T)(ref T t, void* start, void* stop)
     }
 }
 
+/**
+* Used mainly for corner case like appender!string, without the '()'.
+*/
 template TypeOf(T)
 {
     static if (__traits(compiles, {ReturnType!T _;}))
@@ -1024,11 +1044,15 @@ enum Debug
 
 struct ReplContext
 {
-    import std.typecons;
+    import std.typecons, std.datetime;
 
     Tuple!(string,"filename",
            string,"tempPath",
            string,"fullName") paths;
+
+    Tuple!(string,"path",
+           string,"name",
+           SysTime,"modified")[] userModules;
 
     Symbol[] symbols;
     long[string] symbolSet;
@@ -1047,6 +1071,7 @@ struct ReplContext
     {
         symbols.clear;
         symbolSet.clear;
+        userModules.clear;
         vtbls.clear;
         vtblFixup.clear;
     }
