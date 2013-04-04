@@ -141,18 +141,22 @@ bool handleMetaCommand(ref ReplContext repl,
             if (args.length == 0 || canFind(args, "all")) // print all vars
             {
                 foreach(val; repl.symbols)
+                {
                     if (val.type == Symbol.Type.Var)
-                        writeln(val);
+                    {
+                        auto info = val.v.ty.view([], val.v.addr, repl);
+                        writeln(val.v.name, " (", info[1].toString(), ") = ", info[0]);
+                    }
+                }
             }
             else // print selected symbols
             {
                 foreach(a; args)
                 {
-                    string op;
-                    auto expr = parseIt(a, op);
+                    auto parseResult = parseExpr(a);
                     foreach(s; repl.symbols)
-                        if (s.type == Symbol.Type.Var && s.v.name == op)
-                            writeln(s.v.ty.val(expr, s.v.addr, repl));
+                        if (s.type == Symbol.Type.Var && s.v.name == parseResult[0])
+                            writeln(s.v.ty.view(parseResult[1], s.v.addr, repl)[0]);
                 }
                 break;
             }
@@ -163,11 +167,10 @@ bool handleMetaCommand(ref ReplContext repl,
         {
             foreach(a; args)
             {
-                string op;
-                auto expr = parseIt(a, op);
+                auto parseResult = parseExpr(a);
                 foreach(s; repl.symbols)
-                    if (s.type == Symbol.Type.Var && s.v.name == op)
-                        writeln(s.v.ty.type(expr, s.v.addr, repl));
+                    if (s.type == Symbol.Type.Var && s.v.name == parseResult[0])
+                        writeln(s.v.ty.view(parseResult[1], s.v.addr, repl)[1].toString());
             }
             break;
         }
@@ -588,3 +591,78 @@ private string getTempDir()
 
     return tmpRoot;
 }
+
+
+/**
+* Print-expression parser
+*/
+import
+    pegged.peg,
+    pegged.grammar;
+
+mixin(grammar(`
+
+ExprParser:
+
+    Expr    < ( IndexExpr / SubExpr / CastExpr / DerefExpr / MemberExpr / Ident )*
+
+    SubExpr < '(' Expr ')'
+
+    Ident   < identifier
+    Number  <~ [0-9]+
+    Index   < '[' Number ']'
+    CastTo  <~ (!')' .)*
+
+    IndexExpr   < (SubExpr / MemberExpr / Ident) Index+
+    CastExpr    < 'cast' '(' CastTo ')' Expr
+    DerefExpr   < '*' Expr
+    MemberExpr  < '.' Ident
+
+`));
+
+Tuple!(string,Operation[]) parseExpr(string s)
+{
+    Operation[] list;
+    auto p = ExprParser(s);
+    expressionList(p, list);
+    return tuple(list[0].val, list[1..$]);
+}
+
+void expressionList(ParseTree p, ref Operation[] list)
+{
+    enum Prefix = "ExprParser";
+    switch(p.name) with(Operation)
+    {
+        case Prefix:
+            expressionList(p.children[0], list);
+            break;
+        case Prefix ~ ".Expr":
+            foreach(c; p.children)
+                expressionList(c, list);
+            break;
+        case Prefix ~ ".SubExpr":
+            expressionList(p.children[0], list);
+            break;
+        case Prefix ~ ".IndexExpr":
+            expressionList(p.children[0], list);
+            foreach(c; p.children[1..$])
+                list ~= Operation(Op.Index, c.children[0].matches[0]);
+            break;
+        case Prefix ~ ".CastExpr":
+            expressionList(p.children[1], list);
+            list ~= Operation(Op.Cast, p.children[0].matches[0]);
+            break;
+        case Prefix ~ ".DerefExpr":
+            expressionList(p.children[0], list);
+            list ~= Operation(Op.Deref);
+            break;
+        case Prefix ~ ".MemberExpr":
+            list ~= Operation(Op.Member, p.children[0].matches[0]);
+            break;
+        case Prefix ~ ".Ident":
+            list ~= Operation(Op.Member, p.matches[0]);
+            break;
+        default: writeln("No clause for ", p.name);
+    }
+}
+

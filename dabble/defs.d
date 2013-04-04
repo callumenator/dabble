@@ -235,7 +235,6 @@ void stringDup(T)(ref T t, void* start, void* stop)
     }
 }
 
-
 template TypeOf(T)
 {
     static if (__traits(compiles, {ReturnType!T _;}))
@@ -619,66 +618,40 @@ struct Type
         return null;
     }
 
-    string val(string expr, void* ptr, ref ReplContext repl)
-    {
-        string op;
-        return val(parseIt(expr, op), ptr, repl);
-    }
-
-    string val(Operation[] stack, void* ptr, ref ReplContext repl)
+    Tuple!(string,Type*) view(Operation[] stack, void* ptr, ref ReplContext repl)
     {
         void* addr = ptr;
         Type* currType = &this;
         foreach(i; stack)
         {
-            final switch(i.op) with(Op)
+            final switch(i.op) with(Operation.Op)
             {
-                case Deref: currType = currType.deref(addr); break;
-                case Index: currType = currType.index(addr, i.val.to!size_t); break;
-                case Slice: return ""; break;
-                case Member: currType = currType.member(addr, i.val); break;
-                case Cast: currType = buildType(i.val, repl); if (currType is null) return "cast unsuccessful"; break;
+                case Deref:
+                    currType = currType.deref(addr);
+                    break;
+                case Index:
+                    currType = currType.index(addr, i.val.to!size_t);
+                    break;
+                case Slice:
+                    return tuple("slice not supported", cast(Type*)null);
+                case Member:
+                    currType = currType.member(addr, i.val);
+                    break;
+                case Cast:
+                    currType = buildType(i.val, repl);
+                    if (currType is null)
+                        return tuple("cast unsuccessful", cast(Type*)null);
+                    break;
             }
         }
 
         if (currType !is null)
         {
             if (trace) writeln("val: type is ", currType.typeName);
-            return currType.getMe(addr);
+            return tuple(currType.getMe(addr), currType);
         }
         else
-            return "val: Null Type*";
-    }
-
-    string type(string expr, void* ptr, ref ReplContext repl)
-    {
-        string op;
-        return type(parseIt(expr, op), ptr, repl);
-    }
-
-    string type(Operation[] stack, void* ptr, ref ReplContext repl)
-    {
-        void* addr = null;
-        Type* currType = &this;
-        foreach(i; stack)
-        {
-            final switch(i.op) with(Op)
-            {
-                case Deref: currType = currType._ref; break;
-                case Index: currType = currType._ref; break;
-                case Slice: return ""; break;
-                case Member: currType = currType.member(addr, i.val); break;
-                case Cast: currType = buildType(i.val, repl); if (currType is null) return ""; break;
-            }
-        }
-
-        if (currType !is null)
-        {
-            writeln(currType.typeName);
-            return currType.toString();
-        }
-        else
-            return "type: Null Type*";
+            return tuple("view: Null Type*", cast(Type*)null);
     }
 
     string getMe(void* absAddr)
@@ -799,6 +772,19 @@ struct Type
     }
 }
 
+/**
+* Operations to carry out in a print expression.
+*/
+struct Operation
+{
+    enum Op { Deref, Index, Slice, Cast, Member }
+    Op op;
+    string val, val2;
+}
+
+/**
+* Run buildType for the built-in types.
+*/
 void buildBasicTypes(ref ReplContext repl)
 {
     enum types = ["byte", "ubyte", "char", "dchar", "wchar",
@@ -815,6 +801,14 @@ void buildBasicTypes(ref ReplContext repl)
 */
 Type* buildType()(string typeString, ref ReplContext repl)
 {
+    bool isIdentChar(dchar c)
+    {
+        return (c >= 'A' && c <= 'Z') ||
+               (c >= 'a' && c <= 'z') ||
+               (c >= '0' && c <= '9') ||
+               (c == '_');
+    }
+
     if (typeString in repl.map)
         return repl.map[typeString];
 
@@ -907,6 +901,10 @@ Type* buildType()(string typeString, ref ReplContext repl)
     return null;
 }
 
+
+/**
+* Static type building.
+*/
 Type* buildType(T)(ref ReplContext repl, Type* ptr = null)
 {
     alias typeName!T name;
@@ -992,6 +990,9 @@ Type* buildType(T)(ref ReplContext repl, Type* ptr = null)
     return t;
 }
 
+/**
+* String name for a type.
+*/
 template typeName(T)
 {
     alias Unqual!(T) Type;
@@ -1007,6 +1008,9 @@ template typeName(T)
         enum typeName = Type.stringof;
 }
 
+/**
+* Alias to the element type of an array.
+*/
 template ArrayElement(T)
 {
     static if (is(T _ : U[], U))
@@ -1017,198 +1021,13 @@ template ArrayElement(T)
         static assert(false);
 }
 
+/**
+* For static foreach.
+*/
 template Iota(size_t i, size_t n)
 {
     static if (n == 0) { alias TypeTuple!() Iota; }
     else { alias TypeTuple!(i, Iota!(i + 1, n - 1)) Iota; }
-}
-
-enum Op { Deref, Index, Slice, Cast, Member }
-
-struct Operation { Op op; string val; string val2; }
-
-bool isIdentChar(dchar c)
-{
-    return (c == '_') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
-}
-
-Operation[] parseIt(ref string s, out string operand)
-{
-    Operation[] current;
-    Operation[] pending;
-
-    bool leftAssoc(Op op)
-    {
-        return op == Op.Index || op == Op.Slice || op == Op.Member;
-    }
-
-    int precedence(Op op) pure
-    {
-        final switch(op) with(Op)
-        {
-            case Deref: return 1;
-            case Cast: return 1;
-            case Index: return 2;
-            case Slice: return 2;
-            case Member: return 2;
-        }
-    }
-
-    void flush(Operation thisOp)
-    {
-        while(!pending.empty && (
-                    (leftAssoc(thisOp.op) && ( precedence(pending.front.op) >= precedence(thisOp.op) )) ||
-                    (precedence(pending.front.op) > precedence(thisOp.op))))
-        {
-            current ~= pending.front;
-            pending.popFront();
-        }
-        pending = thisOp ~ pending;
-    }
-
-    void finalize()
-    {
-        current ~= pending;
-    }
-
-    void skipWhite(ref string s)
-    {
-        while(!s.empty && (s.front == ' ' || s.front == '\t'))
-            s.popFront();
-    }
-
-    string grabIdent(ref string s, bool allowDot = false)
-    {
-        string ident;
-        skipWhite(s);
-        while(!s.empty && (isIdentChar(s.front) || (allowDot && s.front == '.')))
-        {
-            ident ~= s.front;
-            s.popFront();
-        }
-        return ident;
-    }
-
-    string grabNumber(ref string s)
-    {
-        string number;
-        skipWhite(s);
-        while(!s.empty && s.front >= '0' && s.front <= '9')
-        {
-            number ~= s.front;
-            s.popFront();
-        }
-        return number;
-    }
-
-    bool expect(ref string s, string e)
-    {
-        skipWhite(s);
-        if (s.length < e.length)
-        {
-            return false;
-        }
-        else
-        {
-            if (s[0..e.length] == e)
-            {
-                s = s[e.length..$];
-                return true;
-            }
-            return false;
-        }
-    }
-
-    while(!s.empty)
-    {
-
-        switch(s.front)
-        {
-
-            case '(':
-                s.popFront();
-                string _;
-                auto sub = parseIt(s, _);
-                current ~= sub;
-                break;
-
-            case ')':
-                s.popFront();
-                finalize();
-                return current;
-
-            case ' ':
-                s.popFront();
-                break;
-
-            case '*':
-                s.popFront();
-                flush(Operation(Op.Deref, ""));
-                break;
-
-            case '[':
-                s.popFront();
-                string index, index2;
-                index = grabNumber(s);
-                skipWhite(s);
-
-                if (expect(s, ".."))
-                {
-                    skipWhite(s);
-                    index2 = grabNumber(s);
-                    flush(Operation(Op.Slice, index, index2));
-                }
-                else
-                {
-                    flush(Operation(Op.Index, index));
-                }
-
-                if (!expect(s, "]"))
-                    writeln("Expected ']' following index " ~ index);
-                break;
-
-            case '.':
-                s.popFront();
-                skipWhite(s);
-                if (!s.empty && !isIdentChar(s.front))
-                    writeln("Error: expected ident after .");
-                else
-                    flush(Operation(Op.Member, grabIdent(s)));
-                break;
-
-            case '_':
-            case 'a': .. case 'z':
-            case 'A': .. case 'Z':
-                auto temp = grabIdent(s);
-
-                if (temp == "cast")
-                {
-                    expect(s, "(");
-                    skipWhite(s);
-
-                    string castTo;
-                    while(!s.empty && s.front != ')')
-                    {
-                        if (s.front != ' ') castTo ~= s.front;
-                        s.popFront();
-                    }
-
-                    if (expect(s, ")"))
-                        flush(Operation(Op.Cast, castTo));
-                }
-                else
-                {
-                    operand = temp;
-                }
-                break;
-
-            default:
-                writeln("Unexpected: ", s.front);
-                s.popFront();
-        }
-    }
-    finalize();
-    return current;
 }
 
 enum Debug
