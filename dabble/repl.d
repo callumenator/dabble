@@ -198,7 +198,7 @@ bool handleMetaCommand(ref ReplContext repl,
 
             foreach(a; args)
                 if (exists(a))
-                    repl.userModules ~= TupType(dirName(a), baseName(a), SysTime(0));
+                    repl.userModules ~= TupType(dirName(a), baseName(a), SysTime(0).stdTime());
                 else
                     writeln("Error: module ", a, " could not be found");
         }
@@ -419,20 +419,19 @@ bool build(Tuple!(string,string) code,
     }
 
     auto dirChange = "cd " ~ escapeShellFileName(repl.paths.tempPath);
-
-    string cmd = dirChange ~ " & dmd " ~ repl.paths.filename
-               ~ ".d " ~ repl.paths.filename ~ ".def defs.lib ";
+    auto linkFlags = " -L/NORELOCATIONCHECK -L/NOMAP ";
+    string cmd = dirChange ~ " & dmd " ~ linkFlags ~ repl.paths.filename
+               ~ ".d " ~ repl.paths.filename ~ ".def extra.lib ";
 
     if (!buildUserModules(repl, error))
         return false;
 
     if (repl.userModules.length > 0)
     {
-        auto includePaths = repl.userModules.map!(a => "-I" ~ a[0]).join(" ");
-        cmd ~= includePaths ~ " extra.lib";
+        auto includePaths = repl.userModules.map!(a => "-I" ~ a.path).join(" ");
+        cmd ~= includePaths;
     }
 
-    writeln(cmd);
     if (!attempt(repl, cmd, error, repl.paths.fullName ~ ".d"))
         return false;
 
@@ -457,21 +456,22 @@ bool buildUserModules(ReplContext repl,
     if (init)
     {
         dabble.defs.writeModule(repl.paths.tempPath ~ "defs.d");
-        attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -lib defs.d", error, repl.paths.tempPath ~ "defs.d");
+        attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -c defs.d", error, repl.paths.tempPath ~ "defs.d");
+        rebuildLib = true;
     }
 
     if (repl.userModules.length == 0 && !rebuildLib)
         return true;
 
-    auto allIncludes = repl.userModules.map!(a => "-I" ~ a[0]).join(" ");
+    auto allIncludes = repl.userModules.map!(a => "-I" ~ a.path).join(" ");
 
     foreach(ref m; repl.userModules)
     {
-        auto fullPath = m[0]~dirSeparator~m[1];
+        auto fullPath = m.path~dirSeparator~m.name;
         SysTime access, modified;
         getTimes(fullPath, access, modified);
 
-        if (modified == m.modified)
+        if (modified.stdTime() == m.modified)
             continue;
 
         rebuildLib = true;
@@ -480,14 +480,14 @@ bool buildUserModules(ReplContext repl,
         if (!attempt(repl, cmd, error, fullPath))
             return false;
 
-        getTimes(fullPath, access, m.modified);
+        getTimes(fullPath, access, modified);
+        m.modified = modified.stdTime();
     }
 
     if (rebuildLib)
     {
-        writeln("REBUILD");
-        auto objs = repl.userModules.map!(a => stripExtension(a[1])~".obj").join(" ");
-        if (!attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -lib -ofextra.lib " ~ objs, error, ""))
+        auto objs = repl.userModules.map!(a => stripExtension(a.name)~".obj").join(" ");
+        if (!attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -lib -ofextra.lib defs.obj " ~ objs, error, ""))
             return false;
     }
 

@@ -11,16 +11,12 @@ import
     std.traits,
     std.range;
 
-import std.c.string, std.c.stdlib, std.c.windows.windows;
-import core.sys.windows.dll, core.runtime, core.memory;
-
 /**
 * Output this module to another .d file
 */
 void writeModule(string filename)
 {
     import std.file : readText;
-    import std.algorithm : findSplitAfter;
 
     auto text = "module defs;\n" ~ findSplitAfter(readText(__FILE__),
                                                   "module dabble.defs;")[1];
@@ -33,6 +29,7 @@ char[1024] buffer;
 
 void fixUp()
 {
+    import core.sys.windows.dll, core.sys.windows.windows;
     import core.sys.windows.threadaux : getTEB;
 
     alias extern(Windows)
@@ -114,59 +111,6 @@ string exprResult(E)(lazy E expr)
     auto temp = expr();
     return temp.to!string;
 }
-
-string currentVal(T)(ref T val)
-{
-    import std.traits;
-
-    string current;
-    static if (is(T _ : U[], U))
-    {
-        static if (isSomeString!T)
-        {
-            if (val.length <= 50)
-                current = val.to!string;
-            else
-            {
-                auto start = val[0..20].to!string;
-                auto end = val[$-20..$].to!string;
-                current = "\""
-                          ~ start[0..$-1]
-                          ~ " ... "
-                          ~ end[1..$]
-                          ~ "\"";
-            }
-        }
-        else
-        {
-            if (val.length <= 12)
-                current = val.to!string;
-            else
-            {
-                auto start = val[0..4].to!string;
-                auto end = val[$-4..$].to!string;
-                current = start[0..$-1]
-                          ~ ", ..("
-                          ~ (val.length - 8).to!string
-                          ~ " elements).. ,"
-                          ~ end[1..$];
-            }
-        }
-    }
-    else
-    {
-        // Much hackish
-        stdout.flush();
-        stdout.setvbuf(buffer);
-        stdout.writeln(val);
-        stdout.setvbuf(null, _IOLBF);
-        current = val.to!string;
-    }
-    return current.idup;
-}
-
-
-
 
 template needsDup(T)
 {
@@ -459,7 +403,6 @@ struct Var
             else
             {
                 put(c.prefix, "auto ", name, " = _REPL.getVar!(", type, ")(_repl_,", index.to!string, ");\n");
-                //put(c.suffix, sym(index) ~ ".v.current = _REPL.currentVal(*", name, ");\n");
             }
         }
     }
@@ -1128,15 +1071,11 @@ enum Debug
 
 struct ReplContext
 {
-    import std.typecons, std.datetime;
+    struct Paths { string filename, tempPath, fullName; }
+    struct Mods { string path, name; long modified; }
 
-    Tuple!(string,"filename",
-           string,"tempPath",
-           string,"fullName") paths;
-
-    Tuple!(string,"path",
-           string,"name",
-           SysTime,"modified")[] userModules;
+    Paths paths;
+    Mods[] userModules;
 
     Symbol[] symbols;
     long[string] symbolSet;
@@ -1146,7 +1085,7 @@ struct ReplContext
 
     uint debugLevel = Debug.none;
 
-    Tuple!(void*,void*) imageBounds; /// memory bounds of the dll image
+    void*[2] imageBounds; /// memory bounds of the dll image
     Type*[string] map; /// map used by typeBuilder and friends
     void* gc; /// host gc instance
 

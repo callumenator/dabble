@@ -45,12 +45,12 @@ version(Windows)
             MemoryFreeLibrary(handle, callDetach);
         }
 
-        Tuple!(void*,void*) bounds()
+        void*[2] bounds()
         {
             assert(handle !is null);
-            void* start, stop;
-            getImageBounds(handle, start, stop);
-            return tuple(start, stop);
+            void*[2] bounds;
+            getImageBounds(handle, bounds[0], bounds[1]);
+            return bounds;
         }
 
         T getFunction(T)(string name) in {assert(handle !is null, "Null handle");} body
