@@ -40,7 +40,6 @@ void parseArgs(ref ReplContext repl, char[][] args)
 ReplContext stress()
 {
     return run([
-    "if (true) { auto b = [1,2,3]; writeln(b); } else { auto b = `hello`; writeln(b); }",
     "err0 = `1.2`.to!int;",
     "struct S {int x, y = 5; }",
     "structS = S();",
@@ -84,6 +83,9 @@ ReplContext stress()
     "writeln(arr4[]);",
     "T boo(T)(T t) { return T.init; }",
     "short0 = boo(cast(short)5);",
+    "if (true) { auto b = [1,2,3]; writeln(b); } else { auto b = `hello`; writeln(b); }",
+    "counter0 = 10;",
+    "while(counter0-- > 1) { if (false) { auto _temp = 8; } else { writeln(counter0);} }",
     ]);
 }
 
