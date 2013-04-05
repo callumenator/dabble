@@ -157,12 +157,14 @@ static:
         if (t.successful && t.matches.length)
         {
             t = ReplParse.decimateTree(t);
+            auto expr = t.matches[0];
 
-            t.matches[0] = "\nstatic if (__traits(compiles, typeof("~t.matches[0]~")) "
-                           "&& !is(typeof("~t.matches[0]~") == void))\n"
-                           "   _expressionResult = _REPL.exprResult(\n"~t.matches[0]~"\n);\n"
-                           "else\n"
-                           "   " ~ t.matches[0] ~ ";\n\n";
+            t.matches[0] =
+            "static if (__traits(compiles, mixin(q{is(typeof(" ~ expr ~ "))}))) {\n"
+            "  mixin(q{ static if (is(typeof(" ~ expr ~ ") == void)) {\n  " ~ expr ~ ";\n"
+            "  } else {\n  _expressionResult = _REPL.exprResult(\n  " ~ expr ~ "\n  );}});\n"
+            "} else {\n"
+            "  " ~ expr ~ ";\n}\n\n";
         }
         return t;
     }

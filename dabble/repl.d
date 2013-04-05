@@ -42,7 +42,6 @@ struct ReplContext
 
     static ReplContext opCall(string filename = "replDll", uint debugLevel = Debug.none)
     {
-        dabble.defs.trace = true;
         import std.path : dirSeparator;
         import std.file : readText, exists;
 

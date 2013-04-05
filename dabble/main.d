@@ -9,9 +9,6 @@ import
     dabble.parser,
     dabble.repl;
 
-import std.container, std.traits;
-
-
 void main(char[][] args)
 {
     auto repl = ReplContext();
@@ -43,6 +40,7 @@ void parseArgs(ref ReplContext repl, char[][] args)
 ReplContext stress()
 {
     return run([
+    "if (true) { auto b = [1,2,3]; writeln(b); } else { auto b = `hello`; writeln(b); }",
     "err0 = `1.2`.to!int;",
     "struct S {int x, y = 5; }",
     "structS = S();",
