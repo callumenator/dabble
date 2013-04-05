@@ -28,9 +28,6 @@ enum Debug
 
 struct ReplContext
 {
-    //struct Paths { string filename, tempPath, fullName; }
-    //struct Mods { string path, name; long modified; }
-
     Tuple!(string,"filename",
            string,"tempPath",
            string,"fullName") paths;
@@ -39,14 +36,10 @@ struct ReplContext
            string,"name",
            long,"modified")[] userModules;
 
-    //Paths paths;
-    //Mods[] userModules;
-    long[string] symbolSet;
-
-    string vtblFixup;
-    uint debugLevel = Debug.none;
-
     ReplShare share;
+    string vtblFixup;
+    long[string] symbolSet;
+    uint debugLevel = Debug.none;
 
     static ReplContext opCall(string filename = "replDll", uint debugLevel = Debug.none)
     {
@@ -79,31 +72,6 @@ struct ReplContext
         userModules.clear;
         vtblFixup.clear;
     }
-}
-
-/**
-* Build a default repl context.
-*/
-ReplContext newContext(string filename = "replDll", uint debugLevel = Debug.none)
-{
-    import std.path : dirSeparator;
-    import std.file : readText, exists;
-
-    ReplContext repl;
-
-    repl.paths.filename = filename;
-    repl.paths.tempPath = getTempDir() ~ dirSeparator;
-    repl.paths.fullName = repl.paths.tempPath ~ dirSeparator ~ filename;
-    repl.debugLevel = debugLevel;
-    repl.share.gc = gc_getProxy();
-
-    repl.share.init();
-
-    string error;
-    if (!buildUserModules(repl, error, true))
-        throw new Exception("Unable to build defs.d, " ~ error);
-
-    return repl;
 }
 
 
@@ -514,15 +482,20 @@ bool buildUserModules(ReplContext repl,
 {
     import std.datetime;
     import std.path : dirSeparator, stripExtension;
-    import std.file : getTimes;
+    import std.file : getTimes, readText;
 
     bool rebuildLib = false;
 
     if (init)
     {
-        dabble.defs.writeModule(repl.paths.tempPath ~ "defs.d");
-        attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -c defs.d", error, repl.paths.tempPath ~ "defs.d");
         rebuildLib = true;
+        auto text = "module defs;\n"
+                  ~ findSplitAfter(readText(dabble.defs.moduleFileName()),"module dabble.defs;")[1];
+        auto f = File(repl.paths.tempPath ~ "defs.d", "w");
+        f.write(text);
+        f.close();
+        if (!attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -c defs.d", error, repl.paths.tempPath ~ "defs.d"))
+            return false;
     }
 
     if (repl.userModules.length == 0 && !rebuildLib)

@@ -18,10 +18,7 @@ void main(char[][] args)
 
     parseArgs(repl, args[1..$]);
 
-    repl = stress();
-
-    //repl = run(["import std.container;", "a = Array!int(1,2,3,4);"]);
-
+    //repl = stress();
     loop(repl);
 
     return;

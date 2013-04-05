@@ -13,15 +13,9 @@ import
 /**
 * Output this module to another .d file
 */
-void writeModule(string filename)
+string moduleFileName()
 {
-    import std.file : readText;
-
-    auto text = "module defs;\n" ~ findSplitAfter(readText(__FILE__),
-                                                  "module dabble.defs;")[1];
-    auto f = File(filename, "w");
-    f.write(text);
-    f.close();
+    return __FILE__;
 }
 
 char[1024] buffer;
