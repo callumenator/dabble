@@ -34,10 +34,10 @@ ReplContext newContext(string filename = "replDll", uint debugLevel = Debug.none
 
     buildBasicTypes(repl);
 
-    // Build defs.lib - always rebuilds, in case defs.lib has changed.
     string error;
-    dabble.defs.writeModule(repl.paths.tempPath ~ "defs.d");
-    attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -lib defs.d", error, repl.paths.tempPath ~ "defs.d");
+    if (!buildUserModules(repl, error, true))
+        throw new Exception("Unable to build defs.d, " ~ error);
+
     return repl;
 }
 
@@ -421,7 +421,7 @@ bool build(Tuple!(string,string) code,
     auto dirChange = "cd " ~ escapeShellFileName(repl.paths.tempPath);
 
     string cmd = dirChange ~ " & dmd " ~ repl.paths.filename
-               ~ ".d " ~ repl.paths.filename ~ ".def defs.lib";
+               ~ ".d " ~ repl.paths.filename ~ ".def defs.lib ";
 
     if (!buildUserModules(repl, error))
         return false;
@@ -429,11 +429,13 @@ bool build(Tuple!(string,string) code,
     if (repl.userModules.length > 0)
     {
         auto includePaths = repl.userModules.map!(a => "-I" ~ a[0]).join(" ");
-        cmd ~= " " ~ includePaths ~ " replLib.lib";
+        cmd ~= includePaths ~ " extra.lib";
     }
 
+    writeln(cmd);
     if (!attempt(repl, cmd, error, repl.paths.fullName ~ ".d"))
         return false;
+
 
     return true;
 }
@@ -443,17 +445,25 @@ bool build(Tuple!(string,string) code,
 * Rebuild user modules into a lib to link with. Only rebuild files that have changed.
 */
 bool buildUserModules(ReplContext repl,
-                      out string error)
+                      out string error,
+                      bool init = false)
 {
     import std.datetime;
     import std.path : dirSeparator, stripExtension;
     import std.file : getTimes;
 
-    if (repl.userModules.length == 0)
+    bool rebuildLib = false;
+
+    if (init)
+    {
+        dabble.defs.writeModule(repl.paths.tempPath ~ "defs.d");
+        attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -lib defs.d", error, repl.paths.tempPath ~ "defs.d");
+    }
+
+    if (repl.userModules.length == 0 && !rebuildLib)
         return true;
 
     auto allIncludes = repl.userModules.map!(a => "-I" ~ a[0]).join(" ");
-    bool rebuildLib = false;
 
     foreach(ref m; repl.userModules)
     {
@@ -475,10 +485,12 @@ bool buildUserModules(ReplContext repl,
 
     if (rebuildLib)
     {
+        writeln("REBUILD");
         auto objs = repl.userModules.map!(a => stripExtension(a[1])~".obj").join(" ");
-        if (!attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -lib -ofreplLib.lib " ~ objs, error, ""))
+        if (!attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -lib -ofextra.lib " ~ objs, error, ""))
             return false;
     }
+
     return true;
 }
 

@@ -165,6 +165,90 @@ string currentVal(T)(ref T val)
     return current.idup;
 }
 
+
+
+
+template needsDup(T)
+{
+    static if (isArray!T)
+        enum needsDup = true;
+    else static if (isPointer!T)
+        enum needsDup = true;
+    else static if (isAggregateType!T)
+        enum needsDup = true;
+    else
+        enum needsDup = false;
+}
+
+void dupSearch(T)(ref T t, void* start, void* stop)
+{
+    import std.c.string;
+
+    static if (isFunctionPointer!T)
+    {
+        if (t >= start && t <= stop)
+        {
+            writeln("Function pointer into code ", T.stringof);
+        }
+    }
+    else static if (isArray!T && !isStaticArray!T)
+    {
+        if (t.ptr >= start && t.ptr <= stop)
+        {
+            writeln("Duping ", T.stringof);
+            t = cast(T)t.dup;
+        }
+
+        // Now check the elements of the array
+        static if (needsDup!(ForeachType!T))
+            foreach(ref e; t)
+                dupSearch(e, start, stop);
+    }
+    else static if (isPointer!T)
+    {
+        if (cast(void*)t >= start && cast(void*)t <= stop)
+        {
+            writeln("Duping ", T.stringof);
+            auto newMem = new void[]((PointerTarget!T).sizeof);
+            memcpy(newMem.ptr, t, (PointerTarget!T).sizeof);
+            t = cast(T)newMem.ptr;
+        }
+
+        static if (needsDup!(PointerTarget!T))
+            dupSearch(*t, start, stop);
+    }
+    else static if (isAggregateType!T)
+    {
+        size_t offset;
+        void* baseAddr = &t;
+
+        static if (is(T == class))
+        {
+            offset += 2*(void*).sizeof;
+            baseAddr = cast(void*)t;
+        }
+
+        foreach(f; t.tupleof)
+        {
+            auto addr =  baseAddr + offset;
+            static if ( (is(typeof(f) == class) || isPointer!(typeof(f))) )
+            {
+                if (f !is null)
+                    dupSearch((*(cast(typeof(f)*)addr)), start, stop);
+            }
+            else
+            {
+                dupSearch((*(cast(typeof(f)*)addr)), start, stop);
+            }
+
+            offset += f.sizeof;
+        }
+    }
+}
+
+
+
+version(none) {
 template needsDup(T)
 {
     import std.typecons;
@@ -233,6 +317,7 @@ void stringDup(T)(ref T t, void* start, void* stop)
             offset += f.sizeof;
         }
     }
+}
 }
 
 /**
@@ -357,7 +442,6 @@ struct Var
                 "    " ~ sym(index) ~ ".v.current = q{", init, "}.idup;\n"
                 "  } else {\n"
                 "    " ~ sym(index) ~ ".v.ty = _REPL.buildType!(typeof(*",name, "))(_repl_);\n"
-                "    //" ~ sym(index) ~ ".v.current = _REPL.currentVal(*", name, ");\n"
                 "}}\n");
         }
         else // var has already been created, just grab it
