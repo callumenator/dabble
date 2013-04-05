@@ -729,12 +729,9 @@ struct Operation
 */
 void buildBasicTypes(ref Type*[string] map)
 {
-    enum types = ["byte", "ubyte", "char", "dchar", "wchar",
-                  "short", "ushort", "int", "uint", "long", "ulong",
-                  "float", "double", "real"];
-
     foreach(T; TypeTuple!(byte, ubyte, char, dchar, wchar, int, uint,
-                          short, ushort, long, ulong, float, double, real))
+                          short, ushort, long, ulong, float, double, real,
+                          void*, void[]))
     buildType!T(map);
 }
 

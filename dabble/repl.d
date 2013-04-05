@@ -23,7 +23,6 @@ enum Debug
     times       = 0x01, /// display time to parse, build and call
     stages      = 0x02, /// display parse, build, call messages
     parseOnly   = 0x04, /// show parse tree and return
-    print       = 0x08  /// add writelns to end of every line
 }
 
 struct ReplContext
@@ -43,7 +42,7 @@ struct ReplContext
 
     static ReplContext opCall(string filename = "replDll", uint debugLevel = Debug.none)
     {
-        writeln("CALLED");
+        dabble.defs.trace = true;
         import std.path : dirSeparator;
         import std.file : readText, exists;
 
@@ -282,10 +281,8 @@ void setDebugLevel(string s)(ref ReplContext repl, string level) if (s == "on" |
     {
         case "times": goto case "showTimes";
         case "showTimes": mixin(op ~ "Debug.times;"); break;
-
         case "stages": goto case "showStages";
         case "showStages": mixin(op ~ "Debug.stages;"); break;
-
         case "parseOnly": mixin(op ~ "Debug.parseOnly;"); break;
         default: break;
     }
@@ -312,15 +309,10 @@ bool eval(string code,
         {
             write("TIMINGS: parse: ", times.parse);
             if (!(repl.debugLevel & Debug.parseOnly))
-            {
-                write(", build: ", times.build);
-                write(", call: ", times.call);
-                writeln(", TOTAL: ", times.parse + times.build + times.call);
-            }
+                writeln(", build: ", times.build, ", call: ", times.call, ", TOTAL: ",
+                        times.parse + times.build + times.call);
             else
-            {
                 writeln();
-            }
         }
     }
 
@@ -384,6 +376,9 @@ bool eval(string code,
 }
 
 
+/**
+* Attempt a build command, redirect errout to a text file.
+*/
 bool attempt(ReplContext repl, string cmd, out string err, string codeFilename)
 {
     import std.process : system;
@@ -453,6 +448,7 @@ bool build(Tuple!(string,string) code,
 
     auto dirChange = "cd " ~ escapeShellFileName(repl.paths.tempPath);
     auto linkFlags = " -L/NORELOCATIONCHECK -L/NOMAP ";
+
     string cmd = dirChange ~ " & dmd " ~ linkFlags ~ repl.paths.filename
                ~ ".d " ~ repl.paths.filename ~ ".def extra.lib ";
 
@@ -467,7 +463,6 @@ bool build(Tuple!(string,string) code,
 
     if (!attempt(repl, cmd, error, repl.paths.fullName ~ ".d"))
         return false;
-
 
     return true;
 }
@@ -486,7 +481,7 @@ bool buildUserModules(ReplContext repl,
 
     bool rebuildLib = false;
 
-    if (init)
+    if (init) // Compile defs.d
     {
         rebuildLib = true;
         auto text = "module defs;\n"
@@ -503,13 +498,13 @@ bool buildUserModules(ReplContext repl,
 
     auto allIncludes = repl.userModules.map!(a => "-I" ~ a.path).join(" ");
 
+    SysTime access, modified;
     foreach(ref m; repl.userModules)
     {
         auto fullPath = m.path~dirSeparator~m.name;
-        SysTime access, modified;
         getTimes(fullPath, access, modified);
 
-        if (modified.stdTime() == m.modified)
+        if (modified.stdTime() == m.modified) // file has not changed
             continue;
 
         rebuildLib = true;
