@@ -17,7 +17,7 @@ void main(char[][] args)
 
     parseArgs(repl, args[1..$]);
 
-    repl = stress();
+    //repl = stress();
 
     loop(repl);
 

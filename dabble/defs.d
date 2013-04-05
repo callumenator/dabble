@@ -2,7 +2,6 @@
 module dabble.defs;
 
 import
-    std.array,
     std.conv,
     std.stdio,
     std.typecons,
@@ -188,80 +187,6 @@ void dupSearch(T)(ref T t, void* start, void* stop)
             offset += f.sizeof;
         }
     }
-}
-
-
-
-version(none) {
-template needsDup(T)
-{
-    import std.typecons;
-    static if (isSomeString!T)
-        enum needsDup = true;
-    else static if (is(T _ == RefCounted!U, U...))
-        enum needsDup = false;
-    else static if (isAggregateType!T)
-        enum needsDup = true;
-    else static if (isPointer!T && needsDup!(PointerTarget!T))
-        enum needsDup = true;
-    else static if (isArray!T && needsDup!(ForeachType!T))
-        enum needsDup = true;
-    else
-        enum needsDup = false;
-}
-
-/**
-* Dup any strings in the code segment.
-*/
-void stringDup(T)(ref T t, void* start, void* stop)
-{
-    static if (!needsDup!T)
-        return;
-
-    static if (isSomeString!T)
-    {
-        if (t.ptr >= start && t.ptr <= stop)
-            t = cast(T)t.idup;
-    }
-    else static if (isPointer!T)
-    {
-        static if (needsDup!T)
-            stringDup(*t, start, stop);
-    }
-    else static if (isArray!T)
-    {
-        static if (needsDup!T)
-            foreach(ref elem; t)
-            stringDup(elem, start, stop);
-    }
-    else static if (isAggregateType!T)
-    {
-        size_t offset;
-        void* baseAddr = &t;
-
-        static if (is(T == class))
-        {
-            offset += 2*(void*).sizeof;
-            baseAddr = cast(void*)t;
-        }
-
-        foreach(f; t.tupleof)
-        {
-            auto addr =  baseAddr + offset;
-            static if ( (is(typeof(f) == class) || isPointer!(typeof(f))) )
-            {
-                if (f !is null)
-                    stringDup((*(cast(typeof(f)*)addr)), start, stop);
-            }
-            else
-            {
-                stringDup((*(cast(typeof(f)*)addr)), start, stop);
-            }
-
-            offset += f.sizeof;
-        }
-    }
-}
 }
 
 /**
