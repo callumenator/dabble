@@ -17,6 +17,70 @@ public import dabble.defs;
 extern(C) void* gc_getProxy();
 
 
+enum Debug
+{
+    none        = 0x00, /// no debug output
+    times       = 0x01, /// display time to parse, build and call
+    stages      = 0x02, /// display parse, build, call messages
+    parseOnly   = 0x04, /// show parse tree and return
+    print       = 0x08  /// add writelns to end of every line
+}
+
+struct ReplContext
+{
+    //struct Paths { string filename, tempPath, fullName; }
+    //struct Mods { string path, name; long modified; }
+
+    Tuple!(string,"filename",
+           string,"tempPath",
+           string,"fullName") paths;
+
+    Tuple!(string,"path",
+           string,"name",
+           long,"modified")[] userModules;
+
+    //Paths paths;
+    //Mods[] userModules;
+    long[string] symbolSet;
+
+    string vtblFixup;
+    uint debugLevel = Debug.none;
+
+    ReplShare share;
+
+    static ReplContext opCall(string filename = "replDll", uint debugLevel = Debug.none)
+    {
+        writeln("CALLED");
+        import std.path : dirSeparator;
+        import std.file : readText, exists;
+
+        ReplContext repl;
+
+        repl.paths.filename = filename;
+        repl.paths.tempPath = getTempDir() ~ dirSeparator;
+        repl.paths.fullName = repl.paths.tempPath ~ dirSeparator ~ filename;
+        repl.debugLevel = debugLevel;
+        repl.share.gc = gc_getProxy();
+
+        repl.share.init();
+
+        string error;
+        if (!buildUserModules(repl, error, true))
+            throw new Exception("Unable to build defs.d, " ~ error);
+
+        return repl;
+    }
+
+    /// Reset a REPL session
+    void reset()
+    {
+        share.reset();
+        symbolSet.clear;
+        userModules.clear;
+        vtblFixup.clear;
+    }
+}
+
 /**
 * Build a default repl context.
 */
@@ -26,13 +90,14 @@ ReplContext newContext(string filename = "replDll", uint debugLevel = Debug.none
     import std.file : readText, exists;
 
     ReplContext repl;
+
     repl.paths.filename = filename;
     repl.paths.tempPath = getTempDir() ~ dirSeparator;
     repl.paths.fullName = repl.paths.tempPath ~ dirSeparator ~ filename;
     repl.debugLevel = debugLevel;
-    repl.gc = gc_getProxy();
+    repl.share.gc = gc_getProxy();
 
-    buildBasicTypes(repl);
+    repl.share.init();
 
     string error;
     if (!buildUserModules(repl, error, true))
@@ -138,11 +203,11 @@ bool handleMetaCommand(ref ReplContext repl,
         {
             if (args.length == 0 || canFind(args, "all")) // print all vars
             {
-                foreach(val; repl.symbols)
+                foreach(val; repl.share.symbols)
                 {
                     if (val.type == Symbol.Type.Var)
                     {
-                        auto info = val.v.ty.view([], val.v.addr, repl);
+                        auto info = val.v.ty.view([], val.v.addr, repl.share.map);
                         writeln(val.v.name, " (", info[1].toString(), ") = ", info[0]);
                     }
                 }
@@ -152,9 +217,9 @@ bool handleMetaCommand(ref ReplContext repl,
                 foreach(a; args)
                 {
                     auto parseResult = parseExpr(a);
-                    foreach(s; repl.symbols)
+                    foreach(s; repl.share.symbols)
                         if (s.type == Symbol.Type.Var && s.v.name == parseResult[0])
-                            writeln(s.v.ty.view(parseResult[1], s.v.addr, repl)[0]);
+                            writeln(s.v.ty.view(parseResult[1], s.v.addr, repl.share.map)[0]);
                 }
                 break;
             }
@@ -166,9 +231,9 @@ bool handleMetaCommand(ref ReplContext repl,
             foreach(a; args)
             {
                 auto parseResult = parseExpr(a);
-                foreach(s; repl.symbols)
+                foreach(s; repl.share.symbols)
                     if (s.type == Symbol.Type.Var && s.v.name == parseResult[0])
-                        writeln(s.v.ty.view(parseResult[1], s.v.addr, repl)[1].toString());
+                        writeln(s.v.ty.view(parseResult[1], s.v.addr, repl.share.map)[1].toString());
             }
             break;
         }
@@ -384,7 +449,7 @@ bool build(Tuple!(string,string) code,
 
     auto text =
         code[0] ~
-        "\n\nexport extern(C) int _main(ref _REPL.ReplContext _repl_)\n"
+        "\n\nexport extern(C) int _main(ref _REPL.ReplShare _repl_)\n"
         "{\n" ~
         "    gc_setProxy(_repl_.gc);\n" ~
         "    import std.exception;\n" ~
@@ -393,7 +458,7 @@ bool build(Tuple!(string,string) code,
         "    return 0;\n" ~
         "}\n\n" ~
 
-        "void _main2(ref _REPL.ReplContext _repl_)\n" ~
+        "void _main2(ref _REPL.ReplShare _repl_)\n" ~
         "{\n" ~
         code[1] ~
         "}\n";
@@ -534,7 +599,7 @@ CallResult call(ref ReplContext repl,
     import core.memory : GC;
 
     static SharedLib lastLib; // XP hack
-    alias extern(C) int function(ref ReplContext) funcType;
+    alias extern(C) int function(ref ReplShare) funcType;
 
     auto lib = SharedLib(repl.paths.fullName ~ ".dll");
 
@@ -546,7 +611,7 @@ CallResult call(ref ReplContext repl,
     if (!lib.loaded)
         return CallResult.loadError;
 
-    repl.imageBounds = lib.bounds();
+    repl.share.imageBounds = lib.bounds();
 
     auto funcPtr = lib.getFunction!(funcType)("_main");
 
@@ -556,7 +621,7 @@ CallResult call(ref ReplContext repl,
         return CallResult.loadError;
     }
 
-    auto res = funcPtr(repl);
+    auto res = funcPtr(repl.share);
 
     scope(exit) GC.removeRange(getSectionBase(lib.handle, ".CRT"));
 

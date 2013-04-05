@@ -5,7 +5,7 @@ import std.conv : to;
 
 import
     dabble.actions,
-    dabble.defs;
+    dabble.repl;
 
 extern(C) void* gc_getProxy();
 
@@ -15,7 +15,10 @@ extern(C) void* gc_getProxy();
 * of the vtables on the heap. This function is called from within
 * the DLL for each new class allocation.
 */
-extern(C) void hookNewClass(TypeInfo_Class ti, void* cptr, ReplContext* repl, bool clear = false)
+extern(C) void hookNewClass(TypeInfo_Class ti,
+                            void* cptr,
+                            void* repl /** ReplContext* **/,
+                            bool clear = false)
 {
     import std.algorithm : countUntil;
     import std.c.string : memcpy;
@@ -41,19 +44,21 @@ extern(C) void hookNewClass(TypeInfo_Class ti, void* cptr, ReplContext* repl, bo
     }
     else
     {
+        auto _repl = cast(ReplContext*)repl;
+
         foreach(i; infos)
         {
             void* vtblPtr = null;
-            size_t index = countUntil!"a.name == b"(repl.vtbls, i.name);
+            size_t index = countUntil!"a.name == b"(_repl.share.vtbls, i.name);
 
             if (index == -1) // No entry exists, need to dup the vtable
             {
-                repl.vtbls ~= Vtbl(i.name, i.vtbl);
-                index = repl.vtbls.length - 1;
-                repl.vtblFixup ~= Parser.genFixup(i.name, index);
+                _repl.share.vtbls ~= Vtbl(i.name, i.vtbl);
+                index = _repl.share.vtbls.length - 1;
+                _repl.vtblFixup ~= Parser.genFixup(i.name, index);
             }
 
-            vtblPtr = repl.vtbls[index].vtbl.ptr;
+            vtblPtr = _repl.share.vtbls[index].vtbl.ptr;
 
             assert(vtblPtr !is null, "Null vtbl pointer");
 
@@ -135,7 +140,7 @@ string genHeader()
 
             auto obj = cast(Object) p;
 
-            alias extern(C) void function(TypeInfo_Class, void*, _REPL.ReplContext*, bool) cb;
+            alias extern(C) void function(TypeInfo_Class, void*, void*, bool) cb;
             auto fp = cast(cb)(0x` ~ (&hookNewClass).to!string ~ `);
             fp(typeid(obj), p, null, false);
             return obj;

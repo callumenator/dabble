@@ -12,6 +12,7 @@ import
 
 import
     dabble.parser,
+    dabble.repl,
     dabble.defs;
 
 struct Parser
@@ -33,7 +34,7 @@ static:
         p = ReplParse.decimateTree(p);
 
         Code code;
-        foreach(idx, ref sym; repl.symbols)
+        foreach(idx, ref sym; repl.share.symbols)
             sym.generate(code, idx);
 
         foreach(d; stringDups)
@@ -85,7 +86,7 @@ static:
     {
         if (repl && t.successful) {
             auto imp = removechars(t.matches[0], " ");
-            repl.symbols ~= Symbol(Import(imp));
+            repl.share.symbols ~= Symbol(Import(imp));
         }
         return t;
     }
@@ -97,7 +98,7 @@ static:
     {
         if (repl && t.successful)
         {
-            repl.symbols ~= Symbol(Alias(t.matches[0], isGlobal(t.matches[0])));
+            repl.share.symbols ~= Symbol(Alias(t.matches[0], isGlobal(t.matches[0])));
             t.matches.clear;
         }
         return t;
@@ -109,7 +110,7 @@ static:
     T enumDecl(T)(T t)
     {
         if (repl && t.successful) {
-            repl.symbols ~= Symbol(Enum(t.matches[0], isGlobal(t.matches[0])));
+            repl.share.symbols ~= Symbol(Enum(t.matches[0], isGlobal(t.matches[0])));
             t.matches.clear;
         }
         return t;
@@ -121,7 +122,7 @@ static:
     T userType(T)(T t)
     {
         if (repl && t.successful) {
-            repl.symbols ~= Symbol(UserType(t.matches[0]));
+            repl.share.symbols ~= Symbol(UserType(t.matches[0]));
             t.matches.clear;
         }
         return t;
@@ -263,7 +264,7 @@ static:
                     init = strip(p.children[$-1].matches[0]);
 
                 repl.symbolSet[name] = parseID;
-                repl.symbols ~= Symbol(Var(name, type, init));
+                repl.share.symbols ~= Symbol(Var(name, type, init));
                 stringDups ~= name;
             }
         }
@@ -284,7 +285,7 @@ static:
     */
     Var findVar(string name, out size_t index)
     {
-        foreach(s; repl.symbols)
+        foreach(s; repl.share.symbols)
         {
             if (s.type == Symbol.Type.Var && s.v.name == name)
                 return s.v;
@@ -336,8 +337,8 @@ static:
 void pruneSymbols(ref ReplContext repl)
 {
     Symbol[] keep;
-    keep.reserve(repl.symbols.length);
-    foreach(s; repl.symbols)
+    keep.reserve(repl.share.symbols.length);
+    foreach(s; repl.share.symbols)
     {
         if (s.valid)
             keep ~= s;
@@ -347,7 +348,7 @@ void pruneSymbols(ref ReplContext repl)
                 repl.symbolSet.remove(s.v.name);
         }
     }
-    repl.symbols = keep;
+    repl.share.symbols = keep;
 }
 
 /**
@@ -356,11 +357,11 @@ void pruneSymbols(ref ReplContext repl)
 void deleteVar(ref ReplContext repl, string name)
 {
     Symbol[] keep;
-    keep.reserve(repl.symbols.length);
-    foreach(s; repl.symbols)
+    keep.reserve(repl.share.symbols.length);
+    foreach(s; repl.share.symbols)
         if (s.type == Symbol.Type.Var && s.v.name == name)
             repl.symbolSet.remove(s.v.name);
         else
             keep ~= s;
-    repl.symbols = keep;
+    repl.share.symbols = keep;
 }

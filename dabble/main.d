@@ -9,15 +9,18 @@ import
     dabble.parser,
     dabble.repl;
 
+import std.container, std.traits;
+
 
 void main(char[][] args)
 {
-
-    auto repl = newContext();
+    auto repl = ReplContext();
 
     parseArgs(repl, args[1..$]);
 
-    //repl = stress();
+    repl = stress();
+
+    //repl = run(["import std.container;", "a = Array!int(1,2,3,4);"]);
 
     loop(repl);
 
@@ -91,7 +94,7 @@ ReplContext stress()
 
 ReplContext run(string[] code, uint debugLevel = 0)
 {
-    auto repl = newContext("replDll", debugLevel);
+    auto repl = ReplContext("replDll", debugLevel);
     repl.debugLevel |= Debug.times;
     string err;
     foreach(i, c; code)

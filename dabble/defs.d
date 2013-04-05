@@ -100,9 +100,9 @@ string NewTypeof(string S, T...)(T t) // for tuples
     return "Tuple!" ~ T.stringof;
 }
 
-T* getVar(T)(ReplContext repl, size_t index)
+T* getVar(T)(const(Symbol[]) symbols, size_t index)
 {
-    return cast(T*)repl.symbols[index].v.addr;
+    return cast(T*)symbols[index].v.addr;
 }
 
 string exprResult(E)(lazy E expr)
@@ -130,17 +130,12 @@ void dupSearch(T)(ref T t, void* start, void* stop)
     static if (isFunctionPointer!T)
     {
         if (t >= start && t <= stop)
-        {
             writeln("Function pointer into code ", T.stringof);
-        }
     }
     else static if (isArray!T && !isStaticArray!T)
     {
         if (t.ptr >= start && t.ptr <= stop)
-        {
-            writeln("Duping ", T.stringof);
             t = cast(T)t.dup;
-        }
 
         // Now check the elements of the array
         static if (needsDup!(ForeachType!T))
@@ -151,7 +146,6 @@ void dupSearch(T)(ref T t, void* start, void* stop)
     {
         if (cast(void*)t >= start && cast(void*)t <= stop)
         {
-            writeln("Duping ", T.stringof);
             auto newMem = new void[]((PointerTarget!T).sizeof);
             memcpy(newMem.ptr, t, (PointerTarget!T).sizeof);
             t = cast(T)newMem.ptr;
@@ -171,7 +165,7 @@ void dupSearch(T)(ref T t, void* start, void* stop)
             baseAddr = cast(void*)t;
         }
 
-        foreach(f; t.tupleof)
+        foreach(ref f; t.tupleof)
         {
             auto addr =  baseAddr + offset;
             static if ( (is(typeof(f) == class) || isPointer!(typeof(f))) )
@@ -183,7 +177,6 @@ void dupSearch(T)(ref T t, void* start, void* stop)
             {
                 dupSearch((*(cast(typeof(f)*)addr)), start, stop);
             }
-
             offset += f.sizeof;
         }
     }
@@ -310,7 +303,7 @@ struct Var
                 "  if (" ~ sym(index) ~ ".v.func) {\n"
                 "    " ~ sym(index) ~ ".v.current = q{", init, "}.idup;\n"
                 "  } else {\n"
-                "    " ~ sym(index) ~ ".v.ty = _REPL.buildType!(typeof(*",name, "))(_repl_);\n"
+                "    " ~ sym(index) ~ ".v.ty = _REPL.buildType!(typeof(*",name, "))(_repl_.map);\n"
                 "}}\n");
         }
         else // var has already been created, just grab it
@@ -327,7 +320,7 @@ struct Var
             }
             else
             {
-                put(c.prefix, "auto ", name, " = _REPL.getVar!(", type, ")(_repl_,", index.to!string, ");\n");
+                put(c.prefix, "auto ", name, " = _REPL.getVar!(", type, ")(_repl_.symbols,", index.to!string, ");\n");
             }
         }
     }
@@ -573,7 +566,7 @@ struct Type
         return null;
     }
 
-    Tuple!(string,Type*) view(Operation[] stack, void* ptr, ref ReplContext repl)
+    Tuple!(string,Type*) view(Operation[] stack, void* ptr, ref Type*[string] map)
     {
         void* addr = ptr;
         Type* currType = &this;
@@ -593,7 +586,7 @@ struct Type
                     currType = currType.member(addr, i.val);
                     break;
                 case Cast:
-                    currType = buildType(i.val, repl);
+                    currType = buildType(i.val, map);
                     if (currType is null)
                         return tuple("cast unsuccessful", cast(Type*)null);
                     break;
@@ -740,21 +733,21 @@ struct Operation
 /**
 * Run buildType for the built-in types.
 */
-void buildBasicTypes(ref ReplContext repl)
+void buildBasicTypes(ref Type*[string] map)
 {
     enum types = ["byte", "ubyte", "char", "dchar", "wchar",
                   "short", "ushort", "int", "uint", "long", "ulong",
                   "float", "double", "real"];
 
-    foreach(t; TypeTuple!(byte, ubyte, char, dchar, wchar, int, uint,
+    foreach(T; TypeTuple!(byte, ubyte, char, dchar, wchar, int, uint,
                           short, ushort, long, ulong, float, double, real))
-    buildType!t(repl);
+    buildType!T(map);
 }
 
 /**
 * For dynamic (but simple) type building.
 */
-Type* buildType()(string typeString, ref ReplContext repl)
+Type* buildType()(string typeString, ref Type*[string] map)
 {
     bool isIdentChar(dchar c)
     {
@@ -764,8 +757,8 @@ Type* buildType()(string typeString, ref ReplContext repl)
                (c == '_');
     }
 
-    if (typeString in repl.map)
-        return repl.map[typeString];
+    if (typeString in map)
+        return map[typeString];
 
     string ident;
     while(!typeString.empty && isIdentChar(typeString.front))
@@ -782,9 +775,9 @@ Type* buildType()(string typeString, ref ReplContext repl)
             s.popFront();
     }
 
-    if (ident in repl.map)
+    if (ident in map)
     {
-        auto baseType = repl.map[ident]; // current type
+        auto baseType = map[ident]; // current type
 
         // Get *, [], [number]
         while(!typeString.empty)
@@ -798,7 +791,7 @@ Type* buildType()(string typeString, ref ReplContext repl)
                     type._ref = baseType;
                     type.typeName = ident ~ "*";
                     type.typeSize = (void*).sizeof;
-                    repl.map[type.typeName.idup] = type;
+                    map[type.typeName.idup] = type;
                     baseType = type;
                     break;
 
@@ -828,7 +821,7 @@ Type* buildType()(string typeString, ref ReplContext repl)
                         type.length = len.to!size_t;
                         type.typeName = ident ~ "[" ~ len ~ "]";
                         type.typeSize = (baseType.typeSize)*type.length;
-                        repl.map[type.typeName.idup] = type;
+                        map[type.typeName.idup] = type;
                         baseType = type;
                     }
                     else // dynamic array
@@ -838,7 +831,7 @@ Type* buildType()(string typeString, ref ReplContext repl)
                         type._ref = baseType;
                         type.typeName = ident ~ "[]";
                         type.typeSize = (void[]).sizeof;
-                        repl.map[type.typeName.idup] = type;
+                        map[type.typeName.idup] = type;
                         baseType = type;
                     }
                     break;
@@ -860,15 +853,15 @@ Type* buildType()(string typeString, ref ReplContext repl)
 /**
 * Static type building.
 */
-Type* buildType(T)(ref ReplContext repl, Type* ptr = null)
+Type* buildType(T)(ref Type*[string] map, Type* ptr = null)
 {
     alias typeName!T name;
 
-    if (name in repl.map)
+    if (name in map)
     {
         if (trace) writeln("buildType: retrieving ", name);
-        if (ptr !is null) *ptr = *repl.map[name];
-        return repl.map[name];
+        if (ptr !is null) *ptr = *map[name];
+        return map[name];
     }
 
     Type* t;
@@ -878,7 +871,7 @@ Type* buildType(T)(ref ReplContext repl, Type* ptr = null)
 
     t.typeName = name.idup;
     t.typeSize = T.sizeof;
-    repl.map[name.idup] = t; // store it here to avoid infinite recursion
+    map[name.idup] = t; // store it here to avoid infinite recursion
 
     if (trace) writeln("buildType: building ", name);
 
@@ -898,14 +891,14 @@ Type* buildType(T)(ref ReplContext repl, Type* ptr = null)
             {
                 enum _name = ((splitter(T.tupleof[i].stringof, ".")).array())[$-1];
                 enum _offset = T.tupleof[i].offsetof;
-                mixin("t._object[`"~_name~"`.idup]=Tuple!(Type*,`type`,size_t,`offset`)(buildType!(_Type)(repl), _offset);");
+                mixin("t._object[`"~_name~"`.idup]=Tuple!(Type*,`type`,size_t,`offset`)(buildType!(_Type)(map), _offset);");
             }
         }
 
         // Here we get inner defs, that may not be directly used by the type
         foreach(m; __traits(allMembers, T))
-        static if (__traits(compiles, mixin("{TypeBuilder.buildType!(T."~m~")(repl);}")))
-            mixin("TypeBuilder.buildType!(T."~m~")(repl);");
+        static if (__traits(compiles, mixin("{TypeBuilder.buildType!(T."~m~")(map);}")))
+            mixin("TypeBuilder.buildType!(T."~m~")(map);");
     }
     else static if (isPointer!T)
     {
@@ -913,7 +906,7 @@ Type* buildType(T)(ref ReplContext repl, Type* ptr = null)
 
         t.flag = Type.Pointer;
         t._ref = new Type;
-        buildType!(PointerTarget!T)(repl, t._ref);
+        buildType!(PointerTarget!T)(map, t._ref);
     }
     else static if (isArray!T)
     {
@@ -927,11 +920,11 @@ Type* buildType(T)(ref ReplContext repl, Type* ptr = null)
             t.length = T.length;
         }
         t._ref = new Type;
-        buildType!(ArrayElement!T)(repl, t._ref);
+        buildType!(ArrayElement!T)(map, t._ref);
     }
     else static if (isAssociativeArray!T)
     {
-        t = buildType!(object.AssociativeArray!(KeyType!T, ValueType!T))(repl);
+        t = buildType!(object.AssociativeArray!(KeyType!T, ValueType!T))(map);
     }
     else
     {
@@ -985,42 +978,24 @@ template Iota(size_t i, size_t n)
     else { alias TypeTuple!(i, Iota!(i + 1, n - 1)) Iota; }
 }
 
-enum Debug
+struct ReplShare
 {
-    none        = 0x00, /// no debug output
-    times       = 0x01, /// display time to parse, build and call
-    stages      = 0x02, /// display parse, build, call messages
-    parseOnly   = 0x04, /// show parse tree and return
-    print       = 0x08  /// add writelns to end of every line
-}
-
-struct ReplContext
-{
-    struct Paths { string filename, tempPath, fullName; }
-    struct Mods { string path, name; long modified; }
-
-    Paths paths;
-    Mods[] userModules;
-
     Symbol[] symbols;
-    long[string] symbolSet;
-
     Vtbl[] vtbls;
-    string vtblFixup;
-
-    uint debugLevel = Debug.none;
-
     void*[2] imageBounds; /// memory bounds of the dll image
     Type*[string] map; /// map used by typeBuilder and friends
     void* gc; /// host gc instance
 
-    /// Reset a REPL session
+    void init()
+    {
+        buildBasicTypes(map);
+    }
+
     void reset()
     {
         symbols.clear;
-        symbolSet.clear;
-        userModules.clear;
         vtbls.clear;
-        vtblFixup.clear;
+        map.clear;
+        init();
     }
 }
