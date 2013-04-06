@@ -117,14 +117,14 @@ template needsDup(T)
         enum needsDup = false;
 }
 
-void dupSearch(T)(ref T t, void* start, void* stop)
+void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
 {
     import std.c.string;
 
     static if (isFunctionPointer!T)
     {
         if (t >= start && t <= stop)
-            writeln("Function pointer into code ", T.stringof);
+            keepAlive = true;
     }
     else static if (isArray!T && !isStaticArray!T)
     {
@@ -134,7 +134,7 @@ void dupSearch(T)(ref T t, void* start, void* stop)
         // Now check the elements of the array
         static if (needsDup!(ForeachType!T))
             foreach(ref e; t)
-                dupSearch(e, start, stop);
+                dupSearch(e, start, stop, keepAlive);
     }
     else static if (isPointer!T)
     {
@@ -146,7 +146,7 @@ void dupSearch(T)(ref T t, void* start, void* stop)
         }
 
         static if (needsDup!(PointerTarget!T))
-            dupSearch(*t, start, stop);
+            dupSearch(*t, start, stop, keepAlive);
     }
     else static if (isAggregateType!T)
     {
@@ -165,11 +165,11 @@ void dupSearch(T)(ref T t, void* start, void* stop)
             static if ( (is(typeof(f) == class) || isPointer!(typeof(f))) )
             {
                 if (f !is null)
-                    dupSearch((*(cast(typeof(f)*)addr)), start, stop);
+                    dupSearch((*(cast(typeof(f)*)addr)), start, stop, keepAlive);
             }
             else
             {
-                dupSearch((*(cast(typeof(f)*)addr)), start, stop);
+                dupSearch((*(cast(typeof(f)*)addr)), start, stop, keepAlive);
             }
             offset += f.sizeof;
         }
@@ -973,8 +973,9 @@ struct ReplShare
 {
     Symbol[] symbols;
     Vtbl[] vtbls;
-    void*[2] imageBounds; /// memory bounds of the dll image
+    void*[] imageBounds; /// memory bounds of the dll image (dmd 2.062 bug prevents static array)
     Type*[string] map; /// map used by typeBuilder and friends
+    bool keepAlive; /// keep this dll in memory, something has a pointer into it
     void* gc; /// host gc instance
 
     void init()

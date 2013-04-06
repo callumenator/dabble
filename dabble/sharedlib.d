@@ -47,6 +47,7 @@ version(Windows)
 
         void*[2] bounds()
         {
+            import std.stdio;
             assert(handle !is null);
             void*[2] bounds;
             getImageBounds(handle, bounds[0], bounds[1]);

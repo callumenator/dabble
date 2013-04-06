@@ -413,8 +413,9 @@ bool build(Tuple!(string,string) code,
         code[0] ~
         "\n\nexport extern(C) int _main(ref _REPL.ReplShare _repl_)\n"
         "{\n" ~
-        "    gc_setProxy(_repl_.gc);\n" ~
         "    import std.exception;\n" ~
+        "    _repl_.keepAlive = false;\n" ~
+        "    gc_setProxy(_repl_.gc);\n" ~
         "    auto e = collectException!Throwable(_main2(_repl_));\n" ~
         "    if (e) { writeln(e.msg); return -1; }\n" ~
         "    return 0;\n" ~
@@ -590,6 +591,9 @@ CallResult call(ref ReplContext repl,
 
     auto res = funcPtr(repl.share);
 
+    if (repl.share.keepAlive)
+        lastLib.handle = null;
+
     scope(exit) GC.removeRange(getSectionBase(lib.handle, ".CRT"));
 
     if (res == -1)
@@ -633,7 +637,6 @@ string parseError(ReplContext repl, string error, string codeFilename)
 
     // Read the code, so we can refer to lines
     auto code = splitLines(readText(codeFilename));
-
 
     string filePrepend;
     if (codeFilename != repl.paths.fullName ~ ".d")
