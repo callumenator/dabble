@@ -21,6 +21,7 @@ ReplParse:
            / .
 
     FuncBlock <~ wx BwParens((~Type)/VarRewrite/.) wx BwBraces(Import/UserType/VarRewrite/.)
+               / wx BwParens((~Type)/VarRewrite/.) wx '=>' wx GrabToColon(Import/VarRewrite/.)
 
     ArrayLit <~ BwBrackets(VarRewrite/.)
 
@@ -64,11 +65,6 @@ ReplParse:
                  /  ClassDecl
                  /  FunctionDecl ) {Parser.userType}
 
-    Var <~( AutoVarDeclInit {Parser.autoVarDecl}
-         /  VarDeclInit  {Parser.varDecl}
-         /  VarDecl      {Parser.varDecl} )
-
-
     EnumDecl        <- wx ~("enum" ;ws ( ~Type ;ws Ident wx '=' GrabToColon ';'
                                        / Ident wx '=' GrabToColon ';'
                                        / Ident wx ':' wx ~Type wx EnumBody
@@ -96,6 +92,10 @@ ReplParse:
                                               / ~ParameterList ) wx ~Constraint? wx AllBetween(LBrace,RBrace))
 
     ParameterList   <- BwParens(.)
+
+    Var <~ AutoVarDeclInit {Parser.autoVarDecl}
+         / VarDeclInit     {Parser.varDecl}
+         / VarDecl         {Parser.varDecl}
 
     VarDecl         <- ~Type ;ws Ident wx ;';'
     VarDeclInit     <- ~Type ;ws Ident wx ;'=' (~GrabToColon(VarRewrite/.)) :';'

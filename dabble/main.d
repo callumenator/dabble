@@ -9,15 +9,14 @@ import
     dabble.parser,
     dabble.repl;
 
-
-
 void main(char[][] args)
 {
     auto repl = ReplContext();
 
     parseArgs(repl, args[1..$]);
 
-    //repl = stress();
+    repl = stress();
+
     loop(repl);
 
     return;
@@ -88,6 +87,13 @@ ReplContext stress()
     "if (true) { auto b = [1,2,3]; writeln(b); } else { auto b = `hello`; writeln(b); }",
     "counter0 = 10;",
     "while(counter0-- > 1) { if (false) { auto _temp = 8; } else { writeln(counter0);} }",
+    "func0 = (int i) { return i + 5; };",
+    "func0(10);",
+    "func1 = func0;",
+    "func1(10);",
+    "func2 = (int i) => i + 5;",
+    "func3 = (int i) => (i + 5);",
+    "func1(func2(func3(5)));",
     ]);
 }
 

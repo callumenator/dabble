@@ -173,7 +173,7 @@ bool handleMetaCommand(ref ReplContext repl,
             {
                 foreach(val; repl.share.symbols)
                 {
-                    if (val.type == Symbol.Type.Var)
+                    if (val.type == Symbol.Type.Var && val.v.ty !is null)
                     {
                         auto info = val.v.ty.view([], val.v.addr, repl.share.map);
                         writeln(val.v.name, " (", info[1].toString(), ") = ", info[0]);
@@ -192,7 +192,7 @@ bool handleMetaCommand(ref ReplContext repl,
                 {
                     auto parseResult = parseExpr(a);
                     foreach(s; repl.share.symbols)
-                        if (s.type == Symbol.Type.Var && s.v.name == parseResult[0])
+                        if (s.type == Symbol.Type.Var && s.v.name == parseResult[0]  && s.v.ty !is null)
                             writeln(s.v.ty.view(parseResult[1], s.v.addr, repl.share.map)[0]);
                 }
                 break;
@@ -206,7 +206,7 @@ bool handleMetaCommand(ref ReplContext repl,
             {
                 auto parseResult = parseExpr(a);
                 foreach(s; repl.share.symbols)
-                    if (s.type == Symbol.Type.Var && s.v.name == parseResult[0])
+                    if (s.type == Symbol.Type.Var && s.v.name == parseResult[0] && s.v.ty !is null)
                         writeln(s.v.ty.view(parseResult[1], s.v.addr, repl.share.map)[1].toString());
             }
             break;

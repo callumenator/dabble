@@ -846,87 +846,92 @@ Type* buildType()(string typeString, ref Type*[string] map)
 */
 Type* buildType(T)(ref Type*[string] map, Type* ptr = null)
 {
-    alias typeName!T name;
+    static if (!__traits(compiles, T.sizeof))
+        return null;
+    else {
 
-    if (name in map)
-    {
-        if (trace) writeln("buildType: retrieving ", name);
-        if (ptr !is null) *ptr = *map[name];
-        return map[name];
-    }
+        alias typeName!T name;
 
-    Type* t;
-
-    // This is to avoid problems with circular deps
-    t = ptr ? ptr : new Type;
-
-    t.typeName = name.idup;
-    t.typeSize = T.sizeof;
-    map[name.idup] = t; // store it here to avoid infinite recursion
-
-    if (trace) writeln("buildType: building ", name);
-
-    static if (isAggregateType!T)
-    {
-        if (trace) writeln("buildType: type is aggregate");
-
-        static if (is(T == class))
-            t.flag = Type.Class;
-        else
-            t.flag = Type.Struct;
-
-        foreach(i; Iota!(0, T.tupleof.length))
+        if (name in map)
         {
-            alias typeof(T.tupleof[i]) _Type;
-            static if (!isFunctionPointer!_Type)
+            if (trace) writeln("buildType: retrieving ", name);
+            if (ptr !is null) *ptr = *map[name];
+            return map[name];
+        }
+
+        Type* t;
+
+        // This is to avoid problems with circular deps
+        t = ptr ? ptr : new Type;
+
+        t.typeName = name.idup;
+        t.typeSize = T.sizeof;
+        map[name.idup] = t; // store it here to avoid infinite recursion
+
+        if (trace) writeln("buildType: building ", name);
+
+        static if (isAggregateType!T)
+        {
+            if (trace) writeln("buildType: type is aggregate");
+
+            static if (is(T == class))
+                t.flag = Type.Class;
+            else
+                t.flag = Type.Struct;
+
+            foreach(i; Iota!(0, T.tupleof.length))
             {
-                enum _name = ((splitter(T.tupleof[i].stringof, ".")).array())[$-1];
-                enum _offset = T.tupleof[i].offsetof;
-                mixin("t._object[`"~_name~"`.idup]=Tuple!(Type*,`type`,size_t,`offset`)(buildType!(_Type)(map), _offset);");
+                alias typeof(T.tupleof[i]) _Type;
+                static if (!isFunctionPointer!_Type)
+                {
+                    enum _name = ((splitter(T.tupleof[i].stringof, ".")).array())[$-1];
+                    enum _offset = T.tupleof[i].offsetof;
+                    mixin("t._object[`"~_name~"`.idup]=Tuple!(Type*,`type`,size_t,`offset`)(buildType!(_Type)(map), _offset);");
+                }
             }
+
+            // Here we get inner defs, that may not be directly used by the type
+            foreach(m; __traits(allMembers, T))
+            static if (__traits(compiles, mixin("{TypeBuilder.buildType!(T."~m~")(map);}")))
+                mixin("TypeBuilder.buildType!(T."~m~")(map);");
         }
+        else static if (isPointer!T)
+        {
+            if (trace) writeln("buildType: type is pointer");
 
-        // Here we get inner defs, that may not be directly used by the type
-        foreach(m; __traits(allMembers, T))
-        static if (__traits(compiles, mixin("{TypeBuilder.buildType!(T."~m~")(map);}")))
-            mixin("TypeBuilder.buildType!(T."~m~")(map);");
-    }
-    else static if (isPointer!T)
-    {
-        if (trace) writeln("buildType: type is pointer");
+            t.flag = Type.Pointer;
+            t._ref = new Type;
+            buildType!(PointerTarget!T)(map, t._ref);
+        }
+        else static if (isArray!T)
+        {
+            if (trace) writeln("buildType: type is array");
 
-        t.flag = Type.Pointer;
-        t._ref = new Type;
-        buildType!(PointerTarget!T)(map, t._ref);
-    }
-    else static if (isArray!T)
-    {
-        if (trace) writeln("buildType: type is array");
-
-        static if (!isStaticArray!T)
-            t.flag = Type.DynamicArr;
+            static if (!isStaticArray!T)
+                t.flag = Type.DynamicArr;
+            else
+            {
+                t.flag = Type.StaticArr;
+                t.length = T.length;
+            }
+            t._ref = new Type;
+            buildType!(ArrayElement!T)(map, t._ref);
+        }
+        else static if (isAssociativeArray!T)
+        {
+            t = buildType!(object.AssociativeArray!(KeyType!T, ValueType!T))(map);
+        }
         else
         {
-            t.flag = Type.StaticArr;
-            t.length = T.length;
+            static assert(isBasicType!T);
+
+            if (trace) writeln("buildType: type is basic");
+            t.flag = Type.Basic;
         }
-        t._ref = new Type;
-        buildType!(ArrayElement!T)(map, t._ref);
-    }
-    else static if (isAssociativeArray!T)
-    {
-        t = buildType!(object.AssociativeArray!(KeyType!T, ValueType!T))(map);
-    }
-    else
-    {
-        static assert(isBasicType!T);
 
-        if (trace) writeln("buildType: type is basic");
-        t.flag = Type.Basic;
+        if (trace && t) writeln("buildType: type is ", name, ", ", t.toString());
+        return t;
     }
-
-    if (trace && t) writeln("buildType: type is ", name, ", ", t.toString());
-    return t;
 }
 
 /**
