@@ -139,10 +139,7 @@ void loop(ref ReplContext repl)
 /**
 * Return a command-input prompt.
 */
-string prompt() @safe pure nothrow
-{
-    return ": ";
-}
+string prompt() { return ": "; }
 
 
 /**
@@ -150,8 +147,8 @@ string prompt() @safe pure nothrow
 */
 string title()
 {
-    import std.compiler;
-    return "DABBLE: (DMD " ~ version_major.to!string ~ "." ~ version_minor.to!string ~ ")";
+    import std.compiler, std.conv;
+    return text("DABBLE: (DMD ", version_major, ".", version_minor, ")");
 }
 
 
