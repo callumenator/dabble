@@ -16,6 +16,8 @@ public import dabble.defs;
 
 extern(C) void* gc_getProxy();
 
+private SharedLib[] keepAlive;
+
 
 enum Debug
 {
@@ -178,6 +180,12 @@ bool handleMetaCommand(ref ReplContext repl,
                     }
                 }
             }
+            else if (args.length == 1 && args[0] == "__keepAlive")
+            {
+                writeln("SharedLibs still alive:");
+                foreach(s; keepAlive)
+                    writeln("  ", s);
+            }
             else // print selected symbols
             {
                 foreach(a; args)
@@ -209,6 +217,7 @@ bool handleMetaCommand(ref ReplContext repl,
             if (canFind(args, "session"))
             {
                 repl.reset();
+                keepAlive.clear;
                 writeln("Session reset");
             }
             break;
@@ -592,7 +601,10 @@ CallResult call(ref ReplContext repl,
     auto res = funcPtr(repl.share);
 
     if (repl.share.keepAlive)
+    {
+        keepAlive ~= lib;
         lastLib.handle = null;
+    }
 
     scope(exit) GC.removeRange(getSectionBase(lib.handle, ".CRT"));
 
