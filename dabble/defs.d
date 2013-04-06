@@ -10,57 +10,46 @@ import
     std.traits,
     std.range;
 
+
+/**
+* Info shared between DLL and REPL executable.
+*/
+struct ReplShare
+{
+    Symbol[] symbols;
+    Vtbl[] vtbls;
+    void*[] imageBounds; /// memory bounds of the dll image (dmd 2.062 bug prevents static array)
+    Type*[string] map; /// map used by typeBuilder and friends
+    bool keepAlive; /// keep this dll in memory, something has a pointer into it
+    void* gc; /// host gc instance
+
+    void init()
+    {
+        buildBasicTypes(map);
+    }
+
+    void reset()
+    {
+        symbols.clear;
+        vtbls.clear;
+        map.clear;
+        init();
+    }
+}
+
+
 /**
 * Output this module to another .d file
 */
-string moduleFileName()
-{
-    return __FILE__;
-}
+string moduleFileName() { return __FILE__; }
 
-char[1024] buffer;
-
-void fixUp()
-{
-    import core.sys.windows.dll, core.sys.windows.windows;
-    import core.sys.windows.threadaux : getTEB;
-
-    alias extern(Windows)
-    void* fnRtlAllocateHeap(void* HeapHandle, uint Flags, size_t Size) nothrow;
-
-    HANDLE hnd = GetModuleHandleA( "NTDLL" );
-    assert( hnd, "cannot get module handle for ntdll" );
-
-    fnRtlAllocateHeap* fnAlloc = cast(fnRtlAllocateHeap*) GetProcAddress( hnd, "RtlAllocateHeap" );
-
-    auto teb = getTEB();
-    void** peb = cast(void**) teb[12];
-    void* heap = peb[6];
-
-    auto sz = _tlsend - _tlsstart;
-    void* _tlsdata = cast(void*) (*fnAlloc)( heap, 0xc0000, sz );
-
-    core.stdc.string.memcpy( _tlsdata, _tlsstart, sz );
-
-    auto tlsindex = 1;
-
-    // create copy of tls pointer array
-    void** array = cast(void**) (*fnAlloc)( heap, 0xc0000, (tlsindex + 1) * (void*).sizeof );
-
-    if( tlsindex > 0 && teb[11] )
-        core.stdc.string.memcpy( array, teb[11], tlsindex * (void*).sizeof);
-
-    array[tlsindex] = _tlsdata;
-    teb[11] = cast(void*) array;
-
-    _tls_index ++;
-}
 
 void* newType(T)()
 {
     T t = T.init;
     return newExpr(t);
 }
+
 
 void* newExpr(E)(lazy E expr)
 {
@@ -79,6 +68,7 @@ void* newExpr(E)(lazy E expr)
         static assert(0);
 }
 
+
 string NewTypeof(string S, E)(lazy E expr)
 {
     import std.traits;
@@ -89,21 +79,25 @@ string NewTypeof(string S, E)(lazy E expr)
         return "typeof(" ~ S ~ ")";
 }
 
+
 string NewTypeof(string S, T...)(T t) // for tuples
 {
     return "Tuple!" ~ T.stringof;
 }
+
 
 T* getVar(T)(const(Symbol[]) symbols, size_t index)
 {
     return cast(T*)symbols[index].v.addr;
 }
 
+
 string exprResult(E)(lazy E expr)
 {
     auto temp = expr();
     return temp.to!string;
 }
+
 
 template needsDup(T)
 {
@@ -117,6 +111,11 @@ template needsDup(T)
         enum needsDup = false;
 }
 
+
+/**
+* Look for pointers to DLL data, and copy onto the heap. keepAlive == true
+* indicates that a function pointer is pointing at DLL code.
+*/
 void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
 {
     import std.c.string;
@@ -145,6 +144,7 @@ void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
             t = cast(T)newMem.ptr;
         }
 
+        // Check the contents of the pointer target
         static if (needsDup!(PointerTarget!T))
             dupSearch(*t, start, stop, keepAlive);
     }
@@ -161,20 +161,20 @@ void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
 
         foreach(ref f; t.tupleof)
         {
-            auto addr =  baseAddr + offset;
             static if ( (is(typeof(f) == class) || isPointer!(typeof(f))) )
             {
                 if (f !is null)
-                    dupSearch((*(cast(typeof(f)*)addr)), start, stop, keepAlive);
+                    dupSearch((*(cast(typeof(f)*)(baseAddr + offset))), start, stop, keepAlive);
             }
             else
             {
-                dupSearch((*(cast(typeof(f)*)addr)), start, stop, keepAlive);
+                dupSearch((*(cast(typeof(f)*)(baseAddr + offset))), start, stop, keepAlive);
             }
             offset += f.sizeof;
         }
     }
 }
+
 
 /**
 * Used mainly for corner case like appender!string, without the '()'.
@@ -187,6 +187,7 @@ template TypeOf(T)
         alias T TypeOf;
 }
 
+
 /**
 * Return the mixin string to access a symbol by index.
 */
@@ -195,12 +196,8 @@ string sym(size_t index)
     return "_repl_.symbols["~index.to!string~"]";
 }
 
-struct Code
-{
-    Appender!string header,
-    prefix,
-    suffix;
-}
+
+struct Code { Appender!string header, prefix, suffix; }
 
 struct Var
 {
@@ -318,7 +315,6 @@ struct Var
             }
         }
     }
-
 
     void toString(scope void delegate(const(char)[]) sink)
     {
@@ -484,11 +480,13 @@ bool trace = false;
 struct Type
 {
     enum { Basic, Pointer, Class, Struct, DynamicArr, StaticArr, AssocArr }
+
     union
     {
-        Type* _ref;
-        Tuple!(Type*,"type",size_t,"offset")[string] _object;
+        Type* _ref; /// for pointer and array types
+        Tuple!(Type*,"type",size_t,"offset")[string] _object; /// for aggregates
     }
+
     uint flag;
     size_t length; // for static arrays
     size_t typeSize;
@@ -740,7 +738,7 @@ void buildBasicTypes(ref Type*[string] map)
 }
 
 /**
-* For dynamic (but simple) type building.
+* Dynamic (but simple) type building.
 */
 Type* buildType()(string typeString, ref Type*[string] map)
 {
@@ -938,6 +936,7 @@ Type* buildType(T)(ref Type*[string] map, Type* ptr = null)
     }
 }
 
+
 /**
 * String name for a type.
 */
@@ -956,6 +955,7 @@ template typeName(T)
         enum typeName = Type.stringof;
 }
 
+
 /**
 * Alias to the element type of an array.
 */
@@ -969,6 +969,7 @@ template ArrayElement(T)
         static assert(false);
 }
 
+
 /**
 * For static foreach.
 */
@@ -978,25 +979,40 @@ template Iota(size_t i, size_t n)
     else { alias TypeTuple!(i, Iota!(i + 1, n - 1)) Iota; }
 }
 
-struct ReplShare
+
+void fixUp()
 {
-    Symbol[] symbols;
-    Vtbl[] vtbls;
-    void*[] imageBounds; /// memory bounds of the dll image (dmd 2.062 bug prevents static array)
-    Type*[string] map; /// map used by typeBuilder and friends
-    bool keepAlive; /// keep this dll in memory, something has a pointer into it
-    void* gc; /// host gc instance
+    import core.sys.windows.dll, core.sys.windows.windows;
+    import core.sys.windows.threadaux : getTEB;
 
-    void init()
-    {
-        buildBasicTypes(map);
-    }
+    alias extern(Windows)
+    void* fnRtlAllocateHeap(void* HeapHandle, uint Flags, size_t Size) nothrow;
 
-    void reset()
-    {
-        symbols.clear;
-        vtbls.clear;
-        map.clear;
-        init();
-    }
+    HANDLE hnd = GetModuleHandleA( "NTDLL" );
+    assert( hnd, "cannot get module handle for ntdll" );
+
+    fnRtlAllocateHeap* fnAlloc = cast(fnRtlAllocateHeap*) GetProcAddress( hnd, "RtlAllocateHeap" );
+
+    auto teb = getTEB();
+    void** peb = cast(void**) teb[12];
+    void* heap = peb[6];
+
+    auto sz = _tlsend - _tlsstart;
+    void* _tlsdata = cast(void*) (*fnAlloc)( heap, 0xc0000, sz );
+
+    core.stdc.string.memcpy( _tlsdata, _tlsstart, sz );
+
+    auto tlsindex = 1;
+
+    // create copy of tls pointer array
+    void** array = cast(void**) (*fnAlloc)( heap, 0xc0000, (tlsindex + 1) * (void*).sizeof );
+
+    if( tlsindex > 0 && teb[11] )
+        core.stdc.string.memcpy( array, teb[11], tlsindex * (void*).sizeof);
+
+    array[tlsindex] = _tlsdata;
+    teb[11] = cast(void*) array;
+
+    _tls_index ++;
 }
+

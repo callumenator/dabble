@@ -70,6 +70,7 @@ extern(C) void hookNewClass(TypeInfo_Class ti,
     }
 }
 
+
 /**
 * Generate the DLL header. This needs to be done dynamically, as we
 * take the address of hookNewClass, and hard-code it in the DLL (!)

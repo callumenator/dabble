@@ -18,6 +18,7 @@ extern(C) void* gc_getProxy();
 
 private SharedLib[] keepAlive;
 
+
 /**
 * Available levels of debug info.
 */
@@ -87,9 +88,7 @@ struct ReplContext
 */
 void loop(ref ReplContext repl)
 {
-    import std.compiler;
-    writeln("DABBLE: (DMD ", version_major, ".", version_minor, ")");
-
+    writeln(title());
     string error;
     char[] inBuffer, codeBuffer;
 
@@ -147,12 +146,24 @@ string prompt() @safe pure nothrow
 
 
 /**
+* Return a title.
+*/
+string title()
+{
+    import std.compiler;
+    return "DABBLE: (DMD " ~ version_major.to!string ~ "." ~ version_minor.to!string ~ ")";
+}
+
+
+/**
 * Handle meta commands
 */
 bool handleMetaCommand(ref ReplContext repl,
                        ref const(char[]) inBuffer,
                        ref char[] codeBuffer)
 {
+    import std.process : system;
+
     auto parse = ReplParse.decimateTree(ReplParse.MetaCommand(inBuffer.to!string));
 
     if (!parse.successful) return false;
@@ -248,9 +259,20 @@ bool handleMetaCommand(ref ReplContext repl,
             }
         }
 
+        case "clear":
+        {
+            if (args.length == 0)
+            {
+                clearScreen();
+                writeln(title());
+            }
+            else if (args.length == 1 && args[0] == "buffer")
+                codeBuffer.clear;
+            break;
+        }
+
         case "debug on": foreach(arg; args) setDebugLevel!"on"(repl, arg); break;
         case "debug off": foreach(arg; args) setDebugLevel!"off"(repl, arg); break;
-        case "clear": codeBuffer.clear; break;
         default: return false;
     }
 
@@ -258,6 +280,22 @@ bool handleMetaCommand(ref ReplContext repl,
     // clear the code buffer
     codeBuffer.clear;
     return true;
+}
+
+
+/**
+* Clear the command window.
+*/
+void clearScreen()
+{
+    import std.process : system;
+
+    version(Windows)
+    {
+        system("cls");
+    }
+    else
+        static assert(false, "Only Windows is supported.");
 }
 
 
@@ -483,7 +521,8 @@ bool buildUserModules(ReplContext repl,
     {
         rebuildLib = true;
         auto text = "module defs;\n"
-                  ~ findSplitAfter(readText(dabble.defs.moduleFileName()),"module dabble.defs;")[1];
+                  ~ readText(dabble.defs.moduleFileName()).findSplitAfter("module dabble.defs;")[1];
+
         auto f = File(repl.paths.tempPath ~ "defs.d", "w");
         f.write(text);
         f.close();

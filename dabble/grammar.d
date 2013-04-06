@@ -151,7 +151,7 @@ enum string metaParser = `
                  / MetaDebugOn MetaArgs
                  / MetaDebugOff MetaArgs
                  / MetaUse MetaArgs
-                 / MetaClear
+                 / MetaClear MetaArgs?
 
     MetaPrint    <- 'print'
     MetaType     <- 'type'

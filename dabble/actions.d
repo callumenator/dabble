@@ -56,6 +56,7 @@ static:
         return tuple(code.header.data, inBody);
     }
 
+
     /**
     * Concat the code that remains in the parse tree.
     */
@@ -63,6 +64,7 @@ static:
     {
         return std.array.join(t.matches);
     }
+
 
     /**
     * Generate code to copy new vtables over heap copies.
@@ -72,6 +74,7 @@ static:
         return "memcpy(_repl_.vtbls["~index.to!string~"].vtbl.ptr, typeid("~name~").vtbl.ptr, "
              ~ "typeid("~name~").vtbl.length * (void*).sizeof);\n";
     }
+
 
     /**
     * Clear the matches for this rule.
@@ -84,6 +87,7 @@ static:
         return t;
     }
 
+
     /**
     * A new import has been added.
     */
@@ -95,6 +99,7 @@ static:
         }
         return t;
     }
+
 
     /**
     * Handle alias declarations
@@ -109,6 +114,7 @@ static:
         return t;
     }
 
+
     /**
     * A new enum has been defined
     */
@@ -120,6 +126,7 @@ static:
         }
         return t;
     }
+
 
     /**
     * A new user type has been defined.
@@ -133,6 +140,7 @@ static:
         return t;
     }
 
+
     /**
     * Dup a string onto the heap.
     */
@@ -144,6 +152,7 @@ static:
         return t;
     }
 
+
     /**
     * Wrap a template argument....
     */
@@ -153,6 +162,7 @@ static:
             t.matches[0] = "(" ~ t.matches[0] ~ ")";
         return t;
     }
+
 
     /**
     * Wrap an expression in the code needed to return its result as a string.
@@ -174,6 +184,7 @@ static:
         return t;
     }
 
+
     /**
     * Re-direct a symbol to its pointer.
     */
@@ -190,6 +201,7 @@ static:
         }
         return t;
     }
+
 
     /**
     * Handle variable assignments that may also be declarations.
@@ -239,6 +251,7 @@ static:
         return p;
     }
 
+
     /**
     * Handle three type of variable declaration/initialization.
     */
@@ -278,14 +291,16 @@ static:
         return p;
     }
 
+
     /**
-    * Dumb linear search through defined symbols.
+    * Check if name is already defined.
     */
     bool isDefined(string name)
     {
         auto ptr = name in repl.symbolSet;
         return ptr !is null;
     }
+
 
     /**
     * Find a Var by name.
@@ -302,6 +317,7 @@ static:
         assert(false, "Tried to find un-defined variable " ~ name);
     }
 
+
     /**
     * Return true if input does not reference any local vars (i.e. can be
     * put in code header.
@@ -317,6 +333,10 @@ static:
         return true;
     }
 
+
+    /**
+    * Called by the parser, used for brace matching/checking multiline.
+    */
     T incBraceCount(T)(T t)
     {
         if (t.successful)
@@ -324,18 +344,21 @@ static:
         return t;
     }
 
+
     void parseError(string msg)
     {
         error ~= msg ~ "\n";
     }
 
+
     ReplContext* repl;
-    long parseID;
-    string inputCopy;
+    long parseID; /// system clock tick to ID the current parse
+    string inputCopy; /// a copy of the input string
     string error;
-    string[] stringDups;
+    string[] stringDups; /// names requiring a dupSearch check
     uint braceCount;
 }
+
 
 /**
 * Remove any symbols that do not have a current value string associated with
@@ -357,6 +380,7 @@ void pruneSymbols(ref ReplContext repl)
     }
     repl.share.symbols = keep;
 }
+
 
 /**
 * Remove a variable with the given name.
