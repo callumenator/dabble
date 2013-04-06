@@ -319,6 +319,7 @@ struct Var
         }
     }
 
+
     void toString(scope void delegate(const(char)[]) sink)
     {
         sink(name);
@@ -437,6 +438,9 @@ struct Symbol
             type = Type.UserType;
         }
     }
+
+    // Commonly used predicate
+    bool isVar() { return type == Type.Var; }
 
     void generate(ref Code c, size_t index)
     {

@@ -18,7 +18,9 @@ extern(C) void* gc_getProxy();
 
 private SharedLib[] keepAlive;
 
-
+/**
+* Available levels of debug info.
+*/
 enum Debug
 {
     none        = 0x00, /// no debug output
@@ -27,6 +29,10 @@ enum Debug
     parseOnly   = 0x04, /// show parse tree and return
 }
 
+
+/**
+* Holds REPL state.
+*/
 struct ReplContext
 {
     Tuple!(string,"filename",
@@ -132,7 +138,7 @@ void loop(ref ReplContext repl)
 
 
 /**
-* Return a command input prompt.
+* Return a command-input prompt.
 */
 string prompt() @safe pure nothrow
 {
@@ -149,10 +155,10 @@ bool handleMetaCommand(ref ReplContext repl,
 {
     auto parse = ReplParse.decimateTree(ReplParse.MetaCommand(inBuffer.to!string));
 
-    if (!parse.successful)
-        return false;
+    if (!parse.successful) return false;
 
     auto cmd = parse.children[0].matches[0];
+
     string[] args;
     if (parse.children.length == 2)
     {
@@ -171,13 +177,11 @@ bool handleMetaCommand(ref ReplContext repl,
         {
             if (args.length == 0 || canFind(args, "all")) // print all vars
             {
-                foreach(val; repl.share.symbols)
+                auto vars = repl.share.symbols.filter!(s => s.type == Symbol.Type.Var && s.v.ty !is null);
+                foreach(val; vars)
                 {
-                    if (val.type == Symbol.Type.Var && val.v.ty !is null)
-                    {
-                        auto info = val.v.ty.view([], val.v.addr, repl.share.map);
-                        writeln(val.v.name, " (", info[1].toString(), ") = ", info[0]);
-                    }
+                    auto info = val.v.ty.view([], val.v.addr, repl.share.map);
+                    writeln(val.v.name, " (", info[1].toString(), ") = ", info[0]);
                 }
             }
             else if (args.length == 1 && args[0] == "__keepAlive")
@@ -190,12 +194,12 @@ bool handleMetaCommand(ref ReplContext repl,
             {
                 foreach(a; args)
                 {
-                    auto parseResult = parseExpr(a);
-                    foreach(s; repl.share.symbols)
-                        if (s.type == Symbol.Type.Var && s.v.name == parseResult[0]  && s.v.ty !is null)
-                            writeln(s.v.ty.view(parseResult[1], s.v.addr, repl.share.map)[0]);
+                    auto p = parseExpr(a);
+                    auto vars = repl.share.symbols.filter!(s => s.isVar() && s.v.name == p[0] && s.v.ty !is null);
+                    foreach(s; vars)
+                        writeln(s.v.ty.view(p[1], s.v.addr, repl.share.map)[0]);
+
                 }
-                break;
             }
             break;
         }
@@ -204,10 +208,10 @@ bool handleMetaCommand(ref ReplContext repl,
         {
             foreach(a; args)
             {
-                auto parseResult = parseExpr(a);
-                foreach(s; repl.share.symbols)
-                    if (s.type == Symbol.Type.Var && s.v.name == parseResult[0] && s.v.ty !is null)
-                        writeln(s.v.ty.view(parseResult[1], s.v.addr, repl.share.map)[1].toString());
+                auto p = parseExpr(a);
+                auto vars = repl.share.symbols.filter!(s => s.isVar() && s.v.name == p[0] && s.v.ty !is null);
+                foreach(s; vars)
+                    writeln(s.v.ty.view(p[1], s.v.addr, repl.share.map)[1].toString());
             }
             break;
         }
@@ -225,9 +229,8 @@ bool handleMetaCommand(ref ReplContext repl,
 
         case "delete":
         {
-            if (args.length > 0)
-                foreach(a; args)
-                    deleteVar(repl, a);
+            foreach(a; args)
+                deleteVar(repl, a);
         }
 
         case "use":
@@ -237,32 +240,17 @@ bool handleMetaCommand(ref ReplContext repl,
             alias ElementType!(typeof(repl.userModules)) TupType;
 
             foreach(a; args)
+            {
                 if (exists(a))
                     repl.userModules ~= TupType(dirName(a), baseName(a), SysTime(0).stdTime());
                 else
                     writeln("Error: module ", a, " could not be found");
+            }
         }
 
-        case "debug on":
-        {
-            foreach(arg; args)
-                setDebugLevel!"on"(repl, arg);
-            break;
-        }
-
-        case "debug off":
-        {
-            foreach(arg; args)
-                setDebugLevel!"off"(repl, arg);
-            break;
-        }
-
-        case "clear":
-        {
-            codeBuffer.clear;
-            break;
-        }
-
+        case "debug on": foreach(arg; args) setDebugLevel!"on"(repl, arg); break;
+        case "debug off": foreach(arg; args) setDebugLevel!"off"(repl, arg); break;
+        case "clear": codeBuffer.clear; break;
         default: return false;
     }
 
@@ -276,7 +264,8 @@ bool handleMetaCommand(ref ReplContext repl,
 /**
 * Turn a debug level on or off, using a string to identify the debug level.
 */
-void setDebugLevel(string s)(ref ReplContext repl, string level) if (s == "on" || s == "off")
+void setDebugLevel(string s)(ref ReplContext repl, string level)
+    if (s == "on" || s == "off")
 {
     import std.string;
 
@@ -387,7 +376,10 @@ bool eval(string code,
 /**
 * Attempt a build command, redirect errout to a text file.
 */
-bool attempt(ReplContext repl, string cmd, out string err, string codeFilename)
+bool attempt(ReplContext repl,
+             string cmd,
+             out string err,
+             string codeFilename)
 {
     import std.process : system;
     import std.file : exists, readText;
@@ -416,21 +408,20 @@ bool build(Tuple!(string,string) code,
     import std.file : exists, readText;
     import std.path : dirSeparator;
     import std.process : system, escapeShellFileName;
-    import std.parallelism : task;
 
     auto text =
         code[0] ~
         "\n\nexport extern(C) int _main(ref _REPL.ReplShare _repl_)\n"
-        "{\n" ~
-        "    import std.exception;\n" ~
-        "    _repl_.keepAlive = false;\n" ~
-        "    gc_setProxy(_repl_.gc);\n" ~
-        "    auto e = collectException!Throwable(_main2(_repl_));\n" ~
-        "    if (e) { writeln(e.msg); return -1; }\n" ~
-        "    return 0;\n" ~
-        "}\n\n" ~
+        "{\n"
+        "    import std.exception;\n"
+        "    _repl_.keepAlive = false;\n"
+        "    gc_setProxy(_repl_.gc);\n"
+        "    auto e = collectException!Throwable(_main2(_repl_));\n"
+        "    if (e) { writeln(e.msg); return -1; }\n"
+        "    return 0;\n"
+        "}\n\n"
 
-        "void _main2(ref _REPL.ReplShare _repl_)\n" ~
+        "void _main2(ref _REPL.ReplShare _repl_)\n"
         "{\n" ~
         code[1] ~
         "}\n";
@@ -439,16 +430,14 @@ bool build(Tuple!(string,string) code,
     file.write(text ~ genHeader());
     file.close();
 
-    scope(exit) task!cleanup(repl).executeInNewThread();
-
     if (!exists(repl.paths.fullName ~ ".def"))
     {
         file = File(repl.paths.fullName ~ ".def", "w");
 
-        enum def = "LIBRARY replDll\n" ~
-                   "DESCRIPTION 'replDll'\n" ~
-                   "EXETYPE	 NT\n" ~
-                   "CODE PRELOAD\n" ~
+        enum def = "LIBRARY replDll\n"
+                   "DESCRIPTION 'replDll'\n"
+                   "EXETYPE	 NT\n"
+                   "CODE PRELOAD\n"
                    "DATA PRELOAD";
 
         file.write(def);
@@ -570,8 +559,7 @@ enum CallResult
 /**
 * Load the shared lib, and call the _main function. Free the lib on exit.
 */
-CallResult call(ref ReplContext repl,
-                out string error)
+CallResult call(ref ReplContext repl, out string error)
 {
     import core.memory : GC;
 
@@ -622,7 +610,9 @@ CallResult call(ref ReplContext repl,
 * Do some processing on errors returned by DMD.
 */
 import std.range;
-string parseError(ReplContext repl, string error, string codeFilename)
+string parseError(ReplContext repl,
+                  string error,
+                  string codeFilename)
 {
     import std.string : splitLines;
     import std.file : readText, exists;
