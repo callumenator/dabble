@@ -188,10 +188,7 @@ bool handleMetaCommand(ref ReplContext repl,
             {
                 auto vars = repl.share.symbols.filter!(s => s.type == Symbol.Type.Var && s.v.ty.type !is null);
                 foreach(val; vars)
-                {
-                    auto info = val.v.ty.view([], val.v.addr, repl.share.map);
-                    writeln(val.v.name, " (", val.v.displayType, ") = ", info[0]);
-                }
+                    writeln(val.v.name, " (", val.v.displayType, ") = ", val.v.ty.valueOf([], val.v.addr, repl.share.map));
             }
             else if (args.length == 1 && args[0] == "__keepAlive")
             {
@@ -206,8 +203,7 @@ bool handleMetaCommand(ref ReplContext repl,
                     auto p = parseExpr(a);
                     auto vars = repl.share.symbols.filter!(s => s.isVar() && s.v.name == p[0] && s.v.ty !is null);
                     foreach(s; vars)
-                        writeln(s.v.ty.view(p[1], s.v.addr, repl.share.map)[0]);
-
+                        writeln(s.v.ty.valueOf(p[1], s.v.addr, repl.share.map));
                 }
             }
             break;
@@ -220,7 +216,13 @@ bool handleMetaCommand(ref ReplContext repl,
                 auto p = parseExpr(a);
                 auto vars = repl.share.symbols.filter!(s => s.isVar() && s.v.name == p[0] && s.v.ty.type !is null);
                 foreach(s; vars)
-                    writeln(s.v.ty.view(p[1], s.v.addr, repl.share.map)[1].toString());
+                {
+                    auto typeOf = s.v.ty.typeOf(p[1], repl.share.map);
+                    if (typeOf[1].length > 0)
+                        writeln(typeOf[1]);
+                    else
+                        writeln(typeOf[0].toString());
+                }
             }
             break;
         }

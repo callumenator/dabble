@@ -486,7 +486,41 @@ struct QualifiedType
     Qualifier qualifier = Qualifier.None;
     alias type this;
 
-    Tuple!(string,QualifiedType) view(Operation[] stack, void* ptr, ref Type*[string] map)
+    Tuple!(QualifiedType,string) typeOf(Operation[] stack, ref Type*[string] map)
+    {
+        QualifiedType currType = this;
+        foreach(i; stack)
+        {
+            final switch(i.op) with(Operation.Op)
+            {
+                case Deref:
+                    if (!currType.type.isPointer)
+                        return tuple(QualifiedType(), "Error: "~currType.toString()~" is not a pointer");
+                    currType = currType.type._ref;
+                    break;
+                case Index:
+                    if (!currType.type.isArray)
+                        return tuple(QualifiedType(), "Error: "~currType.toString()~" is not an array");
+                    currType = currType.type._ref;
+                    break;
+                case Slice:
+                    return tuple(QualifiedType(), "Error: slicing not supported");
+                case Member:
+                    if (!currType.type.isAggregate || i.val !in currType.type._object)
+                        return tuple(QualifiedType(), "Error: no member "~i.val~" for type "~currType.toString());
+                    currType = currType.type._object[i.val].type;
+                    break;
+                case Cast:
+                    currType = buildType(i.val, map);
+                    if (currType.type is null)
+                        return tuple(QualifiedType(), "Error: unknown type "~i.val);
+                    break;
+            }
+        }
+        return tuple(currType, "");
+    }
+
+    string valueOf(Operation[] stack, void* ptr, ref Type*[string] map)
     {
         void* addr = ptr;
         QualifiedType currType = this;
@@ -501,29 +535,36 @@ struct QualifiedType
                     currType = currType.index(addr, i.val.to!size_t);
                     break;
                 case Slice:
-                    return tuple("slice not supported", QualifiedType());
+                    return "Error: slicing not supported";
                 case Member:
+                    if (!currType.type.isAggregate)
+                        return "Error: " ~ currType.toString() ~ " is not an aggregate";
                     currType = currType.member(addr, i.val);
+                    if (currType.type is null)
+                        return "Error: no member "~i.val~" for "~currType.toString();
                     break;
                 case Cast:
                     currType = buildType(i.val, map);
                     if (currType.type is null)
-                        return tuple("cast unsuccessful", QualifiedType());
+                        return "Error: unknown type " ~ i.val;
                     break;
             }
         }
 
-        if (currType.type !is null)
-        {
-            if (trace) writeln("val: type is ", currType.typeName);
-            return tuple(currType.getMe(addr), currType);
-        }
-        else
-            return tuple("view: Null Type*", QualifiedType());
+        if (currType.type is null)
+            return "Error: null type*";
+
+        if (addr is null)
+            return "Error: null address";
+
+        if (trace) writeln("view: type is ", currType.typeName);
+        return currType.getMe(addr);
     }
 
     string toString(bool expand = true)
     {
+        if (type is null) return "Error: null type*";
+
         final switch(qualifier) with(Qualifier)
         {
             case None: return type.toString(expand);
@@ -618,8 +659,6 @@ struct Type
         }
         return QualifiedType();
     }
-
-
 
     string getMe(void* absAddr)
     {
@@ -877,7 +916,6 @@ template typeQualifier(T)
         enum typeQualifier = QualifiedType.Qualifier.None;
 }
 
-
 /**
 * Static type building.
 */
@@ -892,7 +930,7 @@ QualifiedType buildType(T)(ref Type*[string] map, QualifiedType* ptr = null)
         if (name in map)
         {
             if (trace) writeln("buildType: retrieving ", name);
-            if (ptr !is null) *ptr = QualifiedType(map[name], typeQualifier!T);
+            if (ptr !is null) *ptr.type = *map[name];
             return QualifiedType(map[name], typeQualifier!T);
         }
 
@@ -972,7 +1010,6 @@ QualifiedType buildType(T)(ref Type*[string] map, QualifiedType* ptr = null)
     }
 }
 
-
 /**
 * String name for a type.
 */
@@ -991,7 +1028,6 @@ template typeName(T)
         enum typeName = Type.stringof;
 }
 
-
 /**
 * Alias to the element type of an array.
 */
@@ -1004,7 +1040,6 @@ template ArrayElement(T)
     else
         static assert(false);
 }
-
 
 /**
 * For static foreach.
