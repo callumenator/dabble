@@ -868,6 +868,10 @@ unittest
     "func2 = (int i) => i + 5;",
     "func3 = (int i) => (i + 5);",
     "func1(func2(func3(5)));",
+    "import std.algorithm, std.range;",
+    "arr5 = [1,2,3,4,5];",
+    "arr5 = arr5.map!( a => a + 4).array();",
+    "writeln(arr5);"
     ]);
 }
 
