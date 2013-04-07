@@ -46,9 +46,11 @@ string moduleFileName() { return __FILE__; }
 
 void* newType(T)()
 {
+    import std.c.string;
+
     T t = T.init;
     auto ptr = newExpr(t);
-    *cast(T*)ptr = T.init;
+    memcpy(ptr, &t, T.sizeof);
     return ptr;
 }
 
@@ -296,7 +298,7 @@ struct Var
                 "  if (" ~ sym(index) ~ ".v.func) {\n"
                 "    " ~ sym(index) ~ ".v.current = q{", init, "}.idup;\n"
                 "  } else {\n"
-                "    //" ~ sym(index) ~ ".v.ty = _REPL.buildType!(typeof(*",name, "))(_repl_.map);\n"
+                "    " ~ sym(index) ~ ".v.ty = _REPL.buildType!(typeof(*",name, "))(_repl_.map);\n"
                 "}}\n");
         }
         else // var has already been created, just grab it

@@ -8,6 +8,8 @@ void main(char[][] args)
 {
     auto repl = ReplContext();
     parseArgs(repl, args[1..$]);
+
+    repl = stress();
     loop(repl);
     return;
 }
