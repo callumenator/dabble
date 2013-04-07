@@ -84,9 +84,7 @@ ReplParse:
 
     Constraint      <- wx "if" wx AllBetween(LBracket,RBracket)
 
-    TemplateInstance <- IdentList wx '!' wx ( ~Type / AllBetween(LBracket,RBracket) )
-
-    BaseClassList   <- Seq(~Seq(TemplateInstance / Ident, '.'), ',')
+    BaseClassList   <- Seq(~Symbol, ',')
 
     FunctionDecl    <- wx ~(~Type ws Ident wx ( ~ParameterList wx ~ParameterList
                                               / ~ParameterList ) wx ~Constraint? wx AllBetween(LBrace,RBrace))
@@ -106,12 +104,14 @@ ReplParse:
           / BasicType Seq(TypeSuffix)?
           / TypeOf Seq(TypeSuffix)?
           / Auto
-          / TemplateInstance Seq(TypeSuffix)?
-          / Ident Seq(TypeSuffix)?
+          / Symbol Seq(TypeSuffix)?
 
     Ident       <- identifier
     IdentList   <- Seq( NestedIdent / Ident, '.')
     NestedIdent <- :'(' wx (NestedIdent / Ident) wx :')'
+
+    Symbol <- Ident (wx '!' wx ( ~Type / AllBetween(LBracket,RBracket) ))? (wx '.' Symbol)?
+            / ;'(' wx Symbol wx ;')'
 
     Auto        <- 'auto'
     Storage     <- 'const' / 'shared' / 'immutable' / 'inout'

@@ -28,6 +28,7 @@ static:
         parseID = Clock.currSystemTick().msecs();
         inputCopy = input;
         stringDups.clear;
+        error = "";
         repl = &_repl;
 
         auto p = ReplParse.Search(input);
@@ -49,22 +50,12 @@ static:
             "string _expressionResult;\n" ~
             repl.vtblFixup ~
             code.prefix.data ~
-            genCode(p) ~
+            join(p.matches) ~
             code.suffix.data ~
             "if (_expressionResult.length == 0) _expressionResult = `OK`; writeln(`=> `, _expressionResult);\n";
 
         return tuple(code.header.data, inBody);
     }
-
-
-    /**
-    * Concat the code that remains in the parse tree.
-    */
-    string genCode(T)(T t)
-    {
-        return std.array.join(t.matches);
-    }
-
 
     /**
     * Generate code to copy new vtables over heap copies.
@@ -74,7 +65,6 @@ static:
         return "memcpy(_repl_.vtbls["~index.to!string~"].vtbl.ptr, typeid("~name~").vtbl.ptr, "
              ~ "typeid("~name~").vtbl.length * (void*).sizeof);\n";
     }
-
 
     /**
     * Clear the matches for this rule.
@@ -87,7 +77,6 @@ static:
         return t;
     }
 
-
     /**
     * A new import has been added.
     */
@@ -99,7 +88,6 @@ static:
         }
         return t;
     }
-
 
     /**
     * Handle alias declarations
@@ -114,7 +102,6 @@ static:
         return t;
     }
 
-
     /**
     * A new enum has been defined
     */
@@ -126,7 +113,6 @@ static:
         }
         return t;
     }
-
 
     /**
     * A new user type has been defined.
@@ -140,7 +126,6 @@ static:
         return t;
     }
 
-
     /**
     * Dup a string onto the heap.
     */
@@ -152,7 +137,6 @@ static:
         return t;
     }
 
-
     /**
     * Wrap a template argument....
     */
@@ -162,7 +146,6 @@ static:
             t.matches[0] = "(" ~ t.matches[0] ~ ")";
         return t;
     }
-
 
     /**
     * Wrap an expression in the code needed to return its result as a string.
@@ -184,7 +167,6 @@ static:
         return t;
     }
 
-
     /**
     * Re-direct a symbol to its pointer.
     */
@@ -201,7 +183,6 @@ static:
         }
         return t;
     }
-
 
     /**
     * Handle variable assignments that may also be declarations.
@@ -251,9 +232,8 @@ static:
         return p;
     }
 
-
     /**
-    * Handle three type of variable declaration/initialization.
+    * Handle variable declaration/initialization.
     */
     T varDecl(T)(T p)
     {
@@ -291,7 +271,6 @@ static:
         return p;
     }
 
-
     /**
     * Check if name is already defined.
     */
@@ -300,7 +279,6 @@ static:
         auto ptr = name in repl.symbolSet;
         return ptr !is null;
     }
-
 
     /**
     * Find a Var by name.
@@ -317,7 +295,6 @@ static:
         assert(false, "Tried to find un-defined variable " ~ name);
     }
 
-
     /**
     * Return true if input does not reference any local vars (i.e. can be
     * put in code header.
@@ -333,7 +310,6 @@ static:
         return true;
     }
 
-
     /**
     * Called by the parser, used for brace matching/checking multiline.
     */
@@ -344,12 +320,10 @@ static:
         return t;
     }
 
-
     void parseError(string msg)
     {
         error ~= msg ~ "\n";
     }
-
 
     ReplContext* repl;
     long parseID; /// system clock tick to ID the current parse
@@ -396,3 +370,98 @@ void deleteVar(ref ReplContext repl, string name)
             keep ~= s;
     repl.share.symbols = keep;
 }
+
+
+unittest
+{
+    writeln("/** Testing ", __FILE__, " **/");
+
+    auto repl = ReplContext();
+
+    Parser.go("a = 5;", repl);
+    assert(repl.share.symbols.length == 1 && repl.symbolSet.length == 1);
+    assert(Parser.isDefined("a"));
+
+    Parser.go("string a = `blah`;", repl);
+    assert(Parser.error.length > 0);
+    assert(repl.share.symbols.length == 1 && repl.symbolSet.length == 1);
+
+    size_t index;
+    auto v = Parser.findVar("a", index);
+    assert(index == 0 && v.name == "a" && v.type == "auto");
+
+    deleteVar(repl, "a");
+    assert(repl.share.symbols.length == 0 && repl.symbolSet.length == 0, "deleteVar failed");
+
+    Parser.go("a = `blah`;", repl);
+    assert(repl.share.symbols.length == 1 && repl.symbolSet.length == 1);
+
+    pruneSymbols(repl);
+    assert(repl.share.symbols.length == 0 && repl.symbolSet.length == 0, "pruneSymbols failed");
+
+    repl.reset();
+    Parser.go("import std.string, \n std.array, core.sys.windows.windows;", repl);
+    assert(repl.share.symbols[0].type == Symbol.Type.Import &&
+           repl.share.symbols[0].i.decl == "std.string", "Parse import failure");
+    assert(repl.share.symbols[1].type == Symbol.Type.Import &&
+           repl.share.symbols[1].i.decl == "std.array", "Parse import failure");
+    assert(repl.share.symbols[2].type == Symbol.Type.Import &&
+           repl.share.symbols[2].i.decl == "core.sys.windows.windows", "Parse import failure");
+
+    repl.reset();
+    Parser.go("alias MyType MyAliasToType;", repl);
+    assert(repl.share.symbols[0].type == Symbol.Type.Alias &&
+           repl.share.symbols[0].a.decl == "alias MyType MyAliasToType;",
+           "Parse alias failure: " ~ repl.share.symbols[0].a.decl);
+
+    repl.reset();
+    Parser.go("alias MyAliasToType = MyAlias;", repl);
+    assert(repl.share.symbols[0].type == Symbol.Type.Alias &&
+           repl.share.symbols[0].a.decl == "alias MyAliasToType = MyAlias;",
+           "Parse alias failure: " ~ repl.share.symbols[0].a.decl);
+
+    repl.reset();
+    Parser.go("enum MyEnum { a = 0, b = 0x01, c = 10+5 }", repl);
+    assert(repl.share.symbols[0].type == Symbol.Type.Enum &&
+           repl.share.symbols[0].e.decl == "enum MyEnum { a = 0, b = 0x01, c = 10+5 }",
+           "Parse enum failure: " ~ repl.share.symbols[0].e.decl);
+
+    repl.reset();
+    Parser.go("enum : uint { a, b, c }", repl);
+    assert(repl.share.symbols[0].type == Symbol.Type.Enum &&
+           repl.share.symbols[0].e.decl == "enum : uint { a, b, c }",
+           "Parse enum failure: " ~ repl.share.symbols[0].e.decl);
+
+    repl.reset();
+    Parser.go("enum MyEnum = `blah`;", repl);
+    assert(repl.share.symbols[0].type == Symbol.Type.Enum &&
+           repl.share.symbols[0].e.decl == "enum MyEnum = `blah`.idup;",
+           "Parse enum failure: " ~ repl.share.symbols[0].e.decl);
+
+    repl.reset();
+    Parser.go("class A : B, C, D { int i; void foo() {} }", repl);
+    assert(repl.share.symbols[0].type == Symbol.Type.UserType &&
+           repl.share.symbols[0].u.decl == "class A :B,C,D{ int i; void foo() {} }",
+           "Parse user type failure: " ~ repl.share.symbols[0].u.decl);
+
+    repl.reset();
+    Parser.go("class A(T) : B!int, C!MyType, D.E!(int).F!int { int i; void foo() {} }", repl);
+    assert(repl.share.symbols[0].type == Symbol.Type.UserType &&
+           repl.share.symbols[0].u.decl == "class A(T) :B!int,C!MyType,D.E!(int).F!int{ int i; void foo() {} }",
+           "Parse user type failure: " ~ repl.share.symbols[0].u.decl);
+
+    repl.reset();
+    Parser.go("class A(T) : B!(((int))) {}", repl);
+    assert(repl.share.symbols[0].type == Symbol.Type.UserType &&
+           repl.share.symbols[0].u.decl == "class A(T) :B!(((int))){}",
+           "Parse user type failure: " ~ repl.share.symbols[0].u.decl);
+
+    repl.reset();
+    Parser.go("class A(T)   if (is(T == class)) : B!(((int))) {}", repl);
+    assert(repl.share.symbols[0].type == Symbol.Type.UserType &&
+           repl.share.symbols[0].u.decl == "class A(T) if (is(T == class)) :B!(((int))){}",
+           "Parse user type failure: " ~ repl.share.symbols[0].u.decl);
+}
+
+
+

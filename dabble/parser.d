@@ -81,9 +81,7 @@ ReplParse:
 
     Constraint      <- wx "if" wx AllBetween(LBracket,RBracket)
 
-    TemplateInstance <- IdentList wx '!' wx ( ~Type / AllBetween(LBracket,RBracket) )
-
-    BaseClassList   <- Seq(~Seq(TemplateInstance / Ident, '.'), ',')
+    BaseClassList   <- Seq(~Symbol, ',')
 
     FunctionDecl    <- wx ~(~Type ws Ident wx ( ~ParameterList wx ~ParameterList
                                               / ~ParameterList ) wx ~Constraint? wx AllBetween(LBrace,RBrace))
@@ -103,12 +101,14 @@ ReplParse:
           / BasicType Seq(TypeSuffix)?
           / TypeOf Seq(TypeSuffix)?
           / Auto
-          / TemplateInstance Seq(TypeSuffix)?
-          / Ident Seq(TypeSuffix)?
+          / Symbol Seq(TypeSuffix)?
 
     Ident       <- identifier
     IdentList   <- Seq( NestedIdent / Ident, '.')
     NestedIdent <- :'(' wx (NestedIdent / Ident) wx :')'
+
+    Symbol <- Ident (wx '!' wx ( ~Type / AllBetween(LBracket,RBracket) ))? (wx '.' Symbol)?
+            / ;'(' wx Symbol wx ;')'
 
     Auto        <- 'auto'
     Storage     <- 'const' / 'shared' / 'immutable' / 'inout'
@@ -288,7 +288,6 @@ struct GenericReplParse(TParseTree)
         rules["UnionDecl"] = toDelegate(&ReplParse.UnionDecl);
         rules["ClassDecl"] = toDelegate(&ReplParse.ClassDecl);
         rules["Constraint"] = toDelegate(&ReplParse.Constraint);
-        rules["TemplateInstance"] = toDelegate(&ReplParse.TemplateInstance);
         rules["BaseClassList"] = toDelegate(&ReplParse.BaseClassList);
         rules["FunctionDecl"] = toDelegate(&ReplParse.FunctionDecl);
         rules["ParameterList"] = toDelegate(&ReplParse.ParameterList);
@@ -300,6 +299,7 @@ struct GenericReplParse(TParseTree)
         rules["Ident"] = toDelegate(&ReplParse.Ident);
         rules["IdentList"] = toDelegate(&ReplParse.IdentList);
         rules["NestedIdent"] = toDelegate(&ReplParse.NestedIdent);
+        rules["Symbol"] = toDelegate(&ReplParse.Symbol);
         rules["Auto"] = toDelegate(&ReplParse.Auto);
         rules["Storage"] = toDelegate(&ReplParse.Storage);
         rules["TypeSuffix"] = toDelegate(&ReplParse.TypeSuffix);
@@ -880,38 +880,19 @@ struct GenericReplParse(TParseTree)
         return "ReplParse.Constraint";
     }
 
-    static TParseTree TemplateInstance(TParseTree p)
-    {
-        if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.and!(IdentList, wx, pegged.peg.literal!("!"), wx, pegged.peg.or!(pegged.peg.fuse!(Type), AllBetween!(LBracket, RBracket))), "ReplParse.TemplateInstance")(p);
-        else
-            return hooked!(pegged.peg.named!(pegged.peg.and!(IdentList, wx, pegged.peg.literal!("!"), wx, pegged.peg.or!(pegged.peg.fuse!(Type), AllBetween!(LBracket, RBracket))), "ReplParse.TemplateInstance"), "TemplateInstance")(p);
-    }
-    static TParseTree TemplateInstance(string s)
-    {
-        if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.and!(IdentList, wx, pegged.peg.literal!("!"), wx, pegged.peg.or!(pegged.peg.fuse!(Type), AllBetween!(LBracket, RBracket))), "ReplParse.TemplateInstance")(TParseTree("", false,[], s));
-        else
-            return hooked!(pegged.peg.named!(pegged.peg.and!(IdentList, wx, pegged.peg.literal!("!"), wx, pegged.peg.or!(pegged.peg.fuse!(Type), AllBetween!(LBracket, RBracket))), "ReplParse.TemplateInstance"), "TemplateInstance")(TParseTree("", false,[], s));
-    }
-    static string TemplateInstance(GetName g)
-    {
-        return "ReplParse.TemplateInstance";
-    }
-
     static TParseTree BaseClassList(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(Seq!(pegged.peg.fuse!(Seq!(pegged.peg.or!(TemplateInstance, Ident), pegged.peg.literal!("."))), pegged.peg.literal!(",")), "ReplParse.BaseClassList")(p);
+            return         pegged.peg.named!(Seq!(pegged.peg.fuse!(Symbol), pegged.peg.literal!(",")), "ReplParse.BaseClassList")(p);
         else
-            return hooked!(pegged.peg.named!(Seq!(pegged.peg.fuse!(Seq!(pegged.peg.or!(TemplateInstance, Ident), pegged.peg.literal!("."))), pegged.peg.literal!(",")), "ReplParse.BaseClassList"), "BaseClassList")(p);
+            return hooked!(pegged.peg.named!(Seq!(pegged.peg.fuse!(Symbol), pegged.peg.literal!(",")), "ReplParse.BaseClassList"), "BaseClassList")(p);
     }
     static TParseTree BaseClassList(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(Seq!(pegged.peg.fuse!(Seq!(pegged.peg.or!(TemplateInstance, Ident), pegged.peg.literal!("."))), pegged.peg.literal!(",")), "ReplParse.BaseClassList")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(Seq!(pegged.peg.fuse!(Symbol), pegged.peg.literal!(",")), "ReplParse.BaseClassList")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(Seq!(pegged.peg.fuse!(Seq!(pegged.peg.or!(TemplateInstance, Ident), pegged.peg.literal!("."))), pegged.peg.literal!(",")), "ReplParse.BaseClassList"), "BaseClassList")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(Seq!(pegged.peg.fuse!(Symbol), pegged.peg.literal!(",")), "ReplParse.BaseClassList"), "BaseClassList")(TParseTree("", false,[], s));
     }
     static string BaseClassList(GetName g)
     {
@@ -1035,16 +1016,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree Type(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(Storage, wx, pegged.peg.literal!("("), wx, Type, wx, pegged.peg.literal!(")"), pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(Storage, ws, Type, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(BasicType, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(TypeOf, pegged.peg.option!(Seq!(TypeSuffix))), Auto, pegged.peg.and!(TemplateInstance, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(Ident, pegged.peg.option!(Seq!(TypeSuffix)))), "ReplParse.Type")(p);
+            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(Storage, wx, pegged.peg.literal!("("), wx, Type, wx, pegged.peg.literal!(")"), pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(Storage, ws, Type, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(BasicType, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(TypeOf, pegged.peg.option!(Seq!(TypeSuffix))), Auto, pegged.peg.and!(Symbol, pegged.peg.option!(Seq!(TypeSuffix)))), "ReplParse.Type")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(Storage, wx, pegged.peg.literal!("("), wx, Type, wx, pegged.peg.literal!(")"), pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(Storage, ws, Type, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(BasicType, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(TypeOf, pegged.peg.option!(Seq!(TypeSuffix))), Auto, pegged.peg.and!(TemplateInstance, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(Ident, pegged.peg.option!(Seq!(TypeSuffix)))), "ReplParse.Type"), "Type")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(Storage, wx, pegged.peg.literal!("("), wx, Type, wx, pegged.peg.literal!(")"), pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(Storage, ws, Type, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(BasicType, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(TypeOf, pegged.peg.option!(Seq!(TypeSuffix))), Auto, pegged.peg.and!(Symbol, pegged.peg.option!(Seq!(TypeSuffix)))), "ReplParse.Type"), "Type")(p);
     }
     static TParseTree Type(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(Storage, wx, pegged.peg.literal!("("), wx, Type, wx, pegged.peg.literal!(")"), pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(Storage, ws, Type, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(BasicType, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(TypeOf, pegged.peg.option!(Seq!(TypeSuffix))), Auto, pegged.peg.and!(TemplateInstance, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(Ident, pegged.peg.option!(Seq!(TypeSuffix)))), "ReplParse.Type")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(Storage, wx, pegged.peg.literal!("("), wx, Type, wx, pegged.peg.literal!(")"), pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(Storage, ws, Type, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(BasicType, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(TypeOf, pegged.peg.option!(Seq!(TypeSuffix))), Auto, pegged.peg.and!(Symbol, pegged.peg.option!(Seq!(TypeSuffix)))), "ReplParse.Type")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(Storage, wx, pegged.peg.literal!("("), wx, Type, wx, pegged.peg.literal!(")"), pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(Storage, ws, Type, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(BasicType, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(TypeOf, pegged.peg.option!(Seq!(TypeSuffix))), Auto, pegged.peg.and!(TemplateInstance, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(Ident, pegged.peg.option!(Seq!(TypeSuffix)))), "ReplParse.Type"), "Type")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(Storage, wx, pegged.peg.literal!("("), wx, Type, wx, pegged.peg.literal!(")"), pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(Storage, ws, Type, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(BasicType, pegged.peg.option!(Seq!(TypeSuffix))), pegged.peg.and!(TypeOf, pegged.peg.option!(Seq!(TypeSuffix))), Auto, pegged.peg.and!(Symbol, pegged.peg.option!(Seq!(TypeSuffix)))), "ReplParse.Type"), "Type")(TParseTree("", false,[], s));
     }
     static string Type(GetName g)
     {
@@ -1106,6 +1087,25 @@ struct GenericReplParse(TParseTree)
     static string NestedIdent(GetName g)
     {
         return "ReplParse.NestedIdent";
+    }
+
+    static TParseTree Symbol(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(Ident, pegged.peg.option!(pegged.peg.and!(wx, pegged.peg.literal!("!"), wx, pegged.peg.or!(pegged.peg.fuse!(Type), AllBetween!(LBracket, RBracket)))), pegged.peg.option!(pegged.peg.and!(wx, pegged.peg.literal!("."), Symbol))), pegged.peg.and!(pegged.peg.drop!(pegged.peg.literal!("(")), wx, Symbol, wx, pegged.peg.drop!(pegged.peg.literal!(")")))), "ReplParse.Symbol")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(Ident, pegged.peg.option!(pegged.peg.and!(wx, pegged.peg.literal!("!"), wx, pegged.peg.or!(pegged.peg.fuse!(Type), AllBetween!(LBracket, RBracket)))), pegged.peg.option!(pegged.peg.and!(wx, pegged.peg.literal!("."), Symbol))), pegged.peg.and!(pegged.peg.drop!(pegged.peg.literal!("(")), wx, Symbol, wx, pegged.peg.drop!(pegged.peg.literal!(")")))), "ReplParse.Symbol"), "Symbol")(p);
+    }
+    static TParseTree Symbol(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(Ident, pegged.peg.option!(pegged.peg.and!(wx, pegged.peg.literal!("!"), wx, pegged.peg.or!(pegged.peg.fuse!(Type), AllBetween!(LBracket, RBracket)))), pegged.peg.option!(pegged.peg.and!(wx, pegged.peg.literal!("."), Symbol))), pegged.peg.and!(pegged.peg.drop!(pegged.peg.literal!("(")), wx, Symbol, wx, pegged.peg.drop!(pegged.peg.literal!(")")))), "ReplParse.Symbol")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(Ident, pegged.peg.option!(pegged.peg.and!(wx, pegged.peg.literal!("!"), wx, pegged.peg.or!(pegged.peg.fuse!(Type), AllBetween!(LBracket, RBracket)))), pegged.peg.option!(pegged.peg.and!(wx, pegged.peg.literal!("."), Symbol))), pegged.peg.and!(pegged.peg.drop!(pegged.peg.literal!("(")), wx, Symbol, wx, pegged.peg.drop!(pegged.peg.literal!(")")))), "ReplParse.Symbol"), "Symbol")(TParseTree("", false,[], s));
+    }
+    static string Symbol(GetName g)
+    {
+        return "ReplParse.Symbol";
     }
 
     static TParseTree Auto(TParseTree p)
