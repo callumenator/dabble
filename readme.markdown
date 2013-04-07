@@ -1,6 +1,6 @@
 # Dabble
 
-A small repl for the D programming language (win32).
+A small repl for the D programming language (Windows and DMD32 only).
 
 ### Build
 
@@ -55,8 +55,7 @@ s (S) = S(67)
 ### Meta Commands
 
 Meta commands are intercepted by the REPL environment, and interpreted directly. They do not trigger compilation. The following list of commands are recognized. 
-
-Arguments enclosed in square brakets ```[]``` are optional, those in angle brackets ```<>``` indicate a choice.
+(Arguments enclosed in square brakets ```[]``` are optional, those in angle brackets ```<>``` indicate a choice.)
 
 ##### print
 
