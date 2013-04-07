@@ -7,6 +7,7 @@ void main(char[][] args)
 {
     auto repl = ReplContext();
     parseArgs(repl, args[1..$]);
+
     loop(repl);
     return;
 }

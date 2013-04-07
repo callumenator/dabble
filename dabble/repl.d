@@ -186,7 +186,7 @@ bool handleMetaCommand(ref ReplContext repl,
         {
             if (args.length == 0 || canFind(args, "all")) // print all vars
             {
-                auto vars = repl.share.symbols.filter!(s => s.type == Symbol.Type.Var && s.v.ty !is null);
+                auto vars = repl.share.symbols.filter!(s => s.type == Symbol.Type.Var && s.v.ty.type !is null);
                 foreach(val; vars)
                 {
                     auto info = val.v.ty.view([], val.v.addr, repl.share.map);
@@ -218,7 +218,7 @@ bool handleMetaCommand(ref ReplContext repl,
             foreach(a; args)
             {
                 auto p = parseExpr(a);
-                auto vars = repl.share.symbols.filter!(s => s.isVar() && s.v.name == p[0] && s.v.ty !is null);
+                auto vars = repl.share.symbols.filter!(s => s.isVar() && s.v.name == p[0] && s.v.ty.type !is null);
                 foreach(s; vars)
                     writeln(s.v.ty.view(p[1], s.v.addr, repl.share.map)[1].toString());
             }

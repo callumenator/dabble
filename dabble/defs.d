@@ -205,7 +205,7 @@ struct Var
     bool first = true;
     bool func = false;
     void* addr;
-    Type* ty;
+    QualifiedType ty;
 
     void put(T...)(ref Appender!string app, T items)
     {
@@ -475,15 +475,73 @@ struct Vtbl
     void*[] vtbl;
 }
 
-bool trace = false;
+package bool trace = false;
+
+
+struct QualifiedType
+{
+    enum Qualifier { None, Const, Immutable }
+
+    Type* type;
+    Qualifier qualifier = Qualifier.None;
+    alias type this;
+
+    Tuple!(string,QualifiedType) view(Operation[] stack, void* ptr, ref Type*[string] map)
+    {
+        void* addr = ptr;
+        QualifiedType currType = this;
+        foreach(i; stack)
+        {
+            final switch(i.op) with(Operation.Op)
+            {
+                case Deref:
+                    currType = currType.deref(addr);
+                    break;
+                case Index:
+                    currType = currType.index(addr, i.val.to!size_t);
+                    break;
+                case Slice:
+                    return tuple("slice not supported", QualifiedType());
+                case Member:
+                    currType = currType.member(addr, i.val);
+                    break;
+                case Cast:
+                    currType = buildType(i.val, map);
+                    if (currType.type is null)
+                        return tuple("cast unsuccessful", QualifiedType());
+                    break;
+            }
+        }
+
+        if (currType.type !is null)
+        {
+            if (trace) writeln("val: type is ", currType.typeName);
+            return tuple(currType.getMe(addr), currType);
+        }
+        else
+            return tuple("view: Null Type*", QualifiedType());
+    }
+
+    string toString(bool expand = true)
+    {
+        final switch(qualifier) with(Qualifier)
+        {
+            case None: return type.toString(expand);
+            case Const: return "const(" ~ type.toString(expand) ~ ")";
+            case Immutable: return "immutable(" ~ type.toString(expand) ~ ")";
+        }
+        assert(false);
+    }
+}
 
 struct Type
 {
     enum { Basic, Pointer, Class, Struct, DynamicArr, StaticArr, AssocArr }
+
     union
     {
-        Type* _ref; /// for pointer and array types
-        Tuple!(Type*,"type",size_t,"offset")[string] _object; /// for aggregates
+        QualifiedType _ref; /// for pointer and array types
+        Tuple!(QualifiedType,"type",size_t,"offset")[string] _object; /// for aggregates
     }
 
     uint flag;
@@ -523,33 +581,33 @@ struct Type
             return 0;
     }
 
-    Type* deref(ref void* absAddr)
+    QualifiedType deref(ref void* absAddr)
     {
         assert(isPointer);
         absAddr = *cast(void**)absAddr;
         return _ref;
     }
 
-    Type* index(ref void* absAddr, size_t i)
+    QualifiedType index(ref void* absAddr, size_t i)
     {
         assert(isArray || isPointer);
 
         if (isArray && i >= len(absAddr))
         {
             writeln("Out of bounds index: ", i);
-            return null;
+            return QualifiedType();
         }
 
         absAddr = newBaseAddr(absAddr) + i * _ref.typeSize;
         return _ref;
     }
 
-    Type* slice(ref void* absAddr, size_t a, size_t b)
+    QualifiedType slice(ref void* absAddr, size_t a, size_t b)
     {
         assert(false, "No support for slices.");
     }
 
-    Type* member(ref void* absAddr, string name)
+    QualifiedType member(ref void* absAddr, string name)
     {
         assert(isAggregate);
 
@@ -558,44 +616,10 @@ struct Type
             absAddr = newBaseAddr(absAddr) + _object[name].offset;
             return _object[name].type;
         }
-        return null;
+        return QualifiedType();
     }
 
-    Tuple!(string,Type*) view(Operation[] stack, void* ptr, ref Type*[string] map)
-    {
-        void* addr = ptr;
-        Type* currType = &this;
-        foreach(i; stack)
-        {
-            final switch(i.op) with(Operation.Op)
-            {
-                case Deref:
-                    currType = currType.deref(addr);
-                    break;
-                case Index:
-                    currType = currType.index(addr, i.val.to!size_t);
-                    break;
-                case Slice:
-                    return tuple("slice not supported", cast(Type*)null);
-                case Member:
-                    currType = currType.member(addr, i.val);
-                    break;
-                case Cast:
-                    currType = buildType(i.val, map);
-                    if (currType is null)
-                        return tuple("cast unsuccessful", cast(Type*)null);
-                    break;
-            }
-        }
 
-        if (currType !is null)
-        {
-            if (trace) writeln("val: type is ", currType.typeName);
-            return tuple(currType.getMe(addr), currType);
-        }
-        else
-            return tuple("view: Null Type*", cast(Type*)null);
-    }
 
     string getMe(void* absAddr)
     {
@@ -738,7 +762,7 @@ void buildBasicTypes(ref Type*[string] map)
 /**
 * Dynamic (but simple) type building.
 */
-Type* buildType()(string typeString, ref Type*[string] map)
+QualifiedType buildType()(string typeString, ref Type*[string] map)
 {
     bool isIdentChar(dchar c)
     {
@@ -749,7 +773,7 @@ Type* buildType()(string typeString, ref Type*[string] map)
     }
 
     if (typeString in map)
-        return map[typeString];
+        return QualifiedType(map[typeString]);
 
     string ident;
     while(!typeString.empty && isIdentChar(typeString.front))
@@ -768,7 +792,7 @@ Type* buildType()(string typeString, ref Type*[string] map)
 
     if (ident in map)
     {
-        auto baseType = map[ident]; // current type
+        auto baseType = QualifiedType(map[ident]); // current type
 
         // Get *, [], [number]
         while(!typeString.empty)
@@ -777,13 +801,14 @@ Type* buildType()(string typeString, ref Type*[string] map)
             {
                 case '*':
                     typeString.popFront();
-                    auto type = new Type;
-                    type.flag = Type.Pointer;
-                    type._ref = baseType;
-                    type.typeName = ident ~ "*";
-                    type.typeSize = (void*).sizeof;
-                    map[type.typeName.idup] = type;
-                    baseType = type;
+                    QualifiedType qt;
+                    qt.type = new Type;
+                    qt.type.flag = Type.Pointer;
+                    qt.type._ref = baseType;
+                    qt.type.typeName = ident ~ "*";
+                    qt.type.typeSize = (void*).sizeof;
+                    map[qt.type.typeName.idup] = qt;
+                    baseType = qt;
                     break;
 
                 case '[':
@@ -806,24 +831,26 @@ Type* buildType()(string typeString, ref Type*[string] map)
 
                     if (len.length > 0) // static array
                     {
-                        auto type = new Type;
-                        type.flag = Type.StaticArr;
-                        type._ref = baseType;
-                        type.length = len.to!size_t;
-                        type.typeName = ident ~ "[" ~ len ~ "]";
-                        type.typeSize = (baseType.typeSize)*type.length;
-                        map[type.typeName.idup] = type;
-                        baseType = type;
+                        QualifiedType qt;
+                        qt.type = new Type;
+                        qt.type.flag = Type.StaticArr;
+                        qt.type._ref = baseType;
+                        qt.type.length = len.to!size_t;
+                        qt.type.typeName = ident ~ "[" ~ len ~ "]";
+                        qt.type.typeSize = (baseType.typeSize)*qt.type.length;
+                        map[qt.type.typeName.idup] = qt;
+                        baseType = qt;
                     }
                     else // dynamic array
                     {
-                        auto type = new Type;
-                        type.flag = Type.DynamicArr;
-                        type._ref = baseType;
-                        type.typeName = ident ~ "[]";
-                        type.typeSize = (void[]).sizeof;
-                        map[type.typeName.idup] = type;
-                        baseType = type;
+                        QualifiedType qt;
+                        qt.type = new Type;
+                        qt.type.flag = Type.DynamicArr;
+                        qt.type._ref = baseType;
+                        qt.type.typeName = ident ~ "[]";
+                        qt.type.typeSize = (void[]).sizeof;
+                        map[qt.type.typeName.idup] = qt;
+                        baseType = qt;
                     }
                     break;
 
@@ -837,37 +864,46 @@ Type* buildType()(string typeString, ref Type*[string] map)
         return baseType;
     }
 
-    return null;
+    return QualifiedType();;
+}
+
+template typeQualifier(T)
+{
+    static if (is(T _ == const U, U))
+        enum typeQualifier = QualifiedType.Qualifier.Const;
+    else static if (is(T _ == immutable U, U))
+        enum typeQualifier = QualifiedType.Qualifier.Immutable;
+    else
+        enum typeQualifier = QualifiedType.Qualifier.None;
 }
 
 
 /**
 * Static type building.
 */
-Type* buildType(T)(ref Type*[string] map, Type* ptr = null)
+QualifiedType buildType(T)(ref Type*[string] map, QualifiedType* ptr = null)
 {
     static if (!__traits(compiles, T.sizeof))
-        return null;
+        return QualifiedType();
     else {
 
-        alias typeName!T name;
+        alias typeName!T name; /// unqualified type name
 
         if (name in map)
         {
             if (trace) writeln("buildType: retrieving ", name);
-            if (ptr !is null) *ptr = *map[name];
-            return map[name];
+            if (ptr !is null) *ptr = QualifiedType(map[name], typeQualifier!T);
+            return QualifiedType(map[name], typeQualifier!T);
         }
 
-        Type* t;
+        QualifiedType qt = QualifiedType(null, typeQualifier!T);
 
         // This is to avoid problems with circular deps
-        t = ptr ? ptr : new Type;
+        qt.type = ptr ? ptr.type : new Type;
+        qt.type.typeName = name.idup;
+        qt.type.typeSize = T.sizeof;
 
-        t.typeName = name.idup;
-        t.typeSize = T.sizeof;
-
-        map[name.idup] = t; // store it here to avoid infinite recursion
+        map[name.idup] = qt; // store it here to avoid infinite recursion
 
         if (trace) writeln("buildType: building ", name);
 
@@ -876,18 +912,19 @@ Type* buildType(T)(ref Type*[string] map, Type* ptr = null)
             if (trace) writeln("buildType: type is aggregate");
 
             static if (is(T == class))
-                t.flag = Type.Class;
+                qt.type.flag = Type.Class;
             else
-                t.flag = Type.Struct;
+                qt.type.flag = Type.Struct;
 
             foreach(i; Iota!(0, T.tupleof.length))
             {
                 alias typeof(T.tupleof[i]) _Type;
+                if (trace) writeln("buildType: aggregate member ", _Type.stringof);
                 static if (!isFunctionPointer!_Type)
                 {
                     enum _name = ((splitter(T.tupleof[i].stringof, ".")).array())[$-1];
                     enum _offset = T.tupleof[i].offsetof;
-                    mixin("t._object[`"~_name~"`.idup]=Tuple!(Type*,`type`,size_t,`offset`)(buildType!(_Type)(map), _offset);");
+                    mixin("qt.type._object[`"~_name~"`.idup]=Tuple!(QualifiedType,`type`,size_t,`offset`)(buildType!(_Type)(map), _offset);");
                 }
             }
 
@@ -900,38 +937,38 @@ Type* buildType(T)(ref Type*[string] map, Type* ptr = null)
         {
             if (trace) writeln("buildType: type is pointer");
 
-            t.flag = Type.Pointer;
-            t._ref = new Type;
-            buildType!(PointerTarget!T)(map, t._ref);
+            qt.type.flag = Type.Pointer;
+            qt.type._ref.type = new Type;
+            buildType!(PointerTarget!T)(map, &qt.type._ref);
         }
         else static if (isArray!T)
         {
             if (trace) writeln("buildType: type is array");
 
             static if (!isStaticArray!T)
-                t.flag = Type.DynamicArr;
+                qt.type.flag = Type.DynamicArr;
             else
             {
-                t.flag = Type.StaticArr;
-                t.length = T.length;
+                qt.type.flag = Type.StaticArr;
+                qt.type.length = T.length;
             }
-            t._ref = new Type;
-            buildType!(ArrayElement!T)(map, t._ref);
+            qt.type._ref.type = new Type;
+            buildType!(ArrayElement!T)(map, &qt.type._ref);
         }
         else static if (isAssociativeArray!T)
         {
-            t = buildType!(object.AssociativeArray!(KeyType!T, ValueType!T))(map);
+            qt.type = buildType!(object.AssociativeArray!(KeyType!T, ValueType!T))(map);
         }
         else
         {
             static assert(isBasicType!T);
 
             if (trace) writeln("buildType: type is basic");
-            t.flag = Type.Basic;
+            qt.type.flag = Type.Basic;
         }
 
-        if (trace && t) writeln("buildType: type is ", name, ", ", t.toString());
-        return t;
+        if (trace && qt.type) writeln("buildType: type is ", name, ", ", qt.type.toString());
+        return qt;
     }
 }
 
