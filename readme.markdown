@@ -2,6 +2,13 @@
 
 A small repl for the D programming language (win32).
 
+### Build
+
+```
+cd dabble
+rdmd -IPegged dabble/main.d
+```
+
 ### How it works
 
 (The idea for this comes from http://neugierig.org/software/c-repl/).
@@ -14,7 +21,7 @@ The parsed/modified code is then written to a temporary .d file, and compiled in
 
 If the user's code resulted in a value, that value is printed to the screen. Else, 'OK' is printed to indicate success. The loop then continues.
 
-### Example session:
+### Example session
 A short example session might look like the snipped below.
 ```
 DABBLE: (DMD 2.62)
@@ -46,4 +53,4 @@ s (S) = S(67)
 
 ### Limitations:
 - No static variables (TLS or standard globals) - in particular, static data used by imported modules will not work as expected, since these data are not preserved between DLL loads.
-- Taking the address of code or static data - the addresses will in general not stay the same between DLL loads. 
+- Storing the address of code or static data - this should still work (assuming the pointer is detected), but will prevent the DLL from being unloaded, 
