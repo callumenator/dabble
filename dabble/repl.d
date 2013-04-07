@@ -88,6 +88,7 @@ struct ReplContext
 */
 void loop(ref ReplContext repl)
 {
+    clearScreen();
     writeln(title());
     string error;
     char[] inBuffer, codeBuffer;
@@ -189,7 +190,7 @@ bool handleMetaCommand(ref ReplContext repl,
                 foreach(val; vars)
                 {
                     auto info = val.v.ty.view([], val.v.addr, repl.share.map);
-                    writeln(val.v.name, " (", info[1].toString(), ") = ", info[0]);
+                    writeln(val.v.name, " (", val.v.displayType, ") = ", info[0]);
                 }
             }
             else if (args.length == 1 && args[0] == "__keepAlive")

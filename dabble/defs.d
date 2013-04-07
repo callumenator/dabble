@@ -480,7 +480,6 @@ bool trace = false;
 struct Type
 {
     enum { Basic, Pointer, Class, Struct, DynamicArr, StaticArr, AssocArr }
-
     union
     {
         Type* _ref; /// for pointer and array types
@@ -711,7 +710,6 @@ struct Type
         {
             s = typeName;
         }
-
         return s;
     }
 }
@@ -868,6 +866,7 @@ Type* buildType(T)(ref Type*[string] map, Type* ptr = null)
 
         t.typeName = name.idup;
         t.typeSize = T.sizeof;
+
         map[name.idup] = t; // store it here to avoid infinite recursion
 
         if (trace) writeln("buildType: building ", name);
