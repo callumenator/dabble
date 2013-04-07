@@ -75,7 +75,7 @@ If expression is omitted, prints a list of all currently defined variables, alon
 
 More complex combinations of the above are also accepted, for example:
 
-```print ((cast(MyType)*a).b[3]).d``` - cast 'a' to MyType, access index 3 of member 'b', print the value of member 'd'
+```print ((cast(MyType)*a).b[3]).d``` - cast the value pointed to by 'a' to MyType, access index 3 of member 'b', print the value of member 'd'
 
 ##### type
 
