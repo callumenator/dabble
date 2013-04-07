@@ -47,7 +47,9 @@ string moduleFileName() { return __FILE__; }
 void* newType(T)()
 {
     T t = T.init;
-    return newExpr(t);
+    auto ptr = newExpr(t);
+    *cast(T*)ptr = T.init;
+    return ptr;
 }
 
 
@@ -294,7 +296,7 @@ struct Var
                 "  if (" ~ sym(index) ~ ".v.func) {\n"
                 "    " ~ sym(index) ~ ".v.current = q{", init, "}.idup;\n"
                 "  } else {\n"
-                "    " ~ sym(index) ~ ".v.ty = _REPL.buildType!(typeof(*",name, "))(_repl_.map);\n"
+                "    //" ~ sym(index) ~ ".v.ty = _REPL.buildType!(typeof(*",name, "))(_repl_.map);\n"
                 "}}\n");
         }
         else // var has already been created, just grab it

@@ -88,7 +88,7 @@ struct ReplContext
 */
 void loop(ref ReplContext repl)
 {
-    clearScreen();
+    //clearScreen();
     writeln(title());
     string error;
     char[] inBuffer, codeBuffer;
@@ -813,8 +813,12 @@ void expressionList(ParseTree p, ref Operation[] list)
 unittest
 {
     writeln("/** Testing ", __FILE__, " **/");
+    stress();
+}
 
-    run([
+ReplContext stress()
+{
+    return run([
     "err0 = `1.2`.to!int;",
     "struct S {int x, y = 5; }",
     "structS = S();",
@@ -876,6 +880,7 @@ unittest
 }
 
 
+
 /**
 * Eval an array of strings. Mainly for testing.
 */
@@ -891,6 +896,5 @@ ReplContext run(string[] code, uint debugLevel = 0)
         if (err.length != 0)
             assert(false, err);
     }
-
     return repl;
 }
