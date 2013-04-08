@@ -892,9 +892,8 @@ void libTest()
     void test(string i) { assert(eval(i, repl, err) == EvalResult.noError, err); }
 
     test("import std.container;");
-    test("auto tree0 = redBlackTree!true(1,2,3,4,5);");
-    test("RedBlackTree!int tree1 = new RedBlackTree!int();");
-    test("tree1.insert(5);");
+    test("BinaryHeap!(int[]) heap0;");
+    //test("heap0.insert(1);");
     test("SList!int slist0;");
     test("slist0.insertFront([1,2,3]);");
     test("slist1 = SList!int(1,2,3);");
@@ -907,6 +906,10 @@ void libTest()
     test("array0 ~= [1,2,3];");
     test("array1 = Array!int(1,2,3);");
     test("array1 ~= [1,2,3];");
+    test("auto tree0 = redBlackTree!true(1,2,3,4,5);");
+    test("tree0.insert(5);");
+    test("RedBlackTree!int tree1 = new RedBlackTree!int();");
+    test("tree1.insert(5);");
 }
 
 /**

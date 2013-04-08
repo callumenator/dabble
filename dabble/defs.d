@@ -98,8 +98,14 @@ T* getVar(T)(const(Symbol[]) symbols, size_t index)
 
 string exprResult(E)(lazy E expr)
 {
+    import std.exception;
+
     auto temp = expr();
-    return temp.to!string;
+    string result;
+    if (collectException!Throwable(result = temp.to!string))
+        return "";
+
+    return result;
 }
 
 

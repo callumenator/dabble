@@ -3,7 +3,7 @@ module dabble.main;
 
 import dabble.repl;
 
-class C(T){}
+import std.conv;
 
 void main(char[][] args)
 {
