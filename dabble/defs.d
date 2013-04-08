@@ -148,9 +148,9 @@ void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
             t = cast(T)newMem.ptr;
         }
 
-        // Check the contents of the pointer target
-        static if (needsDup!(PointerTarget!T))
-            dupSearch(*t, start, stop, keepAlive);
+        // Dont check the contents of the pointer target
+        // static if (needsDup!(PointerTarget!T))
+        //    dupSearch(*t, start, stop, keepAlive);
     }
     else static if (isAggregateType!T)
     {

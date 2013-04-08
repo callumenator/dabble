@@ -30,6 +30,26 @@ enum Debug
     parseOnly   = 0x04, /// show parse tree and return
 }
 
+/**
+* Returned by eval.
+*/
+enum EvalResult
+{
+    noError,
+    parseError,
+    buildError,
+    callError
+}
+
+/**
+* Result of attempting to load and call compiled code.
+*/
+enum CallResult
+{
+    success,
+    loadError,
+    runtimeError
+}
 
 /**
 * Holds REPL state.
@@ -327,9 +347,9 @@ void setDebugLevel(string s)(ref ReplContext repl, string level)
 /**
 * Evaluate code in the context of the supplied ReplContext.
 */
-bool eval(string code,
-          ref ReplContext repl,
-          ref string error)
+EvalResult eval(string code,
+                ref ReplContext repl,
+                ref string error)
 {
     import std.datetime : StopWatch;
     import std.typecons;
@@ -366,17 +386,17 @@ bool eval(string code,
     if (Parser.error.length != 0)
     {
         writeln(Parser.error);
-        return false;
+        return EvalResult.parseError;
     }
 
     if (repl.debugLevel & Debug.parseOnly)
     {
         writeln(text[0]~text[1]);
-        return true;
+        return EvalResult.noError;
     }
 
     if (text[0].length == 0 && text[1].length == 0)
-        return true;
+        return EvalResult.noError;
 
     if (repl.debugLevel & Debug.stages) writeln("BUILD...");
 
@@ -386,7 +406,7 @@ bool eval(string code,
     {
         writeln("Error:\n", error);
         pruneSymbols(repl);
-        return false;
+        return EvalResult.buildError;
     }
 
     if (repl.debugLevel & Debug.stages) writeln("CALL...");
@@ -400,11 +420,11 @@ bool eval(string code,
     {
         case success:
             hookNewClass(typeid(Object) /** dummy **/, null /** dummy **/, &repl, false);
-            return true;
+            return EvalResult.noError;
         case loadError:
         case runtimeError:
             hookNewClass(typeid(Object) /** dummy **/, null /** dummy **/, &repl, true);
-            return false;
+            return EvalResult.callError;
     }
 
     assert(false);
@@ -583,18 +603,6 @@ void cleanup(ReplContext repl)
             try { remove(f); } catch(Exception e) {}
 }
 
-
-/**
-* Result of attempting to load and call compiled code.
-*/
-enum CallResult
-{
-    success,
-    loadError,
-    runtimeError
-}
-
-
 /**
 * Load the shared lib, and call the _main function. Free the lib on exit.
 */
@@ -643,7 +651,6 @@ CallResult call(ref ReplContext repl, out string error)
 
     return CallResult.success;
 }
-
 
 /**
 * Do some processing on errors returned by DMD.
@@ -707,7 +714,6 @@ string parseError(ReplContext repl,
     return res;
 }
 
-
 /**
 * This is taken from RDMD
 */
@@ -735,7 +741,6 @@ private string getTempDir()
 
     return tmpRoot;
 }
-
 
 /**
 * Print-expression parser
@@ -879,7 +884,28 @@ ReplContext stress()
     ]);
 }
 
+void libTest()
+{
+    auto repl = ReplContext();
+    string err;
 
+    void test(string i) { assert(eval(i, repl, err) == EvalResult.noError, err); }
+
+    test("import std.container;");
+    test("SList!int slist0;");
+    test("slist0.insertFront([1,2,3]);");
+    test("slist1 = SList!int(1,2,3);");
+    test("slist1.insertFront([1,2,3]);");
+    test("DList!int dlist0;");
+    test("dlist0.insertFront([1,2,3]);");
+    test("dlist1 = DList!int(1,2,3);");
+    test("dlist1.insertFront([1,2,3]);");
+    test("Array!int array0;");
+    test("array0 ~= [1,2,3];");
+    test("array1 = Array!int(1,2,3);");
+    test("array1 ~= [1,2,3];");
+
+}
 
 /**
 * Eval an array of strings. Mainly for testing.
@@ -892,8 +918,8 @@ ReplContext run(string[] code, uint debugLevel = 0)
     foreach(i, c; code)
     {
         writeln("Line: ", i, " -> ", c);
-        eval(c, repl, err);
-        if (err.length != 0)
+        auto result = eval(c, repl, err);
+        if (result == EvalResult.parseError || result == EvalResult.buildError)
             assert(false, err);
     }
     return repl;
