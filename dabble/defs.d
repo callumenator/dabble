@@ -487,7 +487,6 @@ struct Vtbl
 
 package bool trace = false;
 
-
 struct QualifiedType
 {
     enum Qualifier { None, Const, Immutable }
@@ -1061,39 +1060,44 @@ template Iota(size_t i, size_t n)
 }
 
 
-void fixUp()
+version(Windows)
 {
-    import core.sys.windows.dll, core.sys.windows.windows;
-    import core.sys.windows.threadaux : getTEB;
+    void fixUp()
+    {
+        import core.sys.windows.dll, core.sys.windows.windows;
+        import core.sys.windows.threadaux : getTEB;
 
-    alias extern(Windows)
-    void* fnRtlAllocateHeap(void* HeapHandle, uint Flags, size_t Size) nothrow;
+        alias extern(Windows)
+        void* fnRtlAllocateHeap(void* HeapHandle, uint Flags, size_t Size) nothrow;
 
-    HANDLE hnd = GetModuleHandleA( "NTDLL" );
-    assert( hnd, "cannot get module handle for ntdll" );
+        HANDLE hnd = GetModuleHandleA( "NTDLL" );
+        assert( hnd, "cannot get module handle for ntdll" );
 
-    fnRtlAllocateHeap* fnAlloc = cast(fnRtlAllocateHeap*) GetProcAddress( hnd, "RtlAllocateHeap" );
+        fnRtlAllocateHeap* fnAlloc = cast(fnRtlAllocateHeap*) GetProcAddress( hnd, "RtlAllocateHeap" );
 
-    auto teb = getTEB();
-    void** peb = cast(void**) teb[12];
-    void* heap = peb[6];
+        auto teb = getTEB();
+        void** peb = cast(void**) teb[12];
+        void* heap = peb[6];
 
-    auto sz = _tlsend - _tlsstart;
-    void* _tlsdata = cast(void*) (*fnAlloc)( heap, 0xc0000, sz );
+        auto sz = _tlsend - _tlsstart;
+        void* _tlsdata = cast(void*) (*fnAlloc)( heap, 0xc0000, sz );
 
-    core.stdc.string.memcpy( _tlsdata, _tlsstart, sz );
+        core.stdc.string.memcpy( _tlsdata, _tlsstart, sz );
 
-    auto tlsindex = 1;
+        auto tlsindex = 1;
 
-    // create copy of tls pointer array
-    void** array = cast(void**) (*fnAlloc)( heap, 0xc0000, (tlsindex + 1) * (void*).sizeof );
+        // create copy of tls pointer array
+        void** array = cast(void**) (*fnAlloc)( heap, 0xc0000, (tlsindex + 1) * (void*).sizeof );
 
-    if( tlsindex > 0 && teb[11] )
-        core.stdc.string.memcpy( array, teb[11], tlsindex * (void*).sizeof);
+        if( tlsindex > 0 && teb[11] )
+            core.stdc.string.memcpy( array, teb[11], tlsindex * (void*).sizeof);
 
-    array[tlsindex] = _tlsdata;
-    teb[11] = cast(void*) array;
+        array[tlsindex] = _tlsdata;
+        teb[11] = cast(void*) array;
 
-    _tls_index ++;
+        _tls_index ++;
+    }
 }
+else
+    static assert("Only Windows is suported");
 

@@ -891,9 +891,19 @@ void libTest()
 
     void test(string i) { assert(eval(i, repl, err) == EvalResult.noError, err); }
 
+    test("import std.range;");
+    test("r0 = iota(0, 50, 10);");
+    test("while(!r0.empty) { r0.popFront(); }");
+    test("r1 = stride(iota(0, 50, 1), 5);");
+    test("writeln(r1);");
+    test("drop(iota(20), 12);");
+    test("r2 = iota(20);");
+    test("popFrontN(r2, 7);");
+    test("takeOne(retro(iota(20)));");
+
+    repl.reset();
+
     test("import std.container;");
-    test("BinaryHeap!(int[]) heap0;");
-    //test("heap0.insert(1);");
     test("SList!int slist0;");
     test("slist0.insertFront([1,2,3]);");
     test("slist1 = SList!int(1,2,3);");
@@ -910,6 +920,8 @@ void libTest()
     test("tree0.insert(5);");
     test("RedBlackTree!int tree1 = new RedBlackTree!int();");
     test("tree1.insert(5);");
+    test("BinaryHeap!(Array!int) heap0 = BinaryHeap!(Array!int)(Array!int(1,2,3,4));");
+    test("heap0.insert(1);");
 }
 
 /**
@@ -918,14 +930,12 @@ void libTest()
 ReplContext run(string[] code, uint debugLevel = 0)
 {
     auto repl = ReplContext("replDll", debugLevel);
-    repl.debugLevel |= Debug.times;
     string err;
     foreach(i, c; code)
     {
         writeln("Line: ", i, " -> ", c);
         auto result = eval(c, repl, err);
-        if (result == EvalResult.parseError || result == EvalResult.buildError)
-            assert(false, err);
+        assert(result != EvalResult.parseError && result != EvalResult.buildError);
     }
     return repl;
 }
