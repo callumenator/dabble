@@ -3,6 +3,7 @@ module dabble.main;
 
 import dabble.repl;
 
+class C(T){}
 
 void main(char[][] args)
 {
@@ -11,7 +12,7 @@ void main(char[][] args)
 
     //repl = stress();
     libTest();
-    loop(repl);
+    //loop(repl);
     return;
 }
 

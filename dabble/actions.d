@@ -62,8 +62,9 @@ static:
     */
     string genFixup(string name, size_t index)
     {
-        return "memcpy(_repl_.vtbls["~index.to!string~"].vtbl.ptr, typeid("~name~").vtbl.ptr, "
-             ~ "typeid("~name~").vtbl.length * (void*).sizeof);\n";
+        return "memcpy(_repl_.vtbls["~index.to!string~"].vtbl.ptr, "
+               "typeid("~name~").vtbl.ptr, "
+               "typeid("~name~").vtbl.length * (void*).sizeof);\n";
     }
 
     /**

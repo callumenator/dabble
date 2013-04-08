@@ -22,6 +22,7 @@ extern(C) void hookNewClass(TypeInfo_Class ti,
 {
     import std.algorithm : countUntil;
     import std.c.string : memcpy;
+    import std.array;
 
     struct _Info { string name; void*[] vtbl; void* classPtr; }
 
@@ -55,6 +56,25 @@ extern(C) void hookNewClass(TypeInfo_Class ti,
             {
                 _repl.share.vtbls ~= Vtbl(i.name, i.vtbl);
                 index = _repl.share.vtbls.length - 1;
+
+                // Template classes have an extra .Name on the end, remove it
+                auto n = i.name;
+                bool templ = false;
+                int parens = 0, len = 0;
+                foreach(ii, char c; n)
+                {
+                    len++;
+                    switch(c)
+                    {
+                        case '!': templ = true; continue;
+                        case '(': if (templ) parens++; break;
+                        case ')': if (templ) parens--; break;
+                        default: break;
+                    }
+                    if (templ && parens == 0) break;
+                }
+                i.name = i.name[0..len];
+
                 _repl.vtblFixup ~= Parser.genFixup(i.name, index);
             }
 
