@@ -891,6 +891,11 @@ void libTest()
 
     void test(string i) { assert(eval(i, repl, err) == EvalResult.noError, err); }
 
+    test("import std.file;");
+    test("text0 = readText(`"~__FILE__~"`);");
+
+    repl.reset();
+
     test("import std.range;");
     test("r0 = iota(0, 50, 10);");
     test("while(!r0.empty) { r0.popFront(); }");
@@ -900,6 +905,8 @@ void libTest()
     test("r2 = iota(20);");
     test("popFrontN(r2, 7);");
     test("takeOne(retro(iota(20)));");
+    test("takeExactly(iota(20), 5);");
+    test("radial(iota(20).array(), 10);");
 
     repl.reset();
 

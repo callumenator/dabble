@@ -5,22 +5,18 @@ import dabble.repl;
 
 import std.conv;
 
-class C(T){}
-class CC(T){}
+import std.regex;
 
 void main(char[][] args)
 {
     import std.stdio;
 
-    writeln(typeid(C!(CC!int)));
-    return;
-
     auto repl = ReplContext();
     parseArgs(repl, args[1..$]);
 
-    //repl = stress();
+    repl = stress();
     libTest();
-    //loop(repl);
+    loop(repl);
     return;
 }
 

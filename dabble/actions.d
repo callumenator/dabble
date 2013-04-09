@@ -42,8 +42,8 @@ static:
         {
             size_t index;
             findVar(d, index);
-            code.suffix.put("if (!_repl_.symbols["~index.to!string~"].v.func) { "
-                            "_REPL.dupSearch(*"~d~", _repl_.imageBounds[0], _repl_.imageBounds[1], _repl_.keepAlive); }\n");
+            //code.suffix.put("if (!_repl_.symbols["~index.to!string~"].v.func) { "
+            //                "_REPL.dupSearch(*"~d~", _repl_.imageBounds[0], _repl_.imageBounds[1], _repl_.keepAlive); }\n");
         }
 
         auto inBody =

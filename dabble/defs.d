@@ -130,18 +130,21 @@ void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
 {
     import std.c.string;
 
+    writeln("Dup: ", T.stringof);
+
     static if (isFunctionPointer!T)
     {
         if (t >= start && t <= stop)
             keepAlive = true;
     }
-    else static if (isArray!T && !isStaticArray!T)
+    else static if (isSomeString!T)
     {
         if (t.ptr >= start && t.ptr <= stop)
-            t = cast(T)t.dup;
-
-        // Now check the elements of the array
-        static if (needsDup!(ForeachType!T))
+            cast(Unqual!T)t = t.idup;
+    }
+    else static if (isArray!T)
+    {
+        static if (needsDup!(ArrayElement!T))
             foreach(ref e; t)
                 dupSearch(e, start, stop, keepAlive);
     }
@@ -160,8 +163,9 @@ void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
     }
     else static if (isAggregateType!T)
     {
+        writeln("DupAgg:");
         size_t offset;
-        void* baseAddr = &t;
+        void* baseAddr = cast(void*)&t;
 
         static if (is(T == class))
         {
