@@ -139,7 +139,10 @@ void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
     static if (isFunctionPointer!T)
     {
         if (t >= start && t <= stop)
+        {
+            writeln("Keep alive");
             keepAlive = true;
+        }
     }
     else static if (isSomeString!T)
     {
@@ -156,6 +159,7 @@ void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
     {
         if (cast(void*)t >= start && cast(void*)t <= stop)
         {
+            writeln("Copying pointer");
             auto newMem = new void[]((PointerTarget!T).sizeof);
             memcpy(newMem.ptr, t, (PointerTarget!T).sizeof);
             t = cast(T)newMem.ptr;

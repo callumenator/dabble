@@ -7,6 +7,8 @@ void main(char[][] args)
 {
     auto repl = ReplContext();
     parseArgs(repl, args[1..$]);
+
+    repl = run(["import std.variant; v = Variant(5); v+= 5;", "v += 5;"]);
     loop(repl);
     return;
 }
