@@ -140,26 +140,32 @@ void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
     {
         if (t >= start && t <= stop)
         {
-            writeln("Keep alive");
+            debug { writeln("dupeSearch: keep alive - ", T.stringof); }
             keepAlive = true;
         }
     }
     else static if (isSomeString!T)
     {
         if (t.ptr >= start && t.ptr <= stop)
+        {
+            debug { writeln("dupSearch: dup string"); }
             cast(Unqual!T)t = t.idup;
+        }
     }
     else static if (isArray!T)
     {
         static if (needsDup!(ArrayElement!T))
+        {
+            debug { writeln("dupSearch: check array elements ", T.stringof); }
             foreach(ref e; t)
                 dupSearch(e, start, stop, keepAlive);
+        }
     }
     else static if (isPointer!T)
     {
         if (cast(void*)t >= start && cast(void*)t <= stop)
         {
-            writeln("Copying pointer");
+            debug { writeln("dupSearch: dup pointer ", T.stringof); }
             auto newMem = new void[]((PointerTarget!T).sizeof);
             memcpy(newMem.ptr, t, (PointerTarget!T).sizeof);
             t = cast(T)newMem.ptr;
@@ -171,6 +177,8 @@ void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
     }
     else static if (isAggregateType!T)
     {
+        debug { writeln("dupSearch: aggregate ", T.stringof); }
+
         size_t offset;
         void* baseAddr = cast(void*)&t;
 

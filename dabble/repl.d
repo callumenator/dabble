@@ -334,11 +334,11 @@ void setDebugLevel(string s)(ref ReplContext repl, string level)
 
     switch(toLower(level))
     {
-        case "times": goto case "showTimes";
-        case "showTimes": mixin(op ~ "Debug.times;"); break;
-        case "stages": goto case "showStages";
-        case "showStages": mixin(op ~ "Debug.stages;"); break;
-        case "parseOnly": mixin(op ~ "Debug.parseOnly;"); break;
+        case "times": goto case "showtimes";
+        case "showtimes": mixin(op ~ "Debug.times;"); break;
+        case "stages": goto case "showstages";
+        case "showstages": mixin(op ~ "Debug.stages;"); break;
+        case "parseonly": mixin(op ~ "Debug.parseOnly;"); break;
         default: break;
     }
 }
@@ -381,7 +381,8 @@ EvalResult eval(string code,
 
     if (repl.debugLevel & Debug.stages) writeln("PARSE...");
 
-    auto text = timeIt!(Parser.go)(code, repl, sw, times.parse);
+    bool showParse = cast(bool)(repl.debugLevel & Debug.parseOnly);
+    auto text = timeIt!(Parser.go)(code, repl, showParse, sw, times.parse);
 
     if (Parser.error.length != 0)
     {
@@ -891,6 +892,17 @@ void libTest()
 
     void test(string i) { assert(eval(i, repl, err) == EvalResult.noError, err); }
 
+    test("import std.algorithm, std.range;");
+    test("r0 = iota(0, 50, 10);");
+    test("r0.find(20);");
+    test("balancedParens(`((()))`, '(', ')');");
+    test("`hello`.countUntil('l');");
+    test("`hello`.findSplitAfter(`el`);");
+    test("[1,2,3,4,5].bringToFront([3,4,5]);");
+
+return;
+    repl.reset();
+
     test("import std.range;");
     test("r0 = iota(0, 50, 10);");
     test("while(!r0.empty) { r0.popFront(); }");
@@ -928,8 +940,12 @@ void libTest()
     repl.reset();
 
     test("import std.regex;");
-    test("r = regex(`[a-z]*`,`g`);");
-    test("m = match(`abdjsadfjg`,r);");
+    test("r0 = regex(`[a-z]*`,`g`);");
+    test("m0 = match(`abdjsadfjg`,r0);");
+    test("r1 = regex(`[0-9]+`,`g`);");
+    test("m1 = match(`12345`,r1);");
+
+
 }
 
 /**

@@ -7,7 +7,6 @@ ReplParse:
     Search <- (wx Match)*
 
     Match <- Comment
-           / String
            / Import
            / AliasDecl
            / UserType
@@ -137,6 +136,8 @@ ReplParse:
     # This is used in Actions when assignment to a function variable is detected
     ExpRewrite <~ GrabToColon(VarRewrite/.) ';'
 
+    StringDupSearch <- ~((!(eoi) (Comment / StringDup / .))*)
+
 
     MetaCommand <- MetaPrint MetaArgs?
                  / MetaType MetaArgs?
@@ -199,8 +200,8 @@ ReplParse:
     GrabToClosingParens(T=.) <~ (!(')'/eoi) (String/CharLiteral/Comment/FuncBlock/BwParens(T)/T))*
 
     NestItems   <- Comment / String / CharLiteral
-    String      <- (WYSString / DBQString / TKNString / DLMString / StringOf) {Parser.dupString}
-    StringNoDup <- (WYSString / DBQString / TKNString / DLMString)
+    String      <- (WYSString / DBQString / TKNString / DLMString / StringOf)
+    StringDup   <- (WYSString / DBQString / TKNString / DLMString) {Parser.dupString}
 
     WYSString   <~ 'r' doublequote (!doublequote .)* doublequote /
                     backquote (!backquote .)* backquote
@@ -311,6 +312,7 @@ struct GenericReplParse(TParseTree)
         rules["Skip"] = toDelegate(&ReplParse.Skip);
         rules["TemplateArg"] = toDelegate(&ReplParse.TemplateArg);
         rules["ExpRewrite"] = toDelegate(&ReplParse.ExpRewrite);
+        rules["StringDupSearch"] = toDelegate(&ReplParse.StringDupSearch);
         rules["MetaCommand"] = toDelegate(&ReplParse.MetaCommand);
         rules["MetaPrint"] = toDelegate(&ReplParse.MetaPrint);
         rules["MetaType"] = toDelegate(&ReplParse.MetaType);
@@ -334,7 +336,7 @@ struct GenericReplParse(TParseTree)
         rules["BalancedBraces"] = toDelegate(&ReplParse.BalancedBraces);
         rules["NestItems"] = toDelegate(&ReplParse.NestItems);
         rules["String"] = toDelegate(&ReplParse.String);
-        rules["StringNoDup"] = toDelegate(&ReplParse.StringNoDup);
+        rules["StringDup"] = toDelegate(&ReplParse.StringDup);
         rules["WYSString"] = toDelegate(&ReplParse.WYSString);
         rules["DBQString"] = toDelegate(&ReplParse.DBQString);
         rules["TKNString"] = toDelegate(&ReplParse.TKNString);
@@ -427,16 +429,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree Match(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(Comment, String, Import, AliasDecl, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match")(p);
+            return         pegged.peg.named!(pegged.peg.or!(Comment, Import, AliasDecl, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(Comment, String, Import, AliasDecl, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match"), "Match")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.or!(Comment, Import, AliasDecl, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match"), "Match")(p);
     }
     static TParseTree Match(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(Comment, String, Import, AliasDecl, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.or!(Comment, Import, AliasDecl, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(Comment, String, Import, AliasDecl, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match"), "Match")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.or!(Comment, Import, AliasDecl, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match"), "Match")(TParseTree("", false,[], s));
     }
     static string Match(GetName g)
     {
@@ -1317,6 +1319,25 @@ struct GenericReplParse(TParseTree)
         return "ReplParse.ExpRewrite";
     }
 
+    static TParseTree StringDupSearch(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(eoi), pegged.peg.or!(Comment, StringDup, pegged.peg.any)))), "ReplParse.StringDupSearch")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(eoi), pegged.peg.or!(Comment, StringDup, pegged.peg.any)))), "ReplParse.StringDupSearch"), "StringDupSearch")(p);
+    }
+    static TParseTree StringDupSearch(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(eoi), pegged.peg.or!(Comment, StringDup, pegged.peg.any)))), "ReplParse.StringDupSearch")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.zeroOrMore!(pegged.peg.and!(pegged.peg.negLookahead!(eoi), pegged.peg.or!(Comment, StringDup, pegged.peg.any)))), "ReplParse.StringDupSearch"), "StringDupSearch")(TParseTree("", false,[], s));
+    }
+    static string StringDupSearch(GetName g)
+    {
+        return "ReplParse.StringDupSearch";
+    }
+
     static TParseTree MetaCommand(TParseTree p)
     {
         if(__ctfe)
@@ -2002,39 +2023,39 @@ struct GenericReplParse(TParseTree)
     static TParseTree String(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.action!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString, StringOf), Parser.dupString), "ReplParse.String")(p);
+            return         pegged.peg.named!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString, StringOf), "ReplParse.String")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.action!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString, StringOf), Parser.dupString), "ReplParse.String"), "String")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString, StringOf), "ReplParse.String"), "String")(p);
     }
     static TParseTree String(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.action!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString, StringOf), Parser.dupString), "ReplParse.String")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString, StringOf), "ReplParse.String")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.action!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString, StringOf), Parser.dupString), "ReplParse.String"), "String")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString, StringOf), "ReplParse.String"), "String")(TParseTree("", false,[], s));
     }
     static string String(GetName g)
     {
         return "ReplParse.String";
     }
 
-    static TParseTree StringNoDup(TParseTree p)
+    static TParseTree StringDup(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString), "ReplParse.StringNoDup")(p);
+            return         pegged.peg.named!(pegged.peg.action!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString), Parser.dupString), "ReplParse.StringDup")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString), "ReplParse.StringNoDup"), "StringNoDup")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.action!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString), Parser.dupString), "ReplParse.StringDup"), "StringDup")(p);
     }
-    static TParseTree StringNoDup(string s)
+    static TParseTree StringDup(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString), "ReplParse.StringNoDup")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.action!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString), Parser.dupString), "ReplParse.StringDup")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString), "ReplParse.StringNoDup"), "StringNoDup")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.action!(pegged.peg.or!(WYSString, DBQString, TKNString, DLMString), Parser.dupString), "ReplParse.StringDup"), "StringDup")(TParseTree("", false,[], s));
     }
-    static string StringNoDup(GetName g)
+    static string StringDup(GetName g)
     {
-        return "ReplParse.StringNoDup";
+        return "ReplParse.StringDup";
     }
 
     static TParseTree WYSString(TParseTree p)

@@ -10,7 +10,6 @@ ReplParse:
     Search <- (wx Match)*
 
     Match <- Comment
-           / String
            / Import
            / AliasDecl
            / UserType
@@ -139,6 +138,8 @@ ReplParse:
 
     # This is used in Actions when assignment to a function variable is detected
     ExpRewrite <~ GrabToColon(VarRewrite/.) ';'
+
+    StringDupSearch <- ~((!(eoi) (Comment / StringDup / .))*)
 `;
 
 
@@ -208,8 +209,8 @@ enum string parserUtils = `
     GrabToClosingParens(T=.) <~ (!(')'/eoi) (String/CharLiteral/Comment/FuncBlock/BwParens(T)/T))*
 
     NestItems   <- Comment / String / CharLiteral
-    String      <- (WYSString / DBQString / TKNString / DLMString / StringOf) {Parser.dupString}
-    StringNoDup <- (WYSString / DBQString / TKNString / DLMString)
+    String      <- (WYSString / DBQString / TKNString / DLMString / StringOf)
+    StringDup   <- (WYSString / DBQString / TKNString / DLMString) {Parser.dupString}
 
     WYSString   <~ 'r' doublequote (!doublequote .)* doublequote /
                     backquote (!backquote .)* backquote

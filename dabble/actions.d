@@ -23,7 +23,7 @@ static:
     /**
     * Start parsing.
     */
-    Tuple!(string,string) go(string input, ref ReplContext _repl)
+    Tuple!(string,string) go(string input, ref ReplContext _repl, bool showParseTree = false)
     {
         parseID = Clock.currSystemTick().msecs();
         inputCopy = input;
@@ -31,7 +31,12 @@ static:
         error = "";
         repl = &_repl;
 
+        input = ReplParse.StringDupSearch(input).matches[0];
         auto p = ReplParse.Search(input);
+
+        if (showParseTree)
+            writeln(p);
+
         p = ReplParse.decimateTree(p);
 
         Code code;
