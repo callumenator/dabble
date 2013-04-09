@@ -892,6 +892,21 @@ void libTest()
 
     void test(string i) { assert(eval(i, repl, err) == EvalResult.noError, err); }
 
+    test("import std.typecons;");
+    test("Nullable!int a;");
+    test("a = 5;");
+    test("a;");
+    test("int b;");
+    test("bref = NullableRef!int(&b);");
+    test("bref = 5;");
+    test("bref;");
+    test("c = tuple(1, `hello`);");
+    test("Unique!int f = new int;");
+    test("f = 7;");
+
+    return;
+    repl.reset();
+
     test("import std.algorithm, std.range;");
     test("r0 = iota(0, 50, 10);");
     test("r0.find(20);");
@@ -899,8 +914,9 @@ void libTest()
     test("`hello`.countUntil('l');");
     test("`hello`.findSplitAfter(`el`);");
     test("[1,2,3,4,5].bringToFront([3,4,5]);");
+    test("[1,2,3,4,5].filter!(a => a > 3).array();");
+    test("[1,2,3,4,5].isSorted();");
 
-return;
     repl.reset();
 
     test("import std.range;");
