@@ -111,7 +111,10 @@ string exprResult(E)(lazy E expr)
 
 template needsDup(T)
 {
-    static if (isArray!T)
+    import std.regex;
+    static if (is(T _ == RegexMatch!(U), U...))
+        enum needsDup = false;
+    else static if (isArray!T)
         enum needsDup = true;
     else static if (isPointer!T)
         enum needsDup = true;
@@ -130,7 +133,8 @@ void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
 {
     import std.c.string;
 
-    writeln("Dup: ", T.stringof);
+    static if (!needsDup!T)
+        return;
 
     static if (isFunctionPointer!T)
     {
@@ -157,13 +161,12 @@ void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
             t = cast(T)newMem.ptr;
         }
 
-        // Dont check the contents of the pointer target
-        // static if (needsDup!(PointerTarget!T))
-        //    dupSearch(*t, start, stop, keepAlive);
+        // Only check for a pointer to string
+        static if (isSomeString!(PointerTarget!T))
+            dupSearch(*t, start, stop, keepAlive);
     }
     else static if (isAggregateType!T)
     {
-        writeln("DupAgg:");
         size_t offset;
         void* baseAddr = cast(void*)&t;
 

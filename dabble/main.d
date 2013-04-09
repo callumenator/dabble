@@ -3,19 +3,10 @@ module dabble.main;
 
 import dabble.repl;
 
-import std.conv;
-
-import std.regex;
-
 void main(char[][] args)
 {
-    import std.stdio;
-
     auto repl = ReplContext();
     parseArgs(repl, args[1..$]);
-
-    repl = stress();
-    libTest();
     loop(repl);
     return;
 }

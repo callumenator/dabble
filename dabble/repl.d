@@ -891,11 +891,6 @@ void libTest()
 
     void test(string i) { assert(eval(i, repl, err) == EvalResult.noError, err); }
 
-    test("import std.file;");
-    test("text0 = readText(`"~__FILE__~"`);");
-
-    repl.reset();
-
     test("import std.range;");
     test("r0 = iota(0, 50, 10);");
     test("while(!r0.empty) { r0.popFront(); }");
@@ -929,6 +924,12 @@ void libTest()
     test("tree1.insert(5);");
     test("BinaryHeap!(Array!int) heap0 = BinaryHeap!(Array!int)(Array!int(1,2,3,4));");
     test("heap0.insert(1);");
+
+    repl.reset();
+
+    test("import std.regex;");
+    test("r = regex(`[a-z]*`,`g`);");
+    test("m = match(`abdjsadfjg`,r);");
 }
 
 /**
