@@ -2,9 +2,13 @@
 
 A small repl for the D programming language (Windows and DMD32 only).
 
-### Build
+### Get and Build
 
 ```
+git clone https://github.com/callumenator/dabble
+cd dabble
+git submodule init
+git submodule update
 cd dabble
 rdmd -IPegged dabble/main.d
 ```
