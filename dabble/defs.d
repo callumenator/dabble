@@ -66,7 +66,7 @@ void* newExpr(E)(lazy E expr)
         else
             auto mem = new void[](T.sizeof);
 
-        return mem;
+        return mem.ptr;
     }
     else
         static assert(0);
@@ -76,11 +76,14 @@ void* newExpr(E)(lazy E expr)
 string NewTypeof(string S, E)(lazy E expr)
 {
     import std.traits;
-    alias ReturnType!expr RT;
-    static if (__traits(compiles, mixin( "{" ~ RT.stringof ~ " _v;}")))
-        return RT.stringof;
-    else
-        return "typeof(" ~ S ~ ")";
+    static if (__traits(compiles, {alias ReturnType!expr RT;}))
+    {
+        alias ReturnType!expr RT;
+        static if (__traits(compiles, mixin( "{" ~ RT.stringof ~ " _v;}")))
+            return RT.stringof;
+    }
+
+    return "typeof(" ~ S ~ ")";
 }
 
 
@@ -633,7 +636,7 @@ struct Type
         if (isClass || isPointer)
             return *cast(void**)absAddr;
         else if (isDynamicArr)
-            return *cast(void[]*)(absAddr);
+            return (*cast(void[]*)(absAddr)).ptr;
         else if (isStaticArr)
             return absAddr;
         else

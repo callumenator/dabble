@@ -9,8 +9,8 @@ void main(char[][] args)
 {
     auto repl = ReplContext();
     parseArgs(repl, args[1..$]);
-    //stress();
-    libTest();
+    stress();
+    //libTest();
     loop(repl);
     return;
 }
