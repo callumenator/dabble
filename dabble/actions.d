@@ -27,7 +27,7 @@ static:
     {
         parseID = Clock.currSystemTick().msecs();
         inputCopy = input;
-        stringDups.clear;
+        stringDups.clear();
         error = "";
         repl = &_repl;
 
@@ -47,7 +47,7 @@ static:
         {
             size_t index;
             findVar(d, index);
-            code.suffix.put("if (!_repl_.symbols["~index.to!string~"].v.func) { "
+            code.suffix.put("if (!_repl_.symbols["~index.to!(string)()~"].v.func) { "
                             "_REPL.dupSearch(*"~d~", _repl_.imageBounds[0], _repl_.imageBounds[1], _repl_.keepAlive); }\n");
         }
 
@@ -67,7 +67,7 @@ static:
     */
     string genFixup(string name, size_t index)
     {
-        return "memcpy(_repl_.vtbls["~index.to!string~"].vtbl.ptr, "
+        return "memcpy(_repl_.vtbls["~to!(string)(index)~"].vtbl.ptr, "
                "typeid("~name~").vtbl.ptr, "
                "typeid("~name~").vtbl.length * (void*).sizeof);\n";
     }
@@ -78,7 +78,7 @@ static:
     T clear(T)(T t)
     {
         if (t.successful)
-            t.matches.clear;
+            t.matches.clear();
 
         return t;
     }
@@ -103,7 +103,7 @@ static:
         if (repl && t.successful)
         {
             repl.share.symbols ~= Symbol(Alias(t.matches[0], isGlobal(t.matches[0])));
-            t.matches.clear;
+            t.matches.clear();
         }
         return t;
     }
@@ -115,7 +115,7 @@ static:
     {
         if (repl && t.successful) {
             repl.share.symbols ~= Symbol(Enum(t.matches[0], isGlobal(t.matches[0])));
-            t.matches.clear;
+            t.matches.clear();
         }
         return t;
     }
@@ -127,7 +127,7 @@ static:
     {
         if (repl && t.successful) {
             repl.share.symbols ~= Symbol(UserType(t.matches[0]));
-            t.matches.clear;
+            t.matches.clear();
         }
         return t;
     }
@@ -221,8 +221,8 @@ static:
                     p.matches[0] =
                         " static if (__traits(compiles, {" ~ rewrite ~ "}))\n"
                         " {\n"
-                        "   _repl_.symbols[" ~ index.to!string ~ "].v.init = q{" ~ p.matches[$-1] ~ "}.idup;\n"
-                        "   _repl_.symbols[" ~ index.to!string ~ "].v.current = q{" ~ p.matches[$-1] ~ "}.idup;\n"
+                        "   _repl_.symbols[" ~ index.to!string() ~ "].v.init = q{" ~ p.matches[$-1] ~ "}.idup;\n"
+                        "   _repl_.symbols[" ~ index.to!string() ~ "].v.current = q{" ~ p.matches[$-1] ~ "}.idup;\n"
                         " } else {\n"
                         "   " ~ rewrite ~ "\n"
                         " }\n";
@@ -253,17 +253,17 @@ static:
             if (_ptr && *_ptr == parseID)
             {
                 // redifinition, pegged calling actions more than once
-                p.matches.clear;
+                p.matches.clear();
             }
             else if (_ptr && *_ptr != parseID)
             {
                 // redifinition, user defined variable more than once
                 parseError("Error: redifinition of " ~ name ~ " not allowed");
-                p.matches.clear;
+                p.matches.clear();
             }
             else
             {
-                p.matches.clear;
+                p.matches.clear();
 
                 string init;
                 if (p.name == "ReplParse.VarDeclInit")

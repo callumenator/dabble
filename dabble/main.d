@@ -3,13 +3,12 @@ module dabble.main;
 
 import dabble.repl;
 
-
-
 void main(char[][] args)
 {
     auto repl = ReplContext();
     parseArgs(repl, args[1..$]);
-    stress();
+
+    //stress();
     //libTest();
     loop(repl);
     return;

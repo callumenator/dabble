@@ -22,6 +22,7 @@ struct ReplShare
     Type*[string] map; /// map used by typeBuilder and friends
     bool keepAlive; /// keep this dll in memory, something has a pointer into it
     void* gc; /// host gc instance
+    string logFile = "__dabbleTemp"; /// result of the eval
 
     void init()
     {
@@ -30,16 +31,16 @@ struct ReplShare
 
     void reset()
     {
-        symbols.clear;
-        vtbls.clear;
-        map.clear;
+        symbols.clear();
+        vtbls.clear();
+        map.clear();
         init();
     }
 }
 
 
 /**
-* Output this module to another .d file
+* Return the file name of this module.
 */
 string moduleFileName() { return __FILE__; }
 
@@ -105,7 +106,7 @@ string exprResult(E)(lazy E expr)
 
     auto temp = expr();
     string result;
-    if (collectException!Throwable(result = temp.to!string))
+    if (collectException!Throwable(result = temp.to!string()))
         return "";
 
     return result;
@@ -225,9 +226,34 @@ template TypeOf(T)
 */
 string sym(size_t index)
 {
-    return "_repl_.symbols["~index.to!string~"]";
+    return "_repl_.symbols["~index.to!string()~"]";
 }
 
+
+import std.regex;
+
+string applyToType(string Init, string Code)
+{
+    auto r = regex("_Type", "g");
+
+    auto s1 = std.regex.replace(Code, r, "typeof("~Init~")");
+    auto s2 = std.regex.replace(Code, r, "typeof("~Init~"())");
+    auto s3 = std.regex.replace(Code, r, "ReturnType!("~Init~")");
+
+    return
+    "
+    static if (__traits(compiles, mixin(q{typeof("~Init~")}))) {
+        " ~ s1 ~ "
+    }
+    else static if (__traits(compiles, mixin(q{typeof("~Init~"())}))) {
+        " ~ s2 ~ "
+    }
+    else static if (__traits(compiles, {alias ReturnType!("~Init~") RT;})) {
+        " ~ s3 ~ "
+    }
+    else static assert(false);
+    ";
+}
 
 struct Code { Appender!string header, prefix, suffix; }
 
@@ -285,14 +311,14 @@ struct Var
                     test, "{\n",
                     generateFuncLitSection("typeof("~init~")"), " else {\n",
                     "    " ~ sym(index) ~ ".v.addr =  _REPL.newExpr(", init, ");\n",
-                    "    *cast(Unqual!(_REPL.TypeOf!(typeof(",init,")))*)" ~ sym(index) ~ ".v.addr = ", init, ";\n"
-                    "    auto ", name, " = cast(_REPL.TypeOf!(typeof(",init,"))*)" ~ sym(index) ~ ".v.addr;\n"
+                    applyToType(init, "*cast(Unqual!(_REPL.TypeOf!(_Type))*)" ~ sym(index) ~ ".v.addr = " ~ init ~ ";\n"),
+                    applyToType(init, "    auto " ~ name ~ " = cast(_REPL.TypeOf!(_Type)*)" ~ sym(index) ~ ".v.addr;\n"),
                     "}} else {\n",
                     "  auto ", name, " = ", init, ";\n",
                     "}\n");
 
-                put(c.prefix, test, "\n  " ~ sym(index) ~ ".v.type = _REPL.NewTypeof!(q{",
-                    init, "})(", init, ").idup;\n");
+                put(c.prefix, applyToType(init, "\n  " ~ sym(index) ~ ".v.type = q{_Type}.idup;\n"));
+
             }
             else if (init.length > 0) // has type and initializer
             {
@@ -343,7 +369,7 @@ struct Var
             }
             else
             {
-                put(c.prefix, "auto ", name, " = _REPL.getVar!(", type, ")(_repl_.symbols,", index.to!string, ");\n");
+                put(c.prefix, "auto ", name, " = _REPL.getVar!(", type, ")(_repl_.symbols,", index.to!string(), ");\n");
             }
         }
     }
@@ -563,7 +589,7 @@ struct QualifiedType
                     currType = currType.deref(addr);
                     break;
                 case Index:
-                    currType = currType.index(addr, i.val.to!size_t);
+                    currType = currType.index(addr, i.val.to!size_t());
                     break;
                 case Slice:
                     return "Error: slicing not supported";
@@ -703,16 +729,16 @@ struct Type
         {
             string res;
             foreach(s; S)
-            res ~= "case `" ~ s ~ "`: return stringItAs!("~s~Append~");\n";
+            res ~= "case `" ~ s ~ "`: return stringItAs!("~s~Append~")();\n";
             return res ~ "default: return ``;\n";
         }
 
-        string stringItAs(T)() { return (*cast(T*)absAddr).to!string; }
+        string stringItAs(T)() { return (*cast(T*)absAddr).to!string(); }
 
         if (isBasic)
         {
             if (trace) writeln("getMe: isBasic, ", this.toString());
-            switch(typeName) { mixin(generateCases!(types)); }
+            switch(typeName) { mixin(generateCases!(types)()); }
         }
         else if (isAggregate)
         {
@@ -748,9 +774,11 @@ struct Type
             return _ref.getMeArray(newBaseAddr(absAddr), 0, length, true);
         }
         else if (isPointer)
-            return (*cast(void**)absAddr).to!string;
+            return (*cast(void**)absAddr).to!string();
         else
             return "";
+
+        assert(false);
     }
 
     string getMeArray(void* baseAddr, size_t start, size_t stop, bool staticArr = false)
@@ -778,7 +806,7 @@ struct Type
         }
         else if (isStaticArr)
         {
-            s ~= _ref.toString(false) ~ "[" ~ length.to!string ~ "]";
+            s ~= _ref.toString(false) ~ "[" ~ length.to!string() ~ "]";
         }
         else if (isAggregate)
         {
@@ -905,7 +933,7 @@ QualifiedType buildType()(string typeString, ref Type*[string] map)
                         qt.type = new Type;
                         qt.type.flag = Type.StaticArr;
                         qt.type._ref = baseType;
-                        qt.type.length = len.to!size_t;
+                        qt.type.length = len.to!size_t();
                         qt.type.typeName = ident ~ "[" ~ len ~ "]";
                         qt.type.typeSize = (baseType.typeSize)*qt.type.length;
                         map[qt.type.typeName.idup] = qt;
@@ -934,7 +962,7 @@ QualifiedType buildType()(string typeString, ref Type*[string] map)
         return baseType;
     }
 
-    return QualifiedType();;
+    return QualifiedType();
 }
 
 template typeQualifier(T)
@@ -1050,7 +1078,7 @@ template typeName(T)
     static if (isAggregateType!T)
         enum typeName = Type.stringof;
     else static if (isStaticArray!T)
-        enum typeName = typeName!(ArrayElement!T) ~ "[" ~ T.length.to!string ~ "]";
+        enum typeName = typeName!(ArrayElement!T) ~ "[" ~ T.length.to!string() ~ "]";
     else static if (isDynamicArray!T)
         enum typeName = typeName!(ArrayElement!T) ~ "[]";
     else static if (isPointer!T)

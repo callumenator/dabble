@@ -18,7 +18,6 @@ extern(C) void* gc_getProxy();
 
 private SharedLib[] keepAlive;
 
-
 /**
 * Available levels of debug info.
 */
@@ -95,9 +94,9 @@ struct ReplContext
     void reset()
     {
         share.reset();
-        symbolSet.clear;
-        userModules.clear;
-        vtblFixup.clear;
+        symbolSet.clear();
+        userModules.clear();
+        vtblFixup.clear();
     }
 }
 
@@ -110,7 +109,6 @@ void loop(ref ReplContext repl)
 {
     //clearScreen();
     writeln(title());
-    string error;
     char[] inBuffer, codeBuffer;
 
     write(prompt());
@@ -119,41 +117,54 @@ void loop(ref ReplContext repl)
 
     while (strip(inBuffer) != "exit")
     {
-        inBuffer = strip(inBuffer);
-
-        // Try to handle meta command, else assume input is code
-        if (inBuffer.length && !handleMetaCommand(repl, inBuffer, codeBuffer))
-        {
-            codeBuffer ~= inBuffer ~ "\n";
-            Parser.braceCount = 0;
-            auto balanced = ReplParse.BalancedBraces(codeBuffer.to!string);
-
-            if (!multiLine && balanced.successful && inBuffer[$-1] == ';')
-            {
-                eval(codeBuffer.to!string, repl, error);
-                codeBuffer.clear;
-            }
-            else
-            {
-                multiLine = true;
-            }
-
-            if (multiLine)
-            {
-                if ((balanced.successful && Parser.braceCount > 0) ||
-                    (balanced.successful && Parser.braceCount == 0 && inBuffer[$-1] == ';'))
-                {
-                    eval(codeBuffer.to!string, repl, error);
-                    codeBuffer.clear;
-                    multiLine = false;
-                }
-            }
-        }
-
+        writeln(eval(repl, inBuffer, codeBuffer));
         write(prompt());
         stdin.readln(inBuffer);
     }
     return;
+}
+
+string eval(ref ReplContext repl,
+            const char[] inBuffer,
+            ref char[] codeBuffer)
+{
+    import std.string;
+
+    string message;
+    bool multiLine = codeBuffer.length > 0;
+    char[] newInput = strip(inBuffer.dup);
+
+    if (newInput.toLower() == "exit")
+        return "";
+
+    // Try to handle meta command, else assume input is code
+    if (newInput.length > 0 && !handleMetaCommand(repl, newInput, codeBuffer, message))
+    {
+        codeBuffer ~= newInput ~ "\n";
+        Parser.braceCount = 0;
+        auto balanced = ReplParse.BalancedBraces(codeBuffer.to!string());
+
+        // Need to handle things like: a = 5; print a <- note no trailing ';' but 0 braces
+
+        if (!multiLine && balanced.successful && newInput[$-1] == ';')
+        {
+            evaluate(codeBuffer.to!string(), repl, message);
+            codeBuffer.clear();
+        }
+        else
+        {
+            if ((balanced.successful && Parser.braceCount > 0) ||
+                (balanced.successful && Parser.braceCount == 0 && newInput[$-1] == ';'))
+            {
+                evaluate(codeBuffer.to!string(), repl, message);
+                codeBuffer.clear();
+                multiLine = false;
+            }
+
+        }
+    }
+
+    return message;
 }
 
 
@@ -172,17 +183,23 @@ string title()
     return text("DABBLE: (DMD ", version_major, ".", version_minor, ")");
 }
 
+void append(Args...)(ref string message, Args msg)
+{
+    import std.conv;
+    message ~= text(msg, "\n");
+}
 
 /**
 * Handle meta commands
 */
 bool handleMetaCommand(ref ReplContext repl,
                        ref const(char[]) inBuffer,
-                       ref char[] codeBuffer)
+                       ref char[] codeBuffer,
+                       ref string message)
 {
     import std.process : system;
 
-    auto parse = ReplParse.decimateTree(ReplParse.MetaCommand(inBuffer.to!string));
+    auto parse = ReplParse.decimateTree(ReplParse.MetaCommand(inBuffer.to!string()));
 
     if (!parse.successful) return false;
 
@@ -206,24 +223,24 @@ bool handleMetaCommand(ref ReplContext repl,
         {
             if (args.length == 0 || canFind(args, "all")) // print all vars
             {
-                auto vars = repl.share.symbols.filter!(s => s.type == Symbol.Type.Var && s.v.ty.type !is null);
+                auto vars = repl.share.symbols.filter!(s => s.type == Symbol.Type.Var && s.v.ty.type !is null)();
                 foreach(val; vars)
-                    writeln(val.v.name, " (", val.v.displayType, ") = ", val.v.ty.valueOf([], val.v.addr, repl.share.map));
+                    message.append(val.v.name, " (", val.v.displayType, ") = ", val.v.ty.valueOf([], val.v.addr, repl.share.map));
             }
             else if (args.length == 1 && args[0] == "__keepAlive")
             {
-                writeln("SharedLibs still alive:");
+                message.append("SharedLibs still alive:");
                 foreach(s; keepAlive)
-                    writeln("  ", s);
+                    message.append("  ", s);
             }
             else // print selected symbols
             {
                 foreach(a; args)
                 {
                     auto p = parseExpr(a);
-                    auto vars = repl.share.symbols.filter!(s => s.isVar() && s.v.name == p[0] && s.v.ty !is null);
+                    auto vars = repl.share.symbols.filter!(s => s.isVar() && s.v.name == p[0] && s.v.ty !is null)();
                     foreach(s; vars)
-                        writeln(s.v.ty.valueOf(p[1], s.v.addr, repl.share.map));
+                        message.append(s.v.ty.valueOf(p[1], s.v.addr, repl.share.map));
                 }
             }
             break;
@@ -234,14 +251,14 @@ bool handleMetaCommand(ref ReplContext repl,
             foreach(a; args)
             {
                 auto p = parseExpr(a);
-                auto vars = repl.share.symbols.filter!(s => s.isVar() && s.v.name == p[0] && s.v.ty.type !is null);
+                auto vars = repl.share.symbols.filter!(s => s.isVar() && s.v.name == p[0] && s.v.ty.type !is null)();
                 foreach(s; vars)
                 {
                     auto typeOf = s.v.ty.typeOf(p[1], repl.share.map);
                     if (typeOf[1].length > 0)
-                        writeln(typeOf[1]);
+                        message.append(typeOf[1]);
                     else
-                        writeln(typeOf[0].toString());
+                        message.append(typeOf[0].toString());
                 }
             }
             break;
@@ -252,8 +269,8 @@ bool handleMetaCommand(ref ReplContext repl,
             if (canFind(args, "session"))
             {
                 repl.reset();
-                keepAlive.clear;
-                writeln("Session reset");
+                keepAlive.clear();
+                message.append("Session reset");
             }
             break;
         }
@@ -262,6 +279,7 @@ bool handleMetaCommand(ref ReplContext repl,
         {
             foreach(a; args)
                 deleteVar(repl, a);
+            break;
         }
 
         case "use":
@@ -275,8 +293,9 @@ bool handleMetaCommand(ref ReplContext repl,
                 if (exists(a))
                     repl.userModules ~= TupType(dirName(a), baseName(a), SysTime(0).stdTime());
                 else
-                    writeln("Error: module ", a, " could not be found");
+                    message.append("Error: module ", a, " could not be found");
             }
+            break;
         }
 
         case "clear":
@@ -284,10 +303,10 @@ bool handleMetaCommand(ref ReplContext repl,
             if (args.length == 0)
             {
                 clearScreen();
-                writeln(title());
+                message.append(title());
             }
             else if (args.length == 1 && args[0] == "buffer")
-                codeBuffer.clear;
+                codeBuffer.clear();
             break;
         }
 
@@ -298,7 +317,7 @@ bool handleMetaCommand(ref ReplContext repl,
 
     // If we got to here, we successfully parsed a meta command, so
     // clear the code buffer
-    codeBuffer.clear;
+    codeBuffer.clear();
     return true;
 }
 
@@ -347,12 +366,12 @@ void setDebugLevel(string s)(ref ReplContext repl, string level)
 /**
 * Evaluate code in the context of the supplied ReplContext.
 */
-EvalResult eval(string code,
-                ref ReplContext repl,
-                ref string error)
+EvalResult evaluate(string code,
+                    ref ReplContext repl,
+                    ref string message)
 {
     import std.datetime : StopWatch;
-    import std.typecons;
+    import std.typecons, std.conv;
 
     Tuple!(long,"parse",long,"build",long,"call") times;
     StopWatch sw;
@@ -362,12 +381,12 @@ EvalResult eval(string code,
     {
         if (repl.debugLevel & Debug.times)
         {
-            write("TIMINGS: parse: ", times.parse);
+            message ~= text("TIMINGS: parse: ", times.parse);
             if (!(repl.debugLevel & Debug.parseOnly))
-                writeln(", build: ", times.build, ", call: ", times.call, ", TOTAL: ",
+                message.append(", build: ", times.build, ", call: ", times.call, ", TOTAL: ",
                         times.parse + times.build + times.call);
             else
-                writeln();
+                message.append();
         }
     }
 
@@ -379,40 +398,39 @@ EvalResult eval(string code,
         return res;
     }
 
-    if (repl.debugLevel & Debug.stages) writeln("PARSE...");
+    if (repl.debugLevel & Debug.stages) message.append("PARSE...");
 
     bool showParse = cast(bool)(repl.debugLevel & Debug.parseOnly);
     auto text = timeIt!(Parser.go)(code, repl, showParse, sw, times.parse);
 
     if (Parser.error.length != 0)
     {
-        writeln(Parser.error);
+        message.append(Parser.error);
         return EvalResult.parseError;
     }
 
     if (repl.debugLevel & Debug.parseOnly)
     {
-        writeln(text[0]~text[1]);
+        message.append(text[0]~text[1]);
         return EvalResult.noError;
     }
 
     if (text[0].length == 0 && text[1].length == 0)
         return EvalResult.noError;
 
-    if (repl.debugLevel & Debug.stages) writeln("BUILD...");
+    if (repl.debugLevel & Debug.stages) message.append("BUILD...");
 
-    auto build = timeIt!build(text, repl, error, sw, times.build);
+    auto build = timeIt!build(text, repl, message, sw, times.build);
 
     if (!build)
     {
-        writeln("Error:\n", error);
         pruneSymbols(repl);
         return EvalResult.buildError;
     }
 
-    if (repl.debugLevel & Debug.stages) writeln("CALL...");
+    if (repl.debugLevel & Debug.stages) message.append("CALL...");
 
-    auto call = timeIt!call(repl, error, sw, times.call);
+    auto call = timeIt!call(repl, message, sw, times.call);
 
     // Prune any symbols not marked as valid
     pruneSymbols(repl);
@@ -437,7 +455,7 @@ EvalResult eval(string code,
 */
 bool attempt(ReplContext repl,
              string cmd,
-             out string err,
+             ref string message,
              string codeFilename)
 {
     import std.process : system;
@@ -449,7 +467,7 @@ bool attempt(ReplContext repl,
     {
         auto errFile = repl.paths.tempPath ~ "errout.txt";
         if (exists(errFile))
-            err = parseError(repl, readText(errFile), codeFilename);
+            message = parseError(repl, readText(errFile), codeFilename);
         return false;
     }
     return true;
@@ -462,7 +480,7 @@ bool attempt(ReplContext repl,
 import std.typecons;
 bool build(Tuple!(string,string) code,
            ref ReplContext repl,
-           out string error)
+           ref string message)
 {
     import std.file : exists, readText;
     import std.path : dirSeparator;
@@ -475,6 +493,9 @@ bool build(Tuple!(string,string) code,
         "    import std.exception;\n"
         "    _repl_.keepAlive = false;\n"
         "    gc_setProxy(_repl_.gc);\n"
+        "    auto saveOut = stdout;\n"
+        "    scope(exit) { stdout = saveOut; } \n"
+        "    stdout.open(_repl_.logFile, `wt`);\n"
         "    auto e = collectException!Throwable(_main2(_repl_));\n"
         "    if (e) { writeln(e.msg); return -1; }\n"
         "    return 0;\n"
@@ -509,16 +530,16 @@ bool build(Tuple!(string,string) code,
     string cmd = dirChange ~ " & dmd " ~ linkFlags ~ repl.paths.filename
                ~ ".d " ~ repl.paths.filename ~ ".def extra.lib ";
 
-    if (!buildUserModules(repl, error))
+    if (!buildUserModules(repl, message))
         return false;
 
     if (repl.userModules.length > 0)
     {
-        auto includePaths = repl.userModules.map!(a => "-I" ~ a.path).join(" ");
+        auto includePaths = repl.userModules.map!(a => "-I" ~ a.path)().join(" ");
         cmd ~= includePaths;
     }
 
-    if (!attempt(repl, cmd, error, repl.paths.fullName ~ ".d"))
+    if (!attempt(repl, cmd, message, repl.paths.fullName ~ ".d"))
         return false;
 
     return true;
@@ -529,7 +550,7 @@ bool build(Tuple!(string,string) code,
 * Rebuild user modules into a lib to link with. Only rebuild files that have changed.
 */
 bool buildUserModules(ReplContext repl,
-                      out string error,
+                      ref string message,
                       bool init = false)
 {
     import std.datetime;
@@ -547,14 +568,14 @@ bool buildUserModules(ReplContext repl,
         auto f = File(repl.paths.tempPath ~ "defs.d", "w");
         f.write(text);
         f.close();
-        if (!attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -c defs.d", error, repl.paths.tempPath ~ "defs.d"))
+        if (!attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -c defs.d", message, repl.paths.tempPath ~ "defs.d"))
             return false;
     }
 
     if (repl.userModules.length == 0 && !rebuildLib)
         return true;
 
-    auto allIncludes = repl.userModules.map!(a => "-I" ~ a.path).join(" ");
+    auto allIncludes = repl.userModules.map!(a => "-I" ~ a.path)().join(" ");
 
     SysTime access, modified;
     foreach(ref m; repl.userModules)
@@ -568,7 +589,7 @@ bool buildUserModules(ReplContext repl,
         rebuildLib = true;
         auto cmd = "cd " ~ repl.paths.tempPath ~ " & dmd -c " ~ allIncludes ~ " " ~ fullPath;
 
-        if (!attempt(repl, cmd, error, fullPath))
+        if (!attempt(repl, cmd, message, fullPath))
             return false;
 
         getTimes(fullPath, access, modified);
@@ -577,8 +598,8 @@ bool buildUserModules(ReplContext repl,
 
     if (rebuildLib)
     {
-        auto objs = repl.userModules.map!(a => stripExtension(a.name)~".obj").join(" ");
-        if (!attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -lib -ofextra.lib defs.obj " ~ objs, error, ""))
+        auto objs = repl.userModules.map!(a => stripExtension(a.name)~".obj")().join(" ");
+        if (!attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -lib -ofextra.lib defs.obj " ~ objs, message, ""))
             return false;
     }
 
@@ -607,9 +628,10 @@ void cleanup(ReplContext repl)
 /**
 * Load the shared lib, and call the _main function. Free the lib on exit.
 */
-CallResult call(ref ReplContext repl, out string error)
+CallResult call(ref ReplContext repl, ref string message)
 {
     import core.memory : GC;
+    import std.file : readText, exists, remove;
 
     static SharedLib lastLib; // XP hack
     alias extern(C) int function(ref ReplShare) funcType;
@@ -624,13 +646,13 @@ CallResult call(ref ReplContext repl, out string error)
     if (!lib.loaded)
         return CallResult.loadError;
 
-    repl.share.imageBounds = lib.bounds();
+    repl.share.imageBounds = (lib.bounds())[];
 
     auto funcPtr = lib.getFunction!(funcType)("_main");
 
     if (funcPtr is null)
     {
-        error = "Unable to obtain function pointer";
+        message.append("Unable to obtain function pointer");
         return CallResult.loadError;
     }
 
@@ -648,6 +670,16 @@ CallResult call(ref ReplContext repl, out string error)
     {
         GC.collect();
         return CallResult.runtimeError;
+    }
+
+    if (exists(repl.share.logFile))
+    {
+        try
+        {
+            message.append(readText(repl.share.logFile));
+            remove(repl.share.logFile);
+        }
+        catch(Exception e) {}
     }
 
     return CallResult.success;
@@ -703,7 +735,7 @@ string parseError(ReplContext repl,
         auto lnum = match(line, regex(`\([0-9]+\)`, "g"));
         if (!lnum.empty)
         {
-            auto lineNumber = lnum.front.hit()[1..$-1].to!int - 1;
+            auto lineNumber = lnum.front.hit()[1..$-1].to!int() - 1;
             if (lineNumber > 0 && lineNumber < code.length)
                 res ~= filePrepend ~ " < " ~ strip(deDereference(code[lineNumber])) ~ " >\n";
             else
@@ -890,7 +922,7 @@ void libTest()
     auto repl = ReplContext();
     string err;
 
-    void test(string i) { assert(eval(i, repl, err) == EvalResult.noError, err); }
+    void test(string i) { assert(evaluate(i, repl, err) == EvalResult.noError, err); }
 
     test("import std.typecons;");
     test("Nullable!int a;");
@@ -901,10 +933,9 @@ void libTest()
     test("bref = 5;");
     test("bref;");
     test("c = tuple(1, `hello`);");
-    test("Unique!int f = new int;");
-    test("f = 7;");
+    //test("Unique!int f = new int;");
+    //test("f = 7;");
 
-    return;
     repl.reset();
 
     test("import std.algorithm, std.range;");
@@ -955,13 +986,11 @@ void libTest()
 
     repl.reset();
 
-    test("import std.regex;");
-    test("r0 = regex(`[a-z]*`,`g`);");
-    test("m0 = match(`abdjsadfjg`,r0);");
-    test("r1 = regex(`[0-9]+`,`g`);");
-    test("m1 = match(`12345`,r1);");
-
-
+    //test("import std.regex;");
+    //test("r0 = regex(`[a-z]*`,`g`);");
+    //test("m0 = match(`abdjsadfjg`,r0);");
+    //test("r1 = regex(`[0-9]+`,`g`);");
+    //test("m1 = match(`12345`,r1);");
 }
 
 /**
@@ -974,7 +1003,7 @@ ReplContext run(string[] code, uint debugLevel = 0)
     foreach(i, c; code)
     {
         writeln("Line: ", i, " -> ", c);
-        auto result = eval(c, repl, err);
+        auto result = evaluate(c, repl, err);
         assert(result != EvalResult.parseError && result != EvalResult.buildError);
     }
     return repl;

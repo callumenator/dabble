@@ -40,7 +40,7 @@ extern(C) void hookNewClass(TypeInfo_Class ti,
     else if (clear)
     {
         count = 0;
-        infos.clear;
+        infos.clear();
         return;
     }
     else
@@ -86,7 +86,7 @@ extern(C) void hookNewClass(TypeInfo_Class ti,
             memcpy(i.classPtr, &vtblPtr, (void*).sizeof);
         }
         count = 0;
-        infos.clear;
+        infos.clear();
     }
 }
 
@@ -162,7 +162,7 @@ string genHeader()
             auto obj = cast(Object) p;
 
             alias extern(C) void function(TypeInfo_Class, void*, void*, bool) cb;
-            auto fp = cast(cb)(0x` ~ (&hookNewClass).to!string ~ `);
+            auto fp = cast(cb)(0x` ~ (&hookNewClass).to!string() ~ `);
             fp(typeid(obj), p, null, false);
             return obj;
         }
