@@ -1,19 +1,11 @@
 {
 	"name": "dabble",
-
 	"description": "A simple REPL for DMD on Win32",
-
 	"authors": ["cal"],
-
 	"homepage": "",
-
 	"license": "Boost",
 
-  "dependencies": {
-    "vibe-d":   "~master",
-    "libevent": "~master",
-    "libev":    "~master",
-    "openssl":  "~master",
+  "dependencies": {  
     "pegged":   "~master"
 	},
 
@@ -26,7 +18,16 @@
 			"platforms": ["windows"],						
       "targetName":"dabble-server",
       
+      "dependencies": {
+        "vibe-d":   "~master",
+        "libevent": "~master",
+        "libev":    "~master",
+        "openssl":  "~master"
+      },
+      
       "sourceFiles": [
+        "web/source/app.d",
+        "web/source/sourcebrowser.d",
         "dabble/actions.d",
         "dabble/defs.d",
         "dabble/loader.d",
@@ -39,10 +40,11 @@
 		{
 			"name": "console",
 			"targetType": "executable",
-			"platforms": ["windows"],
-      "targetName":"dabble-server",
+			"platforms": ["windows"],      
+      "targetName":"dabble-console",
 			
-      "sourceFiles": [
+      "sourceFiles": [        
+        "dabble/main.d",
         "dabble/actions.d",
         "dabble/defs.d",
         "dabble/loader.d",

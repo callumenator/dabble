@@ -75,10 +75,9 @@ shared static this()
     repl = ReplContext();
 
 	auto router = new URLRouter;
-	router.get("/", &index);
 	router.get("/welcome", &welcome);
 
-	router.get("*", serveStaticFiles("./public/"));
+	router.get("*", serveStaticFiles("./web/public/"));
 
 	router.post("/input", &input);
 	router.post("/suggest", &suggest);
