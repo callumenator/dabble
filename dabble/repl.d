@@ -12,7 +12,8 @@ module dabble.repl;
 
 import
     std.algorithm,
-    std.stdio;
+    std.stdio,
+    std.string;
 
 import
     dabble.actions,
@@ -126,13 +127,17 @@ void loop(ref ReplContext repl)
 
     while (strip(inBuffer) != "exit")
     {
-        writeln(eval(repl, inBuffer, codeBuffer));
+        write(eval(repl, inBuffer, codeBuffer).splitLines().join("\n"));
         write(prompt());
         stdin.readln(inBuffer);
     }
     return;
 }
 
+
+/**
+* Evaluate code in the context of the supplied ReplContext.
+*/
 string eval(ref ReplContext repl,
             const char[] inBuffer,
             ref char[] codeBuffer)
