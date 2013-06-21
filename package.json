@@ -1,0 +1,55 @@
+{
+	"name": "dabble",
+
+	"description": "A simple REPL for DMD on Win32",
+
+	"authors": ["cal"],
+
+	"homepage": "",
+
+	"license": "Boost",
+
+  "dependencies": {
+    "vibe-d":   "~master",
+    "libevent": "~master",
+    "libev":    "~master",
+    "openssl":  "~master",
+    "pegged":   "~master"
+	},
+
+  "targetPath":"./",
+    
+  "configurations": [
+		{
+			"name": "server",
+			"targetType": "executable",
+			"platforms": ["windows"],						
+      "targetName":"dabble-server",
+      
+      "sourceFiles": [
+        "dabble/actions.d",
+        "dabble/defs.d",
+        "dabble/loader.d",
+        "dabble/parser.d",
+        "dabble/repl.d",
+        "dabble/sharedlib.d",
+        "dabble/util.d"    
+      ]
+		},
+		{
+			"name": "console",
+			"targetType": "executable",
+			"platforms": ["windows"],
+      "targetName":"dabble-server",
+			
+      "sourceFiles": [
+        "dabble/actions.d",
+        "dabble/defs.d",
+        "dabble/loader.d",
+        "dabble/parser.d",
+        "dabble/repl.d",
+        "dabble/sharedlib.d",
+        "dabble/util.d"    
+      ]
+		}]
+}
