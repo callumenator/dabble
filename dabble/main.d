@@ -12,8 +12,11 @@ module dabble.main;
 
 import dabble.repl;
 
+class C{}
+
 void main(char[][] args)
 {
+
     auto repl = ReplContext();
     parseArgs(repl, args[1..$]);
     loop(repl);

@@ -252,13 +252,13 @@ string applyToType(string Init, string Code)
     return
     "
     static if (__traits(compiles, mixin(q{typeof("~Init~")}))) {
-        " ~ s1 ~ "
+        mixin(q{" ~ s1 ~ "});
     }
     else static if (__traits(compiles, mixin(q{typeof("~Init~"())}))) {
-        " ~ s2 ~ "
+        mixin(q{" ~ s2 ~ "});
     }
     else static if (__traits(compiles, {alias ReturnType!("~Init~") RT;})) {
-        " ~ s3 ~ "
+        mixin(q{" ~ s3 ~ "});
     }
     else static assert(false);
     ";
@@ -314,7 +314,7 @@ struct Var
             {
                 assert(init.length > 0, "Auto var without initializer");
 
-                test = "static if (__traits(compiles, { auto " ~ name ~ " = " ~ init ~ ";}))";
+                test = "static if (__traits(compiles, mixin(q{{ auto " ~ name ~ " = " ~ init ~ ";}})))";
 
                 put(c.prefix,
                     test, "{\n",

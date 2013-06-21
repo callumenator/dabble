@@ -127,7 +127,8 @@ void loop(ref ReplContext repl)
 
     while (strip(inBuffer) != "exit")
     {
-        write(eval(repl, inBuffer, codeBuffer).splitLines().join("\n"));
+        auto result = eval(repl, inBuffer, codeBuffer);
+        writeln(result.chomp().chomp());
         write(prompt());
         stdin.readln(inBuffer);
     }
