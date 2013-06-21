@@ -15,7 +15,7 @@ import
     std.file;
 
 import
-    dabble.repl;
+    dabble.repl,
     sourcebrowser;
 
 ReplContext repl;
