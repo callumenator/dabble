@@ -76,8 +76,12 @@ void getSymbolSourceByUUID(HTTPServerRequest req, HTTPServerResponse res)
     res.bodyWriter.finalize();
 }
 
-shared static this()
+int main(string[] args)
 {
+    if (args.length == 2) {
+        buildSourceBrowser(args[1]);
+    }
+
     repl = ReplContext();
 
 	auto router = new URLRouter;
@@ -96,4 +100,7 @@ shared static this()
 	//settings.accessLogToConsole = true;
 
 	listenHTTP(settings, router);
+
+    return runEventLoop();
 }
+

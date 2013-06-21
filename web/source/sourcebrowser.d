@@ -390,22 +390,23 @@ Symbol parse(JSONValue[string] obj, string parent = "", string file = "")
     return sym;
 }
 
-static this()
+void buildSourceBrowser(string dmdPath = "")
 {
     writeln("Generating Source Browser Info...");
 
-    auto dir = "c:/cal/d/dmd2/src/phobos/std";
-    auto files = filter!`endsWith(a.name, "algorithm.d")`(dirEntries(dir, SpanMode.shallow));
+    auto files = filter!`endsWith(a.name, ".d")`(dirEntries(dmdPath, SpanMode.shallow));
 
-    auto reg = regex(`[\n\r]`, "g");
-    auto list = files.map!( x => x.name )().join(" ");
-    auto res = system("dmd -c -o- -X -Xfstdlib.json " ~ list);
-    auto text = readText("stdlib.json");
+    if (!files.empty) {
+        auto reg = regex(`[\n\r]`, "g");
+        auto list = files.map!( x => x.name )().join(" ");
+        auto res = system("dmd -c -o- -X -Xfstdlib.json " ~ list);
+        auto text = readText("stdlib.json");
 
-    auto obj = parseJSON(text);
-    auto modList = obj.array;
-    foreach(mod; modList)
-        browser.insert(parse(mod.object));
+        auto obj = parseJSON(text);
+        auto modList = obj.array;
+        foreach(mod; modList)
+            browser.insert(parse(mod.object));
+    }
 
     writeln("Finished Generating Source Browser Info...");
 }

@@ -19,7 +19,8 @@
 		{
 			"name": "server",
 			"targetType": "executable",
-			"platforms": ["windows"],						
+			"platforms": ["windows"],			
+      "versions": ["VibeCustomMain"],
       "targetName":"dabble-server",         
       
       "sourceFiles": [
@@ -37,7 +38,8 @@
 		{
 			"name": "console",
 			"targetType": "executable",
-			"platforms": ["windows"],      
+			"platforms": ["windows"],     
+      "versions": ["VibeCustomMain"],      
       "targetName":"dabble-console",
 			
       "sourceFiles": [        
