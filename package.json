@@ -6,7 +6,11 @@
 	"license": "Boost v1.0",
 
   "dependencies": {  
-    "pegged":   "~master"
+    "pegged":   "~master",    
+    "vibe-d":   "~master",
+    "libevent": "~master",
+    "libev":    "~master",
+    "openssl":  "~master"
 	},
 
   "targetPath":"./",
@@ -16,14 +20,7 @@
 			"name": "server",
 			"targetType": "executable",
 			"platforms": ["windows"],						
-      "targetName":"dabble-server",
-      
-      "dependencies": {
-        "vibe-d":   "~master",
-        "libevent": "~master",
-        "libev":    "~master",
-        "openssl":  "~master"
-      },
+      "targetName":"dabble-server",         
       
       "sourceFiles": [
         "web/source/app.d",
