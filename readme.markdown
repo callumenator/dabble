@@ -20,7 +20,7 @@ dub build --config=server
 ```
 4. Run the application. 
     * console mode: ```dabble-console```
-    * server mode: ```dabble-server```, then launch a browser and point it to http://localhost:8080/form.html
+    * server mode: ```dabble-server```, then launch a browser and point it to http://localhost:8080/repl.html
 
 
 ### How it works
