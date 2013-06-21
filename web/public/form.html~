@@ -61,9 +61,21 @@
 
  <script>
  
+   window.onkeydown = function() { return handleWindowEvent(event); }; 
+   
    var lineIndex = 0; // for moving through the history
-   var browser; // trie for autocompletion
-    
+   
+   function handleWindowEvent(e) {   
+        if (event.ctrlKey == true) {
+        
+            if (event.keyCode == 70) {
+                toggleSearchPaneVisibility();
+                return false;
+            }                        
+        }   
+        return true;
+   }
+           
    if(typeof(String.prototype.trim) === "undefined") {
       String.prototype.trim = function() {
       return String(this).replace(/^\s+|\s+$/g, '');
@@ -71,7 +83,7 @@
    }
    
    // Retrieve Dabble version
-   (function() {
+   window.onload = function() {
       var xhr = createCORSRequest('GET', '/welcome');
       xhr.setRequestHeader('Content-type', 'text/plain;');        
       xhr.onload = function() {
@@ -79,72 +91,39 @@
         updateHistory(responseText);        
       };     
       xhr.send();
-    }());
-   
-   // Retrieve sourcebrowser
-   (function() {
-      var xhr = createCORSRequest('GET', '/trie');
-      xhr.setRequestHeader('Content-type', 'text/plain;');        
-      xhr.onload = function() {
-        var responseText = xhr.responseText;    
-        browser = jsonParse(responseText);                
-      };     
-      xhr.send();
-    }());
+    }; 
 
  
    var editor = CodeMirror.fromTextArea(document.getElementById("code"), {
-     mode:"text/x-d",
-     viewportMargin: Infinity,
-     lineWrapping: true, 
-     extraKeys: {"Ctrl-Down": "autocomplete"}
+         mode:"text/x-d",
+         viewportMargin: Infinity,
+         lineWrapping: true, 
+         extraKeys: {"Ctrl-Down": "autocomplete"}
    });
    
    var history = CodeMirror.fromTextArea(document.getElementById("history"), {
-     mode:"text/x-d",
-     viewportMargin: Infinity,
-     readOnly: "nocursor",
-     lineNumbers: true,
-     lineWrapping: true
+         mode:"text/x-d",
+         viewportMargin: Infinity,
+         readOnly: "nocursor",
+         lineNumbers: true,
+         lineWrapping: true
    });
    
    editor.setOption("theme", "dabble");
    history.setOption("theme", "dabble");
    
-   CodeMirror.commands.autocomplete = function(cm) {
-    CodeMirror.showHint(cm, checkForAutocomplete);
+   CodeMirror.commands.autocomplete = function(cm) {        
+        CodeMirror.showHint(cm, CodeMirror.dHint, autoCompleteOptions);
    }
    
    var autoCompleteOptions = {
-    completeSingle: false,   
-    hintState: "ready" // or "waiting"
+        async: true,
+        completeSingle: false        
    }      
-      
-   function checkForAutocomplete() {
-   
-    var tk = editor.getTokenAt(editor.getCursor());
-    
-    function wrapHints(editor, options) {
-      var data = CodeMirror.dHint(editor, options);
-      
-      CodeMirror.on(data, "select", function() {         
-        // disable hinting until another key is pressed
-        autoCompleteOptions.hintState = "waiting";  
-        });
-        
-      return data;
-    }
-                
-    if (!(typeof tk == "undefined")) {             
-      CodeMirror.showHint(editor, wrapHints, autoCompleteOptions);      
-    }
-   }
-     
+          
    editor.options.onKeyEvent = 
     function(cm, e) {     
-          
-      //console.log(editor.getTokenAt(editor.getCursor()));
-          
+                    
       // If currently auto-completing, do nothing
       if (editor.state.completionActive) 
         return;                    
@@ -152,8 +131,9 @@
       if (!e || !(e instanceof KeyboardEvent)) 
         return;
         
-      if (e.ctrlKey == true)
+      if (e.ctrlKey == true) {             
         return;
+      }
       
       if (e.type == 'keydown' &&
           e.shiftKey == false &&           
@@ -227,23 +207,13 @@
     
     function createCORSRequest(method, url) {
       var xhr = new XMLHttpRequest();
-      if ("withCredentials" in xhr) {
-        // Check if the XMLHttpRequest object has a "withCredentials" property.
-        // "withCredentials" only exists on XMLHTTPRequest2 objects.
+      if ("withCredentials" in xhr) {        
         xhr.open(method, url, true);
-
-      } else if (typeof XDomainRequest != "undefined") {
-
-        // Otherwise, check if XDomainRequest.
-        // XDomainRequest only exists in IE, and is IE's way of making CORS requests.
+      } else if (typeof XDomainRequest != "undefined") {        
         xhr = new XDomainRequest();
         xhr.open(method, url);
-
       } else {
-
-        // Otherwise, CORS is not supported by the browser.
         xhr = null;
-
       }
       return xhr;
     }

@@ -184,6 +184,7 @@
       } else {
         history.setValue(history.getValue() + "\n" + text);     
       }       
+      lineIndex = history.lineCount();
       var el = document.getElementById("codePane");
       el.scrollTop = el.scrollHeight;
     }       
