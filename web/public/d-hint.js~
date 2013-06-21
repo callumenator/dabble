@@ -1,0 +1,173 @@
+
+Array.prototype.getUnique = function(selector){
+   var u = {}, a = [];
+   for(var i = 0, l = this.length; i < l; ++i){
+      if(u.hasOwnProperty(selector(this[i]))) {
+         continue;
+      }
+      a.push(this[i]);
+      u[selector(this[i])] = 1;
+   }
+   return a;
+}
+
+function autocomplete(prefix, selector) {
+  var n = browser;
+  
+  if (typeof n == "undefined") {
+    return [];
+  }
+      
+  for(var i = 0; i < prefix.length; i++) {
+    if (n.hasOwnProperty(prefix[i])) {          
+      n = n[prefix[i]];
+    } else {
+      return [];
+    }
+  }
+  return getSubTree(n, selector);
+}
+
+function findRoot(prefix) {
+  var n = browser;    
+  if (typeof n == "undefined") return null;      
+  for(var i = 0; i < prefix.length; i++) {
+    if (n.hasOwnProperty(prefix[i])) {          
+      n = n[prefix[i]];
+    } else {
+      return null;
+    }
+  }  
+  return n;
+}
+
+function getSubTree(node, selector) {  
+  var matches = [];
+  if (node.hasOwnProperty("name")) { matches = matches.concat(selector(node)); }  
+  for(var prop in node) {          
+    if (node.hasOwnProperty(prop) && prop.length == 1) {
+      matches = matches.concat(getSubTree(node[prop], selector));          
+    }
+  }
+  return matches;
+} 
+
+function searchInput() {
+  var prefix = document.getElementById("searchBox").value;
+  generateSuggestions(prefix);
+}
+    
+function generateSuggestions(prefix) {
+  if (prefix.length >= 3) {
+       
+    var list = autocomplete(prefix, function(n){ return n;});
+        
+    if (list.length > 0) {
+        
+      var htmlString = "";
+      for(var i = 0; i < list.length; i++) {
+        htmlString += "<div class='libPanel' data-expanded='false' onclick='panelClick(\"" + list[i].name + "\")'>" + list[i].name + "</div>";
+      }
+      document.getElementById("suggestionsPane").innerHTML = htmlString;
+      document.getElementById("searchBoxUnder").value = list[0].name;
+          
+    } else {
+      clearSuggestions();
+    }
+  } else {
+    clearSuggestions();
+  }
+}
+
+function panelClick(name) {
+   
+   var el = event.target;
+   
+   if (typeof el.dataset.expanded == "undefined")
+    return;
+   
+   if (el.dataset.expanded != "true")
+    expandPanel(name, el);
+   else
+    collapsePanel(name, el);
+}
+
+function expandPanel(name, parent) {    
+ 
+    var match = getSubTree(findRoot(name), function(n){return n;})[0];
+    
+    console.log(match);
+    
+    var html = "";
+    
+    for(var i = 0; i < match.symbols.length; i++) {
+      html += symbolToHTML(match.symbols[i]);
+    }
+    
+    var div = document.createElement("div");
+    parent.appendChild(div);
+    div.innerHTML = html;  
+    parent.dataset.expanded = "true";
+}
+
+function collapsePanel(name, parent) {
+  parent.removeChild(parent.firstChild.nextSibling); 
+  parent.dataset.expanded = "false";
+}
+
+function symbolToHTML(symbol) {
+  var html = "<div class='libPanel'>";
+  
+  html += "Type: ";
+  if (symbol.type.length > 0)
+    html += symbol.type + "<br>";
+  else
+    html += "None <br>";
+  
+  if (symbol.params.length > 0) {
+    html += "Parameters:<br>";
+    symbol.params.forEach(function(p, i) {
+      if (p.type.length > 0)
+        html += "&nbsp" + p.type + " " + p.name;
+      else 
+        html += "&nbsp" + p.name;
+      html += "<br>";
+    });
+  }
+ 
+  html += "</div>";
+  return html;
+}
+
+
+    
+function clearSuggestions() {
+  document.getElementById("suggestionsPane").innerHTML = "";
+  document.getElementById("searchBoxUnder").value = "";
+}
+
+(function () {
+        
+  CodeMirror.dHint = function(editor, options) {
+      
+    function selector(node) {
+      var results = [];
+      node.symbols
+        .getUnique(function(s){ return s.parent; })
+        .forEach(function(sym) {
+          results.push({text:sym.name, displayText:sym.name + " (" + sym.parent + ")"});
+        });
+      return results;
+    }
+      
+    var cursor = editor.getCursor();
+    var tk = editor.getTokenAt(cursor);    
+    var list = autocomplete(tk.string, selector);    
+    return {
+      list:list, 
+      from:CodeMirror.Pos(cursor.line, tk.start), 
+      to:CodeMirror.Pos(cursor.line, tk.end)
+    };
+  };
+
+}());

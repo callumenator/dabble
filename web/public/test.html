@@ -1,0 +1,265 @@
+
+<!DOCTYPE html5>
+
+<html>
+
+<head>
+
+  <link href="/theme.css" rel="stylesheet" type="text/css">
+  <script src="/rainbow.min.js"></script>
+  <script src="/d.js"></script>
+  <script src="/rangy-core.js"></script>
+  <script src="/rangy-selectionsaverestore.js"></script>
+
+  <style>
+    body {
+      background-color: grey;
+      font-family: Droid Sans Mono;
+      font-size:1em;
+      color: white;
+    }
+    
+    #history {    
+    }
+
+    #codeInput {
+      display: inline-block;
+      width: 80%;
+    }
+         
+    #prompt {
+      display:inline-block;
+      width:20px;
+    }
+    
+    div:focus {
+      outline: none
+    }
+    
+    #outer {
+      width:100%;
+    }
+    
+    .lineNumber {      
+      color: orange;
+    }
+    
+    #centerPane {
+      background-color: black;
+      margin: 0 auto;
+      width: 80%;
+      height: 100%;
+      
+      margin-top:-5px;
+      overflow: auto;
+    }
+    
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    
+    ::-webkit-scrollbar-button:start:decrement,
+    ::-webkit-scrollbar-button:end:increment  {
+      display: none;
+    }
+             
+    ::-webkit-scrollbar-track-piece  {
+      background-color: #3b3b3b;
+      -webkit-border-radius: 6px;
+    }
+             
+    ::-webkit-scrollbar-thumb:vertical {
+      -webkit-border-radius: 6px;
+      background: #666 no-repeat center;
+    }
+    
+  </style>
+
+</head>
+
+<body>
+
+<div id="centerPane">
+
+  <div id="history"> </div>
+
+  <div id="outer">
+    <div id="prompt"> > </div>  
+    
+    <div id="codeInput"
+         contenteditable="true" 
+         onkeyup="keyup()"
+         spellcheck="false">         
+    </div>
+  </div>
+
+</div>
+
+
+
+<script>
+
+var lineCount = 0;
+var historyBuffer = [];
+var historyIndex = 0;
+
+if(typeof(String.prototype.trim) === "undefined") {
+    String.prototype.trim = function() {
+        return String(this).replace(/^\s+|\s+$/g, '');
+    };
+}
+
+document.addEventListener("keydown", function() { 
+  console.log(event.target);
+  return true;
+     });
+
+
+function printChars(str) {
+  for (var c = 0; c < str.length; c++) { console.log(str.charCodeAt(c)); }
+}
+
+function keyup() {
+
+  console.log("keyup");
+  
+  if (readInput().trim().length == 0) {   
+    document.getElementById("codeInput").innerHTML = "<pre> </pre>";        
+  }
+
+  if (event.keyCode == 13) {
+  
+    var txt = readInput();
+    lineCount++;    
+    send(txt);
+    updateHistory(txt);
+    clearInput();    
+
+  } else if (event.keyCode == 32 || // space
+             event.keyCode == 46 || // delete
+             event.keyCode == 8) {  // backspace                        
+    
+    var hi = highlight(readInput());
+    
+    setInputHtml("<pre>"+hi+"<span></span></pre>");        
+    
+    
+  } else if (event.keyCode == 38) { // up        
+    
+    historyIndexChange(-1);
+    setInputHtml("<pre name='texts'>" + highlight(historyBuffer[historyIndex]) + "<span></span></pre>");    
+              
+   } else if (event.keyCode == 40) { // down
+           
+            
+    historyIndexChange(1);
+    setInputHtml("<pre name='texts'>" + highlight(historyBuffer[historyIndex]) + "<span></span></pre>");    
+              
+   }
+}
+
+function historyIndexChange(inc) {
+  if ( (historyIndex + inc) >= 0 && (historyIndex + inc) < historyBuffer.length) {
+    historyIndex += inc;
+  }
+}
+
+function highlight(text) {
+  var hi = "";
+  Rainbow.color(text, 'd', function(code) { hi = code; });
+  return hi;
+}
+
+function setInputHtml(html) { 
+  document.getElementById("codeInput").innerHTML = html;
+  moveCaretToEnd();
+}
+
+function moveCaretToEnd() {
+  
+  try {
+    var sel = rangy.getSelection();
+    sel.selectAllChildren(document.getElementById("codeInput"));
+    sel.collapseToEnd();
+  } catch(err) {}
+}
+
+function updateHistory(text) {
+    
+  document.getElementById("history").innerHTML += lineNumber() + "<pre style='display:inline;'>" + highlight(text) + "</pre><br>";
+  
+  if (historyBuffer.length == 0 || (historyBuffer.length > 0 && (text.trim() != historyBuffer[historyBuffer.length-1].trim()))) {
+    historyBuffer.push(text);
+    historyIndex = historyBuffer.length;
+  }
+  
+  console.log(historyBuffer);
+}
+
+function showResult(text) {
+  document.getElementById("history").innerHTML += "<pre style='display:inline;'>" + highlight(text) + "</pre><br>";  
+}
+
+function lineNumber() {
+  return "<span class='lineNumber'>" + lineCount.toString() + "</span>: ";
+}
+
+function clearInput() {
+  document.getElementById("codeInput").innerHTML = "";
+}
+
+function readInput() {
+  return document.getElementById("codeInput").textContent;
+}
+
+function send(text) {
+  var xhr = createCORSRequest('POST', '/input');
+  xhr.setRequestHeader('Content-type', 'text/plain;');
+    
+  xhr.onload = function() {
+    var responseText = xhr.responseText;
+    
+    var lines = responseText.split("\n");
+    
+    for (var i = 0; i < lines.length; i++) {      
+      var thisLine = lines[i].replace(/(\r\n|\n|\r)/gm,"");
+      if (thisLine.trim().length > 0) {        
+        showResult(thisLine);
+      }
+    }
+  };
+  
+  xhr.send(text.split(/\u00A0/g).join(" "));
+}
+
+
+function createCORSRequest(method, url) {
+  var xhr = new XMLHttpRequest();
+  if ("withCredentials" in xhr) {
+    // Check if the XMLHttpRequest object has a "withCredentials" property.
+    // "withCredentials" only exists on XMLHTTPRequest2 objects.
+    xhr.open(method, url, true);
+
+  } else if (typeof XDomainRequest != "undefined") {
+
+    // Otherwise, check if XDomainRequest.
+    // XDomainRequest only exists in IE, and is IE's way of making CORS requests.
+    xhr = new XDomainRequest();
+    xhr.open(method, url);
+
+  } else {
+
+    // Otherwise, CORS is not supported by the browser.
+    xhr = null;
+
+  }
+  return xhr;
+}
+
+
+</script>
+
+</body>
+
+</html>
