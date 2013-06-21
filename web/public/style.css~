@@ -9,17 +9,28 @@
 }          
 
 html {
-  height: 95%;
+  /*height: 95%;*/
 }
 
 body {
-  background-color: #686D76;
-  height: 95%;
+
+  /*background-color: #686D76;*/
+  background-color: #1d1e1c;
+  /*height: 95%;*/
 }
+
+
+input {
+    outline: none;
+    transition: all 0.25s ease-in-out;
+    -webkit-transition: all 0.25s ease-in-out;
+    -moz-transition: all 0.25s ease-in-out;
+}
+
 
 #centerPane {
   font-family: Droid Sans Mono;
-  width: 90%;
+  width: 100%;
   height: 100%;        
   background-color: #1d1e1c;
   margin: 0 auto;     
@@ -32,39 +43,47 @@ body {
 #codePane {              
   vertical-align: middle;
   display: inline-block;
-  width: 70%;
+  width: 99%;
   margin-left: 10px;
   height:500px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-right: 5px;
   border-right: 1px solid grey;
+  
+  transition: all .2s ease-in-out;
+  -webkit-transition: all .2s ease-in-out;
+  -moz-transition: all .2s ease-in-out;
+  
 }
 
-#libPane {
+#libPane {    
   vertical-align: middle;        
   color: white;
-  display: inline-block;  
-  width: 27%;
+  display: none;    
   margin: 0 auto;
-  height:500px;
+  height:500px;     
 }
 
 #suggestionsPane {
   overflow: auto;        
-  height:90%;
+  height:90%; 
 }
 
-.libPanel {
-  font-size: .8em;
+.libPanel {        
+    
+  vertical-align: middle;
+  white-space: nowrap;  
+  font-size: 12px;
   margin-top: 3px;
-  margin-bottom: 3px;
+  margin-bottom: 3`px;
   border-radius: 5px; 
   /* border: 1px solid #616260; */
-  border-radius:5px;
+  border-radius:0px;
   background-color: #333333;
   padding-left: 5px;
   padding-top: 5px;
-  padding-bottom: 5px;
+  padding-bottom: 0px;
    
   /* Disable text selection */
   -webkit-touch-callout: none;
@@ -73,6 +92,31 @@ body {
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
+}
+
+.libPanelLevel1 {    
+    overflow-x:auto;  
+}
+
+.libPanelLevel2 {
+    background-color: black;
+    margin-left: -5px;
+    margin-right: 0px;
+}
+
+.libPanelSrcButton {
+    border-radius: 5px;
+    /*background-color: greenyellow;*/
+    background-color: rgba(224,27,93,.3);
+    /*display: inline-block;*/
+    width: 80%;    
+    font-weight: bold;
+    font-size: 1em;    
+    text-align: center;
+    margin-top: 5px;
+    padding-left: 3px;
+    padding-right: 3px;
+    color: lightgrey;    
 }
 
 .overlap {
@@ -86,10 +130,13 @@ body {
   font-size: inherit;
   color: #B2B200;
   line-height:2em;
-  background-color: #196CA3;
+  background-color: transparent;
+  border-radius: 5px;
+  
 }
 
-#searchBox {        
+#searchBox {
+  border-radius: 5px;
   padding-left: 5px;
   line-height:2em;
   border: 0px;
@@ -97,7 +144,11 @@ body {
   font-size: inherit;
   color: white;
   background-color: transparent;
+  box-shadow: 0 0 10px rgba(27, 224, 211, 1);
+  -webkit-box-shadow: 0 0 10px rgba(27, 224, 211, 1); 
+  -moz-box-shadow: 0 0 10px rgba(27, 224, 211, 1);
 }
+
 
 #prompt {
   text-align: middle;
@@ -112,14 +163,14 @@ body {
   display: inline-block;
   width: 90%;
 }
-
+    
 #titleOuter {
-  background-color: #686D76;
+  /*background-color: #686D76;*/
+  /*border-bottom: 1px solid #686D76;*/
   font-family: 'Fauna One', serif;
   text-align: right;
   color: white;
-  font-size:2em;
-  border-bottom: 1px solid #686D76;
+  font-size:2em;  
   margin-bottom: 20px;
 }
 
@@ -220,6 +271,11 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:vertical {
+  -webkit-border-radius: 6px;
+  background: #666 no-repeat center;
+}
+
+::-webkit-scrollbar-thumb:horizontal {
   -webkit-border-radius: 6px;
   background: #666 no-repeat center;
 }
