@@ -1,17 +1,27 @@
 # Dabble
 
-A small repl for the D programming language (Windows and DMD32 only).
+A small repl for the D programming language (Windows and DMD32 only). 
 
 ### Get and Build
 
+1. Get DUB package manager: http://registry.vibed.org/download
+2. Get dabble:
 ```
 git clone https://github.com/callumenator/dabble
-cd dabble
-git submodule init
-git submodule update
-cd dabble
-rdmd -IPegged dabble/main.d
 ```
+3. Build a configuration. There are two configurations available:
+    * console: builds dabble as a stand-alone Windows command line application.
+    * server: builds dabble as a web-server using vibe.d, and a supplied client web page is used to interact with the REPL.
+```
+cd dabble
+dub build --config=console
+or
+dub build --config=server
+```
+4. Run the application. 
+    * console mode: ```dabble-console```
+    * server mode: ```dabble-server```, then launch a browser and point it to http://localhost:8080/form.html
+
 
 ### How it works
 
@@ -58,7 +68,7 @@ s (S) = S(67)
 
 ### Meta Commands
 
-Meta commands are intercepted by the REPL environment, and interpreted directly. They do not trigger compilation. The following list of commands are recognized. 
+Meta commands are intercepted by the REPL environment and interpreted directly. They do not trigger compilation. The following list of commands are recognized. 
 (Arguments enclosed in square brakets ```[]``` are optional, those in angle brackets ```<>``` indicate a choice.)
 
 ##### print
@@ -127,5 +137,6 @@ Turn on or off debug switches.
 
 
 ### Limitations:
+- Error messages - these will often be terrible, and expose dabble internals.
 - Static variables (TLS or standard globals) - in particular, static data used by imported modules will not work as expected, since these data are not preserved between DLL loads.
 - Storing the address of code or static data - this should still work (assuming the pointer is detected), but will prevent the DLL from being unloaded, 
