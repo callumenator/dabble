@@ -3,7 +3,7 @@
 	"description": "A simple REPL for DMD on Win32",
 	"authors": ["cal"],
 	"homepage": "",
-	"license": "Boost",
+	"license": "Boost v1.0",
 
   "dependencies": {  
     "pegged":   "~master"

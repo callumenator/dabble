@@ -1,3 +1,12 @@
+/**
+Written in the D programming language.
+
+Main entry point for command-line version of Dabble.
+
+Copyright: Copyright Callum Anderson 2013
+License:   $(WEB boost.org/LICENSE_1_0.txt, Boost License 1.0).
+Authors:   Callum Anderson
+**/
 
 module dabble.main;
 
@@ -7,9 +16,6 @@ void main(char[][] args)
 {
     auto repl = ReplContext();
     parseArgs(repl, args[1..$]);
-
-    //stress();
-    //libTest();
     loop(repl);
     return;
 }

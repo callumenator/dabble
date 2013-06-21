@@ -1,3 +1,12 @@
+/**
+Written in the D programming language.
+
+Main entry for the web/server version of Dabble.
+
+Copyright: Copyright Callum Anderson 2013
+License:   $(WEB boost.org/LICENSE_1_0.txt, Boost License 1.0).
+Authors:   Callum Anderson
+**/
 
 import vibe.d;
 
@@ -5,15 +14,12 @@ import
     std.stdio,
     std.file;
 
-import dabble.repl;
-import sourcebrowser;
+import
+    dabble.repl;
+    sourcebrowser;
 
 ReplContext repl;
 char[] buffer;
-
-void index(HTTPServerRequest req, HTTPServerResponse res)
-{
-}
 
 void welcome(HTTPServerRequest req, HTTPServerResponse res)
 {
