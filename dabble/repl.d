@@ -347,7 +347,6 @@ bool handleMetaCommand(ref ReplContext repl,
                 foreach(s; vars)
                 {
                     auto typeOf = s.v.ty.typeOf(p[1], repl.share.map);
-                    writeln(typeOf[0].type);
                     if (typeOf[1].length > 0)
                         message.append(typeOf[1]);
                     else

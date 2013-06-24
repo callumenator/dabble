@@ -243,7 +243,7 @@ import std.regex;
 
 string applyToType(string Init, string Code)
 {
-    auto r = regex("_Type", "g");
+    auto r = regex("__$x$_Type_$x$__", "g");
 
     auto s1 = std.regex.replace(Code, r, "typeof("~Init~")");
     auto s2 = std.regex.replace(Code, r, "typeof("~Init~"())");
@@ -309,8 +309,9 @@ struct Var
                 return code;
             }
 
+            // TODO: _Type is fragile in applyToType
 
-            import std.regex;
+            import std.regex, std.string;
             if (!type.match(`\bauto\b`).empty) // has initializer but no type
             {
                 assert(init.length > 0, "Auto var without initializer");
@@ -318,11 +319,11 @@ struct Var
                 put(c.prefix,
                     generateFuncLitSection("typeof("~init~")"), " else {\n",
                     "    " ~ sym(index) ~ ".v.addr =  _REPL.newExpr(", init, ");\n",
-                    applyToType(init, "*cast(Unqual!(_REPL.TypeOf!(_Type))*)" ~ sym(index) ~ ".v.addr = " ~ init ~ ";\n"),
-                    applyToType(init, "    auto " ~ name ~ " = cast(_REPL.TypeOf!(_Type)*)" ~ sym(index) ~ ".v.addr;\n"),
+                    applyToType(init, "*cast(Unqual!(_REPL.TypeOf!(__$x$_Type_$x$__))*)" ~ sym(index) ~ ".v.addr = " ~ init ~ ";\n"),
+                    applyToType(init, "    " ~ type ~ " " ~ name ~ " = cast(_REPL.TypeOf!(__$x$_Type_$x$__)*)" ~ sym(index) ~ ".v.addr;\n"),
                     "}\n");
 
-                put(c.prefix, applyToType(init, "\n  " ~ sym(index) ~ ".v.type = q{_Type}.idup;\n"));
+                put(c.prefix, applyToType(init, "\n  " ~ sym(index) ~ ".v.type = q{__$x$_Type_$x$__}.idup;\n"));
 
             }
             else if (init.length > 0) // has type and initializer
