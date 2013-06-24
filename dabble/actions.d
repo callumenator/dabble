@@ -213,6 +213,22 @@ static:
         return t;
     }
 
+    T storageVarDecl(T)(T t)
+    {
+        import std.regex;
+
+        if (repl && t.successful)
+        {
+            t.name = "ReplParse.VarDeclInit";
+            auto store = t.children[0].matches[0];
+            if (store.match(`\bauto\b`).empty)
+                t.children[0].matches[0] = store ~ " auto";
+
+            t = varDecl(t, true);
+        }
+        return t;
+    }
+
     /**
     * Handle variable assignments that may also be declarations.
     */

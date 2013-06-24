@@ -90,13 +90,15 @@ ReplParse:
 
     ParameterList   <- BwParens(.)
 
-    Var <~ AutoVarDeclInit {Parser.autoVarDecl}
+    Var <~ StorageVarDeclInit {Parser.storageVarDecl}
+         / AutoVarDeclInit {Parser.autoVarDecl}
          / VarDeclInit     {Parser.varDecl}
          / VarDecl         {Parser.varDecl}
 
     VarDecl         <- ~Type ;ws Ident wx ;';'
     VarDeclInit     <- ~Type ;ws Ident wx ;'=' (~GrabToColon(VarRewrite/.)) :';'
     AutoVarDeclInit <- Ident wx ;'=' (~GrabToColon(VarRewrite/.)) :';'
+    StorageVarDeclInit <- ~(Storage (wx Storage)*) ;ws Ident wx ;'=' (~GrabToColon(VarRewrite/.)) :';'
 
     Type <- Storage wx '(' wx Type wx ')' Seq(TypeSuffix)?
           / Storage ws Type Seq(TypeSuffix)?

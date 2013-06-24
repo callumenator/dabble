@@ -310,7 +310,8 @@ struct Var
             }
 
 
-            if (type == "auto") // has initializer but no type
+            import std.regex;
+            if (!type.match(`\bauto\b`).empty) // has initializer but no type
             {
                 assert(init.length > 0, "Auto var without initializer");
 
@@ -583,7 +584,10 @@ struct QualifiedType
                     break;
             }
         }
-        return tuple(currType, "");
+        // Returning tuple directly results in buggy behaviour
+        Tuple!(QualifiedType, string) ret;
+        ret[0] = currType;
+        return ret;
     }
 
     string valueOf(Operation[] stack, void* ptr, ref Type*[string] map)

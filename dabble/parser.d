@@ -87,13 +87,15 @@ ReplParse:
 
     ParameterList   <- BwParens(.)
 
-    Var <~ AutoVarDeclInit {Parser.autoVarDecl}
+    Var <~ StorageVarDeclInit {Parser.storageVarDecl}
+         / AutoVarDeclInit {Parser.autoVarDecl}
          / VarDeclInit     {Parser.varDecl}
          / VarDecl         {Parser.varDecl}
 
     VarDecl         <- ~Type ;ws Ident wx ;';'
     VarDeclInit     <- ~Type ;ws Ident wx ;'=' (~GrabToColon(VarRewrite/.)) :';'
     AutoVarDeclInit <- Ident wx ;'=' (~GrabToColon(VarRewrite/.)) :';'
+    StorageVarDeclInit <- ~(Storage (wx Storage)*) ;ws Ident wx ;'=' (~GrabToColon(VarRewrite/.)) :';'
 
     Type <- Storage wx '(' wx Type wx ')' Seq(TypeSuffix)?
           / Storage ws Type Seq(TypeSuffix)?
@@ -296,6 +298,7 @@ struct GenericReplParse(TParseTree)
         rules["VarDecl"] = toDelegate(&ReplParse.VarDecl);
         rules["VarDeclInit"] = toDelegate(&ReplParse.VarDeclInit);
         rules["AutoVarDeclInit"] = toDelegate(&ReplParse.AutoVarDeclInit);
+        rules["StorageVarDeclInit"] = toDelegate(&ReplParse.StorageVarDeclInit);
         rules["Type"] = toDelegate(&ReplParse.Type);
         rules["Ident"] = toDelegate(&ReplParse.Ident);
         rules["IdentList"] = toDelegate(&ReplParse.IdentList);
@@ -942,16 +945,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree Var(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.or!(pegged.peg.action!(AutoVarDeclInit, Parser.autoVarDecl), pegged.peg.action!(VarDeclInit, Parser.varDecl), pegged.peg.action!(VarDecl, Parser.varDecl))), "ReplParse.Var")(p);
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.or!(pegged.peg.action!(StorageVarDeclInit, Parser.storageVarDecl), pegged.peg.action!(AutoVarDeclInit, Parser.autoVarDecl), pegged.peg.action!(VarDeclInit, Parser.varDecl), pegged.peg.action!(VarDecl, Parser.varDecl))), "ReplParse.Var")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.or!(pegged.peg.action!(AutoVarDeclInit, Parser.autoVarDecl), pegged.peg.action!(VarDeclInit, Parser.varDecl), pegged.peg.action!(VarDecl, Parser.varDecl))), "ReplParse.Var"), "Var")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.or!(pegged.peg.action!(StorageVarDeclInit, Parser.storageVarDecl), pegged.peg.action!(AutoVarDeclInit, Parser.autoVarDecl), pegged.peg.action!(VarDeclInit, Parser.varDecl), pegged.peg.action!(VarDecl, Parser.varDecl))), "ReplParse.Var"), "Var")(p);
     }
     static TParseTree Var(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.or!(pegged.peg.action!(AutoVarDeclInit, Parser.autoVarDecl), pegged.peg.action!(VarDeclInit, Parser.varDecl), pegged.peg.action!(VarDecl, Parser.varDecl))), "ReplParse.Var")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.or!(pegged.peg.action!(StorageVarDeclInit, Parser.storageVarDecl), pegged.peg.action!(AutoVarDeclInit, Parser.autoVarDecl), pegged.peg.action!(VarDeclInit, Parser.varDecl), pegged.peg.action!(VarDecl, Parser.varDecl))), "ReplParse.Var")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.or!(pegged.peg.action!(AutoVarDeclInit, Parser.autoVarDecl), pegged.peg.action!(VarDeclInit, Parser.varDecl), pegged.peg.action!(VarDecl, Parser.varDecl))), "ReplParse.Var"), "Var")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.or!(pegged.peg.action!(StorageVarDeclInit, Parser.storageVarDecl), pegged.peg.action!(AutoVarDeclInit, Parser.autoVarDecl), pegged.peg.action!(VarDeclInit, Parser.varDecl), pegged.peg.action!(VarDecl, Parser.varDecl))), "ReplParse.Var"), "Var")(TParseTree("", false,[], s));
     }
     static string Var(GetName g)
     {
@@ -1013,6 +1016,25 @@ struct GenericReplParse(TParseTree)
     static string AutoVarDeclInit(GetName g)
     {
         return "ReplParse.AutoVarDeclInit";
+    }
+
+    static TParseTree StorageVarDeclInit(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.and!(pegged.peg.fuse!(pegged.peg.and!(Storage, pegged.peg.zeroOrMore!(pegged.peg.and!(wx, Storage)))), pegged.peg.drop!(ws), Ident, wx, pegged.peg.drop!(pegged.peg.literal!("=")), pegged.peg.fuse!(GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any))), pegged.peg.discard!(pegged.peg.literal!(";"))), "ReplParse.StorageVarDeclInit")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.and!(pegged.peg.fuse!(pegged.peg.and!(Storage, pegged.peg.zeroOrMore!(pegged.peg.and!(wx, Storage)))), pegged.peg.drop!(ws), Ident, wx, pegged.peg.drop!(pegged.peg.literal!("=")), pegged.peg.fuse!(GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any))), pegged.peg.discard!(pegged.peg.literal!(";"))), "ReplParse.StorageVarDeclInit"), "StorageVarDeclInit")(p);
+    }
+    static TParseTree StorageVarDeclInit(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.and!(pegged.peg.fuse!(pegged.peg.and!(Storage, pegged.peg.zeroOrMore!(pegged.peg.and!(wx, Storage)))), pegged.peg.drop!(ws), Ident, wx, pegged.peg.drop!(pegged.peg.literal!("=")), pegged.peg.fuse!(GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any))), pegged.peg.discard!(pegged.peg.literal!(";"))), "ReplParse.StorageVarDeclInit")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.and!(pegged.peg.fuse!(pegged.peg.and!(Storage, pegged.peg.zeroOrMore!(pegged.peg.and!(wx, Storage)))), pegged.peg.drop!(ws), Ident, wx, pegged.peg.drop!(pegged.peg.literal!("=")), pegged.peg.fuse!(GrabToColon!(pegged.peg.or!(VarRewrite, pegged.peg.any))), pegged.peg.discard!(pegged.peg.literal!(";"))), "ReplParse.StorageVarDeclInit"), "StorageVarDeclInit")(TParseTree("", false,[], s));
+    }
+    static string StorageVarDeclInit(GetName g)
+    {
+        return "ReplParse.StorageVarDeclInit";
     }
 
     static TParseTree Type(TParseTree p)
