@@ -31,7 +31,7 @@ struct ReplShare
     Type*[string] map; /// map used by typeBuilder and friends
     bool keepAlive; /// keep this dll in memory, something has a pointer into it
     void* gc; /// host gc instance
-    string logFile = "__dabbleTemp"; /// result of the eval
+    string logFile; /// result of the eval
 
     void init()
     {

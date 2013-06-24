@@ -313,6 +313,7 @@ struct ReplContext
         repl.paths.fullName = repl.paths.tempPath ~ dirSeparator ~ filename;
         repl.debugLevel = debugLevel;
         repl.share.gc = gc_getProxy();
+        repl.share.logFile = repl.paths.tempPath ~ "__dabbleTemp";
 
         repl.share.init();
 
