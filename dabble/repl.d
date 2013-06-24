@@ -757,7 +757,7 @@ bool build(Tuple!(string,string) code,
 */
 string testCompile(const ReplContext repl, string code)
 {
-    import std.file : exists;
+    import std.file : exists, remove;
     import std.process : system, escapeShellFileName;
 
     auto file = File(repl.paths.tempPath ~ "testCompile.d", "w");
@@ -767,11 +767,15 @@ string testCompile(const ReplContext repl, string code)
     auto srcFile = repl.paths.tempPath ~ "testCompile.d";
     auto errFile = repl.paths.tempPath ~ "testCompileErrout.txt";
 
+    if (errFile.exists()) {
+        try { errFile.remove(); } catch(Exception e) {}
+    }
+
     auto dirChange = "cd " ~ escapeShellFileName(repl.paths.tempPath);
     auto cmd = dirChange ~ " & dmd -o- -c testCompile.d";
 
     string result;
-    if (system(cmd ~ " 2> testCompileErrout.txt") != 0 && errFile.exists())
+    if (system(cmd ~ " 2> testCompileErrout.txt") != 0 || errFile.exists())
         result = parseDmdErrorFile(srcFile, errFile, false);
 
     return result;
