@@ -21,7 +21,8 @@ git clone https://github.com/callumenator/dabble
    ```
 4. Run the application. 
     * console mode: ```dabble-console```
-    * server mode: ```dabble-server```, then launch a browser and point it to http://localhost:8080/repl.html
+    * server mode: ```dabble-server```, then launch a browser and point it to http://localhost:8080/repl.html.
+    (To allow searching the std lib, provide a path to Phobos src as argument to dabble-server, ie: ```dabble-server ../dmd2/src/phobos/std```
 
 
 ### How it works
