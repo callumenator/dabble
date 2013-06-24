@@ -269,8 +269,10 @@ string prompt() { return ": "; }
 */
 string title()
 {
-    import std.compiler, std.conv;
-    return text("DABBLE: (DMD ", version_major, ".", version_minor, ")");
+    import std.compiler, std.conv, std.array, std.format;
+    auto writer = appender!string();
+	formattedWrite(writer, "DABBLE: (DMD %d.%03d)", version_major, version_minor);
+    return writer.data;
 }
 
 
