@@ -138,6 +138,6 @@ Turn on or off debug switches.
 
 
 ### Limitations:
-- Error messages - these will often be terrible, and expose dabble internals.
+- Error messages - these are sometimes bad, exposing dabble internals.
 - Static variables (TLS or standard globals) - in particular, static data used by imported modules will not work as expected, since these data are not preserved between DLL loads.
 - Storing the address of code or static data - this should still work (assuming the pointer is detected), but will prevent the DLL from being unloaded, 
