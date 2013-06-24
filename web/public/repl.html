@@ -139,11 +139,8 @@
           e.shiftKey == false &&           
           e.keyCode == 13) {
           
-        var text = editor.getValue();        
-        lineIndex = 0;
-        updateHistory(text);
-        send(text);
-        editor.setValue("");
+        var text = editor.getValue();
+        preparseInput(text);
         e.preventDefault();        
         return true;  
       
@@ -160,6 +157,17 @@
       } 
     
     };  
+    
+    function preparseInput(text) {                
+        if (text.trim() == "clear") {
+            history.setValue("");
+            send("version");
+        } else {
+            updateHistory(text);
+            send(text);
+        }        
+        editor.setValue("");
+    }
         
         
     function retrieveHistory(dir) {
@@ -202,7 +210,6 @@
           updateHistory(str);            
         }
       };    
-  
       xhr.send(text.split(/\u00A0/g).join(" "));
     }
     

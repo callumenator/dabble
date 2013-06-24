@@ -390,6 +390,12 @@ bool handleMetaCommand(ref ReplContext repl,
 
     switch(cmd)
     {
+        case "version":
+        {
+            message = title();
+            break;
+        }
+
         case "print":
         {
             if (args.length == 0 || canFind(args, "all")) // print all vars
