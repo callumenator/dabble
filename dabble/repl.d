@@ -205,6 +205,81 @@ enum CallResult
 
 
 /**
+* Holds raw code, for better error messages.
+*/
+struct RawCode
+{
+    string[] _header;
+    string[] _body;
+    int _newHeaderStart = -1;
+    int _newBodyStart = -1;
+
+    void append(string s, bool global)
+    {
+        if (global)
+        {
+            _header ~= s;
+            if (_newHeaderStart == -1)
+                _newHeaderStart = _header.length - 1;
+        }
+        else
+        {
+            _body ~= s;
+            if (_newBodyStart == -1)
+                _newBodyStart = _body.length - 1;
+        }
+    }
+
+    /**
+    * Remove all code from _newHeaderStart onwards,
+    * same for _newBodyStart. This code did not compile.
+    */
+    void fail()
+    {
+        void _prune(int i, ref string[] a)
+        {
+            if (i != -1)
+            {
+                if (i == 0)
+                    a.clear();
+                else if (i > 0)
+                    a = a[0..i];
+                else
+                    assert(false);
+            }
+        }
+        _prune(_newHeaderStart, _header);
+        _prune(_newBodyStart, _body);
+    }
+
+    /**
+    * New code compiled, to clear markers.
+    */
+    void pass()
+    {
+        _newHeaderStart = -1;
+        _newBodyStart = -1;
+    }
+
+    void reset()
+    {
+        _header.clear();
+        _body.clear();
+        _newHeaderStart = -1;
+        _newBodyStart = -1;
+    }
+
+    /**
+    * Return a compile-able version of the raw code.
+    */
+    string toString()
+    {
+        return _header.join("\n") ~ "\nvoid main() {\n" ~ _body.join("\n") ~ "\n}";
+    }
+}
+
+
+/**
 * Holds REPL state.
 */
 extern(C) void* gc_getProxy();
@@ -220,6 +295,7 @@ struct ReplContext
            string,"name",
            long,"modified")[] userModules;
 
+    RawCode rawCode;
     ReplShare share;
     string vtblFixup;
     long[string] symbolSet;
@@ -250,6 +326,7 @@ struct ReplContext
     /// Reset a REPL session
     void reset()
     {
+        rawCode.reset();
         share.reset();
         symbolSet.clear();
         userModules.clear();
@@ -583,7 +660,7 @@ bool build(Tuple!(string,string) code,
     import core.thread;
 
     // Launch a compile test in a background thread, we wait on this before returning.
-    auto testCompileTask = task!testCompile(repl, Parser.rawCode.toString());
+    auto testCompileTask = task!testCompile(repl, repl.rawCode.toString());
     testCompileTask.executeInNewThread();
 
     auto text =
@@ -647,7 +724,7 @@ bool build(Tuple!(string,string) code,
     if (testCompileTask.workForce().length > 0)
     {
         message ~= testCompileTask.workForce();
-        Parser.rawCode.fail();
+        repl.rawCode.fail();
         return false;
     }
 
@@ -655,11 +732,11 @@ bool build(Tuple!(string,string) code,
     if (!buildAttempt)
     {
         message ~= "Internal error: test compile passed, full build failed. Error follows:\n" ~ tempMessage;
-        Parser.rawCode.fail();
+        repl.rawCode.fail();
         return false;
     }
 
-    Parser.rawCode.pass();
+    repl.rawCode.pass();
     return true;
 }
 

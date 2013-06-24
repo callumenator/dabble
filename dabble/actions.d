@@ -104,7 +104,7 @@ static:
     T bodyCode(T)(T t)
     {
         if (repl && t.successful) {
-            rawCode.append(inputCopy[t.begin..t.end], false);
+            repl.rawCode.append(inputCopy[t.begin..t.end], false);
         }
         return t;
     }
@@ -117,7 +117,7 @@ static:
     {
         if (repl && t.successful) {
 
-            rawCode.append("import " ~ removechars(t.matches[0], " ") ~ ";", true);
+            repl.rawCode.append("import " ~ removechars(t.matches[0], " ") ~ ";", true);
 
             auto imp = removechars(t.matches[0], " ");
             repl.share.symbols ~= Symbol(Import(imp));
@@ -133,7 +133,7 @@ static:
     {
         if (repl && t.successful)
         {
-            rawCode.append(t.matches[0], isGlobal(t.matches[0], false));
+            repl.rawCode.append(t.matches[0], isGlobal(t.matches[0], false));
 
             repl.share.symbols ~= Symbol(Alias(t.matches[0], isGlobal(t.matches[0])));
             t.matches.clear();
@@ -149,7 +149,7 @@ static:
     {
         if (repl && t.successful) {
 
-            rawCode.append(t.matches[0], isGlobal(t.matches[0], false));
+            repl.rawCode.append(t.matches[0], isGlobal(t.matches[0], false));
 
             repl.share.symbols ~= Symbol(Enum(t.matches[0], isGlobal(t.matches[0])));
             t.matches.clear();
@@ -165,7 +165,7 @@ static:
     {
         if (repl && t.successful) {
 
-            rawCode.append(t.matches[0], true);
+            repl.rawCode.append(t.matches[0], true);
 
             repl.share.symbols ~= Symbol(UserType(t.matches[0]));
             t.matches.clear();
@@ -338,9 +338,9 @@ static:
                     init = strip(p.children[$-1].matches[0]);
 
                 if (implicitAuto)
-                    rawCode.append("auto " ~ inputCopy[p.begin..p.end], false);
+                    repl.rawCode.append("auto " ~ inputCopy[p.begin..p.end], false);
                 else
-                    rawCode.append(inputCopy[p.begin..p.end], false);
+                    repl.rawCode.append(inputCopy[p.begin..p.end], false);
 
                 repl.symbolSet[name] = parseID;
                 repl.share.symbols ~= Symbol(Var(name, type, init));
@@ -427,72 +427,6 @@ static:
     string error;
     string[] stringDups; /// names requiring a dupSearch check
     uint braceCount;
-
-    struct RawCode
-    {
-        string[] _header;
-        string[] _body;
-
-        int _newHeaderStart = -1;
-        int _newBodyStart = -1;
-
-        void append(string s, bool global)
-        {
-            if (global)
-            {
-                _header ~= s;
-                if (_newHeaderStart == -1)
-                    _newHeaderStart = _header.length - 1;
-            }
-            else
-            {
-                _body ~= s;
-                if (_newBodyStart == -1)
-                    _newBodyStart = _body.length - 1;
-            }
-        }
-
-        /**
-        * Remove all code from _newHeaderStart onwards,
-        * same for _newBodyStart. This code did not compile.
-        */
-        void fail()
-        {
-            void _prune(int i, ref string[] a)
-            {
-                if (i != -1)
-                {
-                    if (i == 0)
-                        a.clear();
-                    else if (i > 0)
-                        a = a[0..i];
-                    else
-                        assert(false);
-                }
-            }
-            _prune(_newHeaderStart, _header);
-            _prune(_newBodyStart, _body);
-        }
-
-        /**
-        * New code compiled, to clear markers.
-        */
-        void pass()
-        {
-            _newHeaderStart = -1;
-            _newBodyStart = -1;
-        }
-
-        /**
-        * Return a compile-able version of the raw code.
-        */
-        string toString()
-        {
-            return _header.join("\n") ~ "\nvoid main() {\n" ~ _body.join("\n") ~ "\n}";
-        }
-    }
-
-    RawCode rawCode;
 }
 
 
