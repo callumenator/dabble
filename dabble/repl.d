@@ -596,7 +596,7 @@ bool build(Tuple!(string,string) code,
         "    scope(exit) { stdout = saveOut; } \n"
         "    stdout.open(_repl_.logFile, `wt`);\n"
         "    auto e = collectException!Throwable(_main2(_repl_));\n"
-        "    if (e) { writeln(e.msg); return -1; }\n"
+        "    if (e) { writeln(e); return -1; }\n"
         "    return 0;\n"
         "}\n\n"
 
@@ -806,6 +806,16 @@ CallResult call(ref ReplContext repl, ref string message)
 
     auto res = funcPtr(repl.share);
 
+    if (exists(repl.share.logFile))
+    {
+        try
+        {
+            message.append(readText(repl.share.logFile));
+            remove(repl.share.logFile);
+        }
+        catch(Exception e) {}
+    }
+
     if (repl.share.keepAlive)
     {
         keepAlive ~= lib;
@@ -818,16 +828,6 @@ CallResult call(ref ReplContext repl, ref string message)
     {
         GC.collect();
         return CallResult.runtimeError;
-    }
-
-    if (exists(repl.share.logFile))
-    {
-        try
-        {
-            message.append(readText(repl.share.logFile));
-            remove(repl.share.logFile);
-        }
-        catch(Exception e) {}
     }
 
     return CallResult.success;
