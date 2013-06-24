@@ -14,8 +14,8 @@ ReplParse:
            / AliasDecl
            / UserType
            / Var
-           / Statement
-           / BwBraces(VarRewrite/Import/UserType/.)
+           / Statement {Parser.bodyCode}
+           / BwBraces(VarRewrite/Import/UserType/.) {Parser.bodyCode}
            / eoi
            / .
 

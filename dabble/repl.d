@@ -111,6 +111,18 @@ void loop(string sessionId)
 
 
 /**
+* Evaluate code in the context of the supplied ReplContext. This version assumes
+* inBuffer does not contain multiline input.
+*/
+string eval(string sessionId, const char[] inBuffer)
+{
+    char[] dummyBuffer;
+    return sessionId.eval(inBuffer, dummyBuffer);
+}
+
+
+
+/**
 * Evaluate code in the context of the supplied ReplContext.
 */
 string eval(string sessionId,
@@ -449,7 +461,7 @@ void setDebugLevelFromString(string s)(ref ReplContext repl, string level)
 */
 EvalResult evaluate(string code,
                     ref ReplContext repl,
-                    ref string message)
+                    out string message)
 {
     import std.datetime : StopWatch;
     import std.typecons, std.conv;
@@ -1231,12 +1243,16 @@ void libTest()
 ReplContext run(string[] code, uint debugLevel = 0)
 {
     auto repl = ReplContext("replDll", debugLevel);
+
     string err;
+    evaluate("import std.stdio, std.conv, std.traits, std.typecons, std.algorithm, std.range;", repl, err);
+
     foreach(i, c; code)
     {
         writeln("Line: ", i, " -> ", c);
         auto result = evaluate(c, repl, err);
-        assert(result != EvalResult.parseError && result != EvalResult.buildError);
+        assert(result != EvalResult.parseError && result != EvalResult.buildError, err);
+        writeln(err);
     }
     return repl;
 }

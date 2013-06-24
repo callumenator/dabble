@@ -59,16 +59,21 @@ static:
                             "_REPL.dupSearch(*"~d~", _repl_.imageBounds[0], _repl_.imageBounds[1], _repl_.keepAlive); }\n");
         }
 
+        auto leftOver = join(p.matches);
+        auto dupSearch = ReplParse.StringDupSearch(leftOver);
+        auto leftOverCode = dupSearch.matches.length > 0 ? dupSearch.matches[0] : leftOver;
+
         auto inBody =
             "string _expressionResult;\n" ~
             repl.vtblFixup ~
             code.prefix.data ~
-            ReplParse.StringDupSearch(join(p.matches)).matches[0] ~
+            leftOverCode ~
             code.suffix.data ~
             "if (_expressionResult.length == 0) _expressionResult = `OK`; writeln(`=> `, _expressionResult);\n";
 
         return tuple(code.header.data, inBody);
     }
+
 
     /**
     * Generate code to copy new vtables over heap copies.
@@ -79,6 +84,7 @@ static:
                "typeid("~name~").vtbl.ptr, "
                "typeid("~name~").vtbl.length * (void*).sizeof);\n";
     }
+
 
     /**
     * Clear the matches for this rule.
@@ -91,6 +97,19 @@ static:
         return t;
     }
 
+
+    /**
+    * Add code to raw body.
+    */
+    T bodyCode(T)(T t)
+    {
+        if (repl && t.successful) {
+            rawCode.append(inputCopy[t.begin..t.end], false);
+        }
+        return t;
+    }
+
+
     /**
     * A new import has been added.
     */
@@ -98,13 +117,14 @@ static:
     {
         if (repl && t.successful) {
 
-            rawCode.append(removechars(t.matches[0], " "), true);
+            rawCode.append("import " ~ removechars(t.matches[0], " ") ~ ";", true);
 
             auto imp = removechars(t.matches[0], " ");
             repl.share.symbols ~= Symbol(Import(imp));
         }
         return t;
     }
+
 
     /**
     * Handle alias declarations
@@ -121,6 +141,7 @@ static:
         return t;
     }
 
+
     /**
     * A new enum has been defined
     */
@@ -135,6 +156,7 @@ static:
         }
         return t;
     }
+
 
     /**
     * A new user type has been defined.
@@ -151,6 +173,7 @@ static:
         return t;
     }
 
+
     /**
     * Dup a string onto the heap.
     */
@@ -161,6 +184,7 @@ static:
         }
         return t;
     }
+
 
     /**
     * Wrap a template argument....
@@ -174,6 +198,7 @@ static:
         return t;
     }
 
+
     /**
     * Wrap an expression in the code needed to return its result as a string.
     */
@@ -184,8 +209,6 @@ static:
             t = ReplParse.decimateTree(t);
             auto expr = t.matches[0];
 
-            rawCode.append(inputCopy[t.begin..t.end], false);
-
             t.matches[0] =
             "static if (__traits(compiles, mixin(q{is(typeof(" ~ expr ~ "))}))) {\n"
             "  mixin(q{ static if (is(typeof(" ~ expr ~ ") == void)) {\n  " ~ expr ~ ";\n"
@@ -195,6 +218,7 @@ static:
         }
         return t;
     }
+
 
     /**
     * Re-direct a symbol to its pointer.
@@ -213,6 +237,10 @@ static:
         return t;
     }
 
+
+    /**
+    * This is for handling var decls which only use storage classes.
+    */
     T storageVarDecl(T)(T t)
     {
         import std.regex;
@@ -228,6 +256,7 @@ static:
         }
         return t;
     }
+
 
     /**
     * Handle variable assignments that may also be declarations.
@@ -277,6 +306,7 @@ static:
         return p;
     }
 
+
     /**
     * Handle variable declaration/initialization.
     */
@@ -320,6 +350,7 @@ static:
         return p;
     }
 
+
     /**
     * Check if name is already defined.
     */
@@ -328,6 +359,7 @@ static:
         auto ptr = name in repl.symbolSet;
         return ptr !is null;
     }
+
 
     /**
     * Find a Var by name.
@@ -343,6 +375,7 @@ static:
 
         assert(false, "Tried to find un-defined variable " ~ name);
     }
+
 
     /**
     * Return true if input does not reference any local vars (i.e. can be
@@ -371,6 +404,7 @@ static:
 
         assert(false);
     }
+
 
     /**
     * Called by the parser, used for brace matching/checking multiline.

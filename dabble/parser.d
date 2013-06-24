@@ -11,8 +11,8 @@ ReplParse:
            / AliasDecl
            / UserType
            / Var
-           / Statement
-           / BwBraces(VarRewrite/Import/UserType/.)
+           / Statement {Parser.bodyCode}
+           / BwBraces(VarRewrite/Import/UserType/.) {Parser.bodyCode}
            / eoi
            / .
 
@@ -432,16 +432,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree Match(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(Comment, Import, AliasDecl, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match")(p);
+            return         pegged.peg.named!(pegged.peg.or!(Comment, Import, AliasDecl, UserType, Var, pegged.peg.action!(Statement, Parser.bodyCode), pegged.peg.action!(BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), Parser.bodyCode), eoi, pegged.peg.any), "ReplParse.Match")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(Comment, Import, AliasDecl, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match"), "Match")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.or!(Comment, Import, AliasDecl, UserType, Var, pegged.peg.action!(Statement, Parser.bodyCode), pegged.peg.action!(BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), Parser.bodyCode), eoi, pegged.peg.any), "ReplParse.Match"), "Match")(p);
     }
     static TParseTree Match(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(Comment, Import, AliasDecl, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.or!(Comment, Import, AliasDecl, UserType, Var, pegged.peg.action!(Statement, Parser.bodyCode), pegged.peg.action!(BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), Parser.bodyCode), eoi, pegged.peg.any), "ReplParse.Match")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(Comment, Import, AliasDecl, UserType, Var, Statement, BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), eoi, pegged.peg.any), "ReplParse.Match"), "Match")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.or!(Comment, Import, AliasDecl, UserType, Var, pegged.peg.action!(Statement, Parser.bodyCode), pegged.peg.action!(BwBraces!(pegged.peg.or!(VarRewrite, Import, UserType, pegged.peg.any)), Parser.bodyCode), eoi, pegged.peg.any), "ReplParse.Match"), "Match")(TParseTree("", false,[], s));
     }
     static string Match(GetName g)
     {

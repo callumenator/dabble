@@ -315,16 +315,11 @@ struct Var
             {
                 assert(init.length > 0, "Auto var without initializer");
 
-                test = "static if (__traits(compiles, mixin(q{{ auto " ~ name ~ " = " ~ init ~ ";}})))";
-
                 put(c.prefix,
-                    test, "{\n",
                     generateFuncLitSection("typeof("~init~")"), " else {\n",
                     "    " ~ sym(index) ~ ".v.addr =  _REPL.newExpr(", init, ");\n",
                     applyToType(init, "*cast(Unqual!(_REPL.TypeOf!(_Type))*)" ~ sym(index) ~ ".v.addr = " ~ init ~ ";\n"),
                     applyToType(init, "    auto " ~ name ~ " = cast(_REPL.TypeOf!(_Type)*)" ~ sym(index) ~ ".v.addr;\n"),
-                    "}} else {\n",
-                    "  auto ", name, " = ", init, ";\n",
                     "}\n");
 
                 put(c.prefix, applyToType(init, "\n  " ~ sym(index) ~ ".v.type = q{_Type}.idup;\n"));
@@ -332,20 +327,13 @@ struct Var
             }
             else if (init.length > 0) // has type and initializer
             {
-                test = "static if (__traits(compiles, { " ~ type ~ " " ~ name ~ " = " ~ init ~ ";}))";
-
-                put(c.prefix, test, "{\n",
+                put(c.prefix,
                     "  " ~ sym(index) ~ ".v.addr =  _REPL.newExpr(", init, ");\n",
                     "  *cast(Unqual!(", type, ")*)(" ~ sym(index) ~ ".v.addr) = ", init, ";\n"
-                    "  ", type, "* ", name, " = cast(", type, "*)" ~ sym(index) ~ ".v.addr;\n"
-                    "} else {\n",
-                    "  ", type, " ", name, " = ", init, ";\n",
-                    "}\n");
+                    "  ", type, "* ", name, " = cast(", type, "*)" ~ sym(index) ~ ".v.addr;\n");
             }
             else // just has type
             {
-                test = "static if (true)";
-
                 put(c.prefix,
                     generateFuncLitSection(type), " else {\n",
                     type, "* ", name, " = cast(", type, "*)_REPL.newType!(", type, ");\n",
@@ -353,17 +341,16 @@ struct Var
                     "}\n");
             }
 
-            put(c.prefix, test, "{\n",
+            put(c.prefix,
                 "  " ~ sym(index) ~ ".v.displayType = typeof(*", name, ").stringof.idup;\n",
-                "  if (!" ~ sym(index) ~ ".v.func) _expressionResult = _REPL.exprResult(\n*"~name~"\n);\n",
-                "}\n");
+                "  if (!" ~ sym(index) ~ ".v.func) _expressionResult = _REPL.exprResult(\n*"~name~"\n);\n");
 
-            put(c.suffix, test, "{\n"
+            put(c.suffix,
                 "  if (" ~ sym(index) ~ ".v.func) {\n"
                 "    " ~ sym(index) ~ ".v.current = q{", init, "}.idup;\n"
                 "  } else {\n"
                 "    " ~ sym(index) ~ ".v.ty = _REPL.buildType!(typeof(*",name, "))(_repl_.map);\n"
-                "}}\n");
+                "}\n");
         }
         else // var has already been created, just grab it
         {
