@@ -12,18 +12,15 @@ module dabble.main;
 
 import dabble.repl;
 
-class C{}
-
 void main(char[][] args)
 {
-
-    auto repl = ReplContext();
-    parseArgs(repl, args[1..$]);
-    loop(repl);
+    auto session = initiateSession();
+    parseArgs(session, args[1..$]);
+    session.loop();
     return;
 }
 
-void parseArgs(ref ReplContext repl, char[][] args)
+void parseArgs(string id, char[][] args)
 {
     import std.stdio;
 
@@ -31,10 +28,11 @@ void parseArgs(ref ReplContext repl, char[][] args)
     {
         switch(arg)
         {
-            case "--showTimes": repl.debugLevel |= Debug.times; break;
-            case "--showStages": repl.debugLevel |= Debug.stages; break;
-            case "--parseOnly": repl.debugLevel |= Debug.parseOnly; break;
-            default: writeln("Unrecognized argument: ", arg); break;
+            case "--showTimes":     id.addDebugLevel(Debug.times);      break;
+            case "--showStages":    id.addDebugLevel(Debug.stages);     break;
+            case "--parseOnly":     id.addDebugLevel(Debug.parseOnly);  break;
+            default:
+                writeln("Unrecognized argument: ", arg); break;
         }
     }
 }

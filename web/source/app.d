@@ -18,7 +18,7 @@ import
     dabble.repl,
     sourcebrowser;
 
-ReplContext repl;
+string sessionId;
 char[] buffer;
 
 void welcome(HTTPServerRequest req, HTTPServerResponse res)
@@ -31,7 +31,7 @@ void input(HTTPServerRequest req, HTTPServerResponse res)
 {
     auto text = req.bodyReader.readAllUTF8();
 
-    auto result = eval(repl, text, buffer);
+    auto result = sessionId.eval(text, buffer);
     res.bodyWriter.put(result);
     res.bodyWriter.finalize();
 }
@@ -82,7 +82,7 @@ int main(string[] args)
         buildSourceBrowser(args[1]);
     }
 
-    repl = ReplContext();
+    sessionId = initiateSession();
 
 	auto router = new URLRouter;
 	router.get("/welcome", &welcome);

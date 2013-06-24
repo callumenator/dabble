@@ -25,9 +25,11 @@ import
 
 public import dabble.defs;
 
-extern(C) void* gc_getProxy();
-
-private SharedLib[] keepAlive;
+private
+{
+    SharedLib[] keepAlive;
+    __gshared ReplContext[string] sessionMap;
+}
 
 /**
 * Available levels of debug info.
@@ -38,6 +40,132 @@ enum Debug
     times       = 0x01, /// display time to parse, build and call
     stages      = 0x02, /// display parse, build, call messages
     parseOnly   = 0x04, /// show parse tree and return
+}
+
+
+/**
+* Add a debug level to the session.
+*/
+void addDebugLevel(string sessionId, Debug level)
+{
+    if (isValidSessionId(sessionId))
+        sessionMap[sessionId].debugLevel |= level;
+    else
+        writeln("Invalid session id: ", sessionId);
+}
+
+
+/**
+* Set the debug level to the session.
+*/
+void setDebugLevel(string sessionId, uint level)
+{
+    if (isValidSessionId(sessionId))
+        sessionMap[sessionId].debugLevel = level;
+    else
+        writeln("Invalid session id: ", sessionId);
+}
+
+
+/**
+* Create a ReplContext and return a unique session ID for it.
+*/
+string initiateSession()
+{
+    import std.uuid;
+
+    auto id = randomUUID().toString();
+    auto context = ReplContext();
+    sessionMap[id] = context;
+
+    return id;
+}
+
+
+/**
+* Main repl entry point. Keep reading lines from stdin, handle any
+* repl commands, pass the rest onto eval.
+*/
+void loop(string sessionId)
+{
+    if (!isValidSessionId(sessionId))
+        return;
+
+    clearScreen();
+    writeln(title());
+    char[] inBuffer, codeBuffer;
+
+    write(prompt());
+    stdin.readln(inBuffer);
+    bool multiLine = false;
+
+    while (strip(inBuffer) != "exit")
+    {
+        auto result = sessionId.eval(inBuffer, codeBuffer).chomp().chomp();
+        writeln(result);
+        write(prompt());
+        stdin.readln(inBuffer);
+    }
+    return;
+}
+
+
+/**
+* Evaluate code in the context of the supplied ReplContext.
+*/
+string eval(string sessionId,
+            const char[] inBuffer,
+            ref char[] codeBuffer)
+{
+    import std.string;
+
+    if (!isValidSessionId(sessionId))
+        return "Invalid session id: " ~ sessionId;
+
+    string message;
+    bool multiLine = codeBuffer.length > 0;
+    char[] newInput = strip(inBuffer.dup);
+
+    if (newInput.toLower() == "exit")
+        return "";
+
+    // Try to handle meta command, else assume input is code
+    if (newInput.length > 0 && !handleMetaCommand(sessionMap[sessionId], newInput, codeBuffer, message))
+    {
+        codeBuffer ~= newInput ~ "\n";
+        Parser.braceCount = 0;
+        auto balanced = ReplParse.BalancedBraces(codeBuffer.to!string());
+
+        // TODO: Need to handle things like: a = 5; print a <- note no trailing ';' but 0 braces
+
+        if (!multiLine && balanced.successful && newInput[$-1] == ';')
+        {
+            evaluate(codeBuffer.to!string(), sessionMap[sessionId], message);
+            codeBuffer.clear();
+        }
+        else
+        {
+            if ((balanced.successful && Parser.braceCount > 0) ||
+                (balanced.successful && Parser.braceCount == 0 && newInput[$-1] == ';'))
+            {
+                evaluate(codeBuffer.to!string(), sessionMap[sessionId], message);
+                codeBuffer.clear();
+                multiLine = false;
+            }
+
+        }
+    }
+
+    return message;
+}
+
+
+/**
+* Check for a valid session id.
+*/
+bool isValidSessionId(string sessionId)
+{
+    return (sessionId in sessionMap) !is null;
 }
 
 
@@ -67,8 +195,11 @@ enum CallResult
 /**
 * Holds REPL state.
 */
+extern(C) void* gc_getProxy();
 struct ReplContext
 {
+
+
     Tuple!(string,"filename",
            string,"tempPath",
            string,"fullName") paths;
@@ -112,78 +243,6 @@ struct ReplContext
         userModules.clear();
         vtblFixup.clear();
     }
-}
-
-
-/**
-* Main repl entry point. Keep reading lines from stdin, handle any
-* repl commands, pass the rest onto eval.
-*/
-void loop(ref ReplContext repl)
-{
-    //clearScreen();
-    writeln(title());
-    char[] inBuffer, codeBuffer;
-
-    write(prompt());
-    stdin.readln(inBuffer);
-    bool multiLine = false;
-
-    while (strip(inBuffer) != "exit")
-    {
-        auto result = eval(repl, inBuffer, codeBuffer);
-        writeln(result.chomp().chomp());
-        write(prompt());
-        stdin.readln(inBuffer);
-    }
-    return;
-}
-
-
-/**
-* Evaluate code in the context of the supplied ReplContext.
-*/
-string eval(ref ReplContext repl,
-            const char[] inBuffer,
-            ref char[] codeBuffer)
-{
-    import std.string;
-
-    string message;
-    bool multiLine = codeBuffer.length > 0;
-    char[] newInput = strip(inBuffer.dup);
-
-    if (newInput.toLower() == "exit")
-        return "";
-
-    // Try to handle meta command, else assume input is code
-    if (newInput.length > 0 && !handleMetaCommand(repl, newInput, codeBuffer, message))
-    {
-        codeBuffer ~= newInput ~ "\n";
-        Parser.braceCount = 0;
-        auto balanced = ReplParse.BalancedBraces(codeBuffer.to!string());
-
-        // Need to handle things like: a = 5; print a <- note no trailing ';' but 0 braces
-
-        if (!multiLine && balanced.successful && newInput[$-1] == ';')
-        {
-            evaluate(codeBuffer.to!string(), repl, message);
-            codeBuffer.clear();
-        }
-        else
-        {
-            if ((balanced.successful && Parser.braceCount > 0) ||
-                (balanced.successful && Parser.braceCount == 0 && newInput[$-1] == ';'))
-            {
-                evaluate(codeBuffer.to!string(), repl, message);
-                codeBuffer.clear();
-                multiLine = false;
-            }
-
-        }
-    }
-
-    return message;
 }
 
 
@@ -331,8 +390,8 @@ bool handleMetaCommand(ref ReplContext repl,
             break;
         }
 
-        case "debug on": foreach(arg; args) setDebugLevel!"on"(repl, arg); break;
-        case "debug off": foreach(arg; args) setDebugLevel!"off"(repl, arg); break;
+        case "debug on": foreach(arg; args) setDebugLevelFromString!"on"(repl, arg); break;
+        case "debug off": foreach(arg; args) setDebugLevelFromString!"off"(repl, arg); break;
         default: return false;
     }
 
@@ -362,7 +421,7 @@ void clearScreen()
 /**
 * Turn a debug level on or off, using a string to identify the debug level.
 */
-void setDebugLevel(string s)(ref ReplContext repl, string level)
+void setDebugLevelFromString(string s)(ref ReplContext repl, string level)
     if (s == "on" || s == "off")
 {
     import std.string;
