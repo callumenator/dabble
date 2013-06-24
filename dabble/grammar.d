@@ -155,6 +155,7 @@ enum string metaParser = `
                  / MetaDebugOff MetaArgs
                  / MetaUse MetaArgs
                  / MetaClear MetaArgs?
+                 / MetaVersion
 
     MetaPrint    <- 'print'
     MetaType     <- 'type'
@@ -164,6 +165,7 @@ enum string metaParser = `
     MetaDebugOn  <~ ('debug' wx 'on')
     MetaDebugOff <~ ('debug' wx 'off')
     MetaClear    <- 'clear'
+    MetaVersion  <- 'version'
 
     MetaArgs <- (wxd Seq(MetaArg, ','))
     MetaArg  <- ~((!(endOfLine / ',') .)*)

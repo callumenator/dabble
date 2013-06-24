@@ -149,6 +149,7 @@ ReplParse:
                  / MetaDebugOff MetaArgs
                  / MetaUse MetaArgs
                  / MetaClear MetaArgs?
+                 / MetaVersion
 
     MetaPrint    <- 'print'
     MetaType     <- 'type'
@@ -158,6 +159,7 @@ ReplParse:
     MetaDebugOn  <~ ('debug' wx 'on')
     MetaDebugOff <~ ('debug' wx 'off')
     MetaClear    <- 'clear'
+    MetaVersion  <- 'version'
 
     MetaArgs <- (wxd Seq(MetaArg, ','))
     MetaArg  <- ~((!(endOfLine / ',') .)*)
@@ -325,6 +327,7 @@ struct GenericReplParse(TParseTree)
         rules["MetaDebugOn"] = toDelegate(&ReplParse.MetaDebugOn);
         rules["MetaDebugOff"] = toDelegate(&ReplParse.MetaDebugOff);
         rules["MetaClear"] = toDelegate(&ReplParse.MetaClear);
+        rules["MetaVersion"] = toDelegate(&ReplParse.MetaVersion);
         rules["MetaArgs"] = toDelegate(&ReplParse.MetaArgs);
         rules["MetaArg"] = toDelegate(&ReplParse.MetaArg);
         rules["w"] = toDelegate(&ReplParse.w);
@@ -1363,16 +1366,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree MetaCommand(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaType, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), pegged.peg.and!(MetaUse, MetaArgs), pegged.peg.and!(MetaClear, pegged.peg.option!(MetaArgs))), "ReplParse.MetaCommand")(p);
+            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaType, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), pegged.peg.and!(MetaUse, MetaArgs), pegged.peg.and!(MetaClear, pegged.peg.option!(MetaArgs)), MetaVersion), "ReplParse.MetaCommand")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaType, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), pegged.peg.and!(MetaUse, MetaArgs), pegged.peg.and!(MetaClear, pegged.peg.option!(MetaArgs))), "ReplParse.MetaCommand"), "MetaCommand")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaType, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), pegged.peg.and!(MetaUse, MetaArgs), pegged.peg.and!(MetaClear, pegged.peg.option!(MetaArgs)), MetaVersion), "ReplParse.MetaCommand"), "MetaCommand")(p);
     }
     static TParseTree MetaCommand(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaType, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), pegged.peg.and!(MetaUse, MetaArgs), pegged.peg.and!(MetaClear, pegged.peg.option!(MetaArgs))), "ReplParse.MetaCommand")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaType, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), pegged.peg.and!(MetaUse, MetaArgs), pegged.peg.and!(MetaClear, pegged.peg.option!(MetaArgs)), MetaVersion), "ReplParse.MetaCommand")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaType, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), pegged.peg.and!(MetaUse, MetaArgs), pegged.peg.and!(MetaClear, pegged.peg.option!(MetaArgs))), "ReplParse.MetaCommand"), "MetaCommand")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.and!(MetaPrint, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaType, pegged.peg.option!(MetaArgs)), pegged.peg.and!(MetaDelete, MetaArgs), pegged.peg.and!(MetaReset, MetaArgs), pegged.peg.and!(MetaDebugOn, MetaArgs), pegged.peg.and!(MetaDebugOff, MetaArgs), pegged.peg.and!(MetaUse, MetaArgs), pegged.peg.and!(MetaClear, pegged.peg.option!(MetaArgs)), MetaVersion), "ReplParse.MetaCommand"), "MetaCommand")(TParseTree("", false,[], s));
     }
     static string MetaCommand(GetName g)
     {
@@ -1529,6 +1532,25 @@ struct GenericReplParse(TParseTree)
     static string MetaClear(GetName g)
     {
         return "ReplParse.MetaClear";
+    }
+
+    static TParseTree MetaVersion(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.literal!("version"), "ReplParse.MetaVersion")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.literal!("version"), "ReplParse.MetaVersion"), "MetaVersion")(p);
+    }
+    static TParseTree MetaVersion(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.literal!("version"), "ReplParse.MetaVersion")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.literal!("version"), "ReplParse.MetaVersion"), "MetaVersion")(TParseTree("", false,[], s));
+    }
+    static string MetaVersion(GetName g)
+    {
+        return "ReplParse.MetaVersion";
     }
 
     static TParseTree MetaArgs(TParseTree p)
