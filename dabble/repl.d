@@ -12,6 +12,7 @@ module dabble.repl;
 
 import
     std.algorithm,
+    std.range,
     std.stdio,
     std.string;
 
@@ -39,6 +40,7 @@ enum Debug
     parseOnly   = 0x04, /// show parse tree and return
 }
 
+
 /**
 * Returned by eval.
 */
@@ -50,6 +52,7 @@ enum EvalResult
     callError
 }
 
+
 /**
 * Result of attempting to load and call compiled code.
 */
@@ -59,6 +62,7 @@ enum CallResult
     loadError,
     runtimeError
 }
+
 
 /**
 * Holds REPL state.
@@ -198,11 +202,13 @@ string title()
     return text("DABBLE: (DMD ", version_major, ".", version_minor, ")");
 }
 
+
 void append(Args...)(ref string message, Args msg)
 {
     import std.conv;
     message ~= text(msg, "\n");
 }
+
 
 /**
 * Handle meta commands
@@ -299,7 +305,7 @@ bool handleMetaCommand(ref ReplContext repl,
 
         case "use":
         {
-            import std.path, std.datetime, std.traits;
+            import std.path, std.datetime, std.range;
             import std.file : exists;
             alias ElementType!(typeof(repl.userModules)) TupType;
 
@@ -482,7 +488,7 @@ bool attempt(ReplContext repl,
     {
         auto errFile = repl.paths.tempPath ~ "errout.txt";
         if (exists(errFile))
-            message = parseError(repl, readText(errFile), codeFilename);
+            message = parseDmdErrorFile(codeFilename, errFile, true);
         return false;
     }
     return true;
@@ -500,6 +506,12 @@ bool build(Tuple!(string,string) code,
     import std.file : exists, readText;
     import std.path : dirSeparator;
     import std.process : system, escapeShellFileName;
+    import std.parallelism;
+    import core.thread;
+
+    // Launch a compile test in a background thread, we wait on this before returning.
+    auto testCompileTask = task!testCompile(repl, Parser.rawCode.toString());
+    testCompileTask.executeInNewThread();
 
     auto text =
         code[0] ~
@@ -554,10 +566,58 @@ bool build(Tuple!(string,string) code,
         cmd ~= includePaths;
     }
 
-    if (!attempt(repl, cmd, message, repl.paths.fullName ~ ".d"))
-        return false;
+    string tempMessage;
+    bool buildAttempt = attempt(repl, cmd, tempMessage, repl.paths.fullName ~ ".d");
 
+    while(testCompileTask.done() == 0) { Thread.sleep(dur!"msecs"(10)); }
+
+    if (testCompileTask.workForce().length > 0)
+    {
+        message ~= testCompileTask.workForce();
+        Parser.rawCode.fail();
+        return false;
+    }
+
+    // Test compile passed, but build failed, this is a problem
+    if (!buildAttempt)
+    {
+        message ~= "Internal error: test compile passed, full build failed";
+        Parser.rawCode.fail();
+        return false;
+    }
+
+    Parser.rawCode.pass();
     return true;
+}
+
+
+/**
+* Test to see if raw code compiles, this allows us to generate error messages
+* which do not expose too many internals.
+* Returns:
+*   error message string if compilation failed
+*   else an empty string
+*/
+string testCompile(const ReplContext repl, string code)
+{
+    import std.file : exists;
+    import std.process : system, escapeShellFileName;
+
+    auto file = File(repl.paths.tempPath ~ "testCompile.d", "w");
+    file.write(code);
+    file.close();
+
+    auto srcFile = repl.paths.tempPath ~ "testCompile.d";
+    auto errFile = repl.paths.tempPath ~ "testCompileErrout.txt";
+
+    auto dirChange = "cd " ~ escapeShellFileName(repl.paths.tempPath);
+    auto cmd = dirChange ~ " & dmd -o- -c testCompile.d";
+
+    string result;
+    if (system(cmd ~ " 2> testCompileErrout.txt") != 0 && errFile.exists())
+        result = parseDmdErrorFile(srcFile, errFile, false);
+
+    return result;
 }
 
 
@@ -640,6 +700,7 @@ void cleanup(ReplContext repl)
             try { remove(f); } catch(Exception e) {}
 }
 
+
 /**
 * Load the shared lib, and call the _main function. Free the lib on exit.
 */
@@ -700,13 +761,17 @@ CallResult call(ref ReplContext repl, ref string message)
     return CallResult.success;
 }
 
+
+
+version(none) {
 /**
 * Do some processing on errors returned by DMD.
 */
 import std.range;
-string parseError(ReplContext repl,
+string parseError(const ReplContext repl,
                   string error,
-                  string codeFilename)
+                  string codeFilename,
+                  bool dederef = true)
 {
     import std.string : splitLines;
     import std.file : readText, exists;
@@ -722,6 +787,9 @@ string parseError(ReplContext repl,
     // Remove * from user defined vars.
     string deDereference(string s, bool parens = true) @safe
     {
+        if (!dederef)
+            return s;
+
         if (parens)
             return replace(s, regex(`(\(\*)([_a-zA-Z][_0-9a-zA-Z]*)(\))`, "g"), "$2");
         else
@@ -745,22 +813,105 @@ string parseError(ReplContext repl,
         if (strip(line).length == 0)
             continue;
 
-        auto r = splitter(line, regex(":", "g")).array();
+        auto stripped = stripDmdErrorLine(line);
 
-        auto lnum = match(line, regex(`\([0-9]+\)`, "g"));
-        if (!lnum.empty)
-        {
-            auto lineNumber = lnum.front.hit()[1..$-1].to!int() - 1;
-            if (lineNumber > 0 && lineNumber < code.length)
-                res ~= filePrepend ~ " < " ~ strip(deDereference(code[lineNumber])) ~ " >\n";
-            else
-                writeln(error);
-        }
+        if (stripped[1] > 0 && stripped[1] < code.length)
+            res ~= filePrepend ~ " < " ~ strip(deDereference(code[stripped[1]])) ~ " >\n";
 
-        res ~= "   " ~ strip(deDereference(r[$-1], false)) ~ "\n";
+        res ~= "   " ~ strip(deDereference(stripped[0], false)) ~ "\n";
     }
     return res;
 }
+}
+
+
+/**
+* Return error message and line number from a DMD error string.
+*/
+Tuple!(string, int) stripDmdErrorLine(string line)
+{
+    import std.regex;
+
+    Tuple!(string, int) err;
+    auto split = splitter(line, regex(`:`, `g`)).array();
+    if (split.length >= 3)
+        err[0] = split[2..$].join(":");
+    else
+        err[0] = split[$-1];
+
+    auto lnum = match(line, regex(`\([0-9]+\)`, `g`));
+    if (!lnum.empty)
+        err[1] = lnum.front.hit()[1..$-1].to!int() - 1;
+    return err;
+}
+
+
+/**
+* Remove * from user defined vars.
+*/
+string deDereference(string line, bool parens)
+{
+    import std.regex;
+
+    // TODO: this should make sure the matches are user defined vars
+    if (parens)
+        return replace(line, regex(`(\(\*)([_a-zA-Z][_0-9a-zA-Z]*)(\))`, "g"), "$2");
+    else
+        return replace(line, regex(`(\*)([_a-zA-Z][_0-9a-zA-Z]*)`, "g"), "$2");
+}
+
+
+/**
+* Given source code filename and error filename, generate formatted errors
+*/
+string parseDmdErrorFile(string srcFile, string errFile, bool dederef)
+{
+    import std.regex;
+    import std.path: baseName;
+    import std.file : readText, exists;
+    import std.string : splitLines, strip;
+
+    string result;
+
+    if (!exists(srcFile))
+        throw new Exception("parseDmdErrorFile: srcFile does not exist");
+    if (!exists(errFile))
+        throw new Exception("parseDmdErrorFile: errFile does not exist");
+
+    auto src = readText(srcFile).splitLines();
+    auto err = readText(errFile).splitLines();
+
+    int previousLineNumber = -1;
+    foreach(count, l; err)
+    {
+        if (l.length == 0)
+            continue;
+
+        auto split = stripDmdErrorLine(replace(l, regex(srcFile.baseName("d"), "g"), ""));
+        string srcLine, errLine = strip(split[0]);
+
+        if (split[1] > 0 && split[1] < src.length)
+            srcLine = src[split[1]];
+
+        if (dederef)
+        {
+            srcLine = srcLine.deDereference(true);
+            errLine = errLine.deDereference(false);
+        }
+
+        if (previousLineNumber != split[1])
+            result ~= "< " ~ srcLine ~ " >\n  " ~ errLine;
+        else // error refers to same line as previous, don't repeat src
+            result ~= "  " ~ errLine;
+
+        if (count < err.length - 1)
+            result ~= "\n";
+
+        previousLineNumber = split[1];
+    }
+    return result;
+}
+
 
 /**
 * This is taken from RDMD
@@ -789,6 +940,7 @@ private string getTempDir()
 
     return tmpRoot;
 }
+
 
 /**
 * Print-expression parser
@@ -824,6 +976,7 @@ Tuple!(string,Operation[]) parseExpr(string s)
     expressionList(p, list);
     return tuple(list[0].val, list[1..$]);
 }
+
 
 void expressionList(ParseTree p, ref Operation[] list)
 {
@@ -863,11 +1016,13 @@ void expressionList(ParseTree p, ref Operation[] list)
     }
 }
 
+
 unittest
 {
     writeln("/** Testing ", __FILE__, " **/");
     stress();
 }
+
 
 ReplContext stress()
 {
@@ -931,6 +1086,7 @@ ReplContext stress()
     "writeln(arr5);"
     ]);
 }
+
 
 void libTest()
 {
@@ -1007,6 +1163,7 @@ void libTest()
     //test("r1 = regex(`[0-9]+`,`g`);");
     //test("m1 = match(`12345`,r1);");
 }
+
 
 /**
 * Eval an array of strings. Mainly for testing.

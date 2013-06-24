@@ -40,7 +40,6 @@ static:
         error = "";
         repl = &_repl;
 
-        input = ReplParse.StringDupSearch(input).matches[0];
         auto p = ReplParse.Search(input);
 
         if (showParseTree)
@@ -64,7 +63,7 @@ static:
             "string _expressionResult;\n" ~
             repl.vtblFixup ~
             code.prefix.data ~
-            join(p.matches) ~
+            ReplParse.StringDupSearch(join(p.matches)).matches[0] ~
             code.suffix.data ~
             "if (_expressionResult.length == 0) _expressionResult = `OK`; writeln(`=> `, _expressionResult);\n";
 
@@ -98,6 +97,9 @@ static:
     T addImport(T)(T t)
     {
         if (repl && t.successful) {
+
+            rawCode.append(removechars(t.matches[0], " "), true);
+
             auto imp = removechars(t.matches[0], " ");
             repl.share.symbols ~= Symbol(Import(imp));
         }
@@ -111,6 +113,8 @@ static:
     {
         if (repl && t.successful)
         {
+            rawCode.append(t.matches[0], isGlobal(t.matches[0], false));
+
             repl.share.symbols ~= Symbol(Alias(t.matches[0], isGlobal(t.matches[0])));
             t.matches.clear();
         }
@@ -123,6 +127,9 @@ static:
     T enumDecl(T)(T t)
     {
         if (repl && t.successful) {
+
+            rawCode.append(t.matches[0], isGlobal(t.matches[0], false));
+
             repl.share.symbols ~= Symbol(Enum(t.matches[0], isGlobal(t.matches[0])));
             t.matches.clear();
         }
@@ -135,6 +142,9 @@ static:
     T userType(T)(T t)
     {
         if (repl && t.successful) {
+
+            rawCode.append(t.matches[0], true);
+
             repl.share.symbols ~= Symbol(UserType(t.matches[0]));
             t.matches.clear();
         }
@@ -158,7 +168,9 @@ static:
     T wrapInstanceType(T)(T t)
     {
         if (t.successful)
+        {
             t.matches[0] = "(" ~ t.matches[0] ~ ")";
+        }
         return t;
     }
 
@@ -171,6 +183,8 @@ static:
         {
             t = ReplParse.decimateTree(t);
             auto expr = t.matches[0];
+
+            rawCode.append(inputCopy[t.begin..t.end], false);
 
             t.matches[0] =
             "static if (__traits(compiles, mixin(q{is(typeof(" ~ expr ~ "))}))) {\n"
@@ -212,7 +226,7 @@ static:
                 p.name = "ReplParse.VarDeclInit";
                 p.matches = ["",""] ~ p.matches;
                 p.children = ParseTree("",true,["auto"]) ~ p.children;
-                p = varDecl(p);
+                p = varDecl(p, true);
             }
             else
             {
@@ -250,13 +264,12 @@ static:
     /**
     * Handle variable declaration/initialization.
     */
-    T varDecl(T)(T p)
+    T varDecl(T)(T p, bool implicitAuto = false)
     {
         if (repl && p.successful)
         {
             auto type = strip(p.children[0].matches[0]);
             auto name = strip(p.children[1].matches[0]);
-
             auto _ptr = name in repl.symbolSet;
 
             if (_ptr && *_ptr == parseID)
@@ -277,6 +290,11 @@ static:
                 string init;
                 if (p.name == "ReplParse.VarDeclInit")
                     init = strip(p.children[$-1].matches[0]);
+
+                if (implicitAuto)
+                    rawCode.append("auto " ~ inputCopy[p.begin..p.end], false);
+                else
+                    rawCode.append(inputCopy[p.begin..p.end], false);
 
                 repl.symbolSet[name] = parseID;
                 repl.share.symbols ~= Symbol(Var(name, type, init));
@@ -314,15 +332,28 @@ static:
     * Return true if input does not reference any local vars (i.e. can be
     * put in code header.
     */
-    bool isGlobal(string input)
+    bool isGlobal(string input, bool pointer = true)
     {
         import std.regex;
 
-        auto r = regex(`(\(\*)([_a-zA-Z][_0-9a-zA-Z]*)(\))`, "g");
-        foreach(m; match(input, r))
+        if (pointer)
+        {
+            auto r = regex(`(\(\*)([_a-zA-Z][_0-9a-zA-Z]*)(\))`, "g");
+            foreach(m; match(input, r))
             if (isDefined(m.captures[2]))
                return false;
-        return true;
+            return true;
+        }
+        else
+        {
+            auto r = regex(`(([_a-zA-Z][_0-9a-zA-Z]*))`, "g");
+            foreach(m; match(input, r))
+                if (isDefined(m.captures[1]))
+                    return false;
+            return true;
+        }
+
+        assert(false);
     }
 
     /**
@@ -346,6 +377,72 @@ static:
     string error;
     string[] stringDups; /// names requiring a dupSearch check
     uint braceCount;
+
+    struct RawCode
+    {
+        string[] _header;
+        string[] _body;
+
+        int _newHeaderStart = -1;
+        int _newBodyStart = -1;
+
+        void append(string s, bool global)
+        {
+            if (global)
+            {
+                _header ~= s;
+                if (_newHeaderStart == -1)
+                    _newHeaderStart = _header.length - 1;
+            }
+            else
+            {
+                _body ~= s;
+                if (_newBodyStart == -1)
+                    _newBodyStart = _body.length - 1;
+            }
+        }
+
+        /**
+        * Remove all code from _newHeaderStart onwards,
+        * same for _newBodyStart. This code did not compile.
+        */
+        void fail()
+        {
+            void _prune(int i, ref string[] a)
+            {
+                if (i != -1)
+                {
+                    if (i == 0)
+                        a.clear();
+                    else if (i > 0)
+                        a = a[0..i];
+                    else
+                        assert(false);
+                }
+            }
+            _prune(_newHeaderStart, _header);
+            _prune(_newBodyStart, _body);
+        }
+
+        /**
+        * New code compiled, to clear markers.
+        */
+        void pass()
+        {
+            _newHeaderStart = -1;
+            _newBodyStart = -1;
+        }
+
+        /**
+        * Return a compile-able version of the raw code.
+        */
+        string toString()
+        {
+            return _header.join("\n") ~ "\nvoid main() {\n" ~ _body.join("\n") ~ "\n}";
+        }
+    }
+
+    RawCode rawCode;
 }
 
 
