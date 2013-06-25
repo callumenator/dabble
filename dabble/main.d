@@ -10,12 +10,13 @@ Authors:   Callum Anderson
 
 module dabble.main;
 
-import dabble.repl;
+import dabble.repl, dabble.actions;
 
 void main(char[][] args)
 {
     auto session = initiateSession();
     parseArgs(session, args[1..$]);
+    stressParser();
     session.loop();
     return;
 }

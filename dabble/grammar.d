@@ -85,8 +85,12 @@ ReplParse:
 
     BaseClassList   <- Seq(~Symbol, ',')
 
-    FunctionDecl    <- wx ~(~Type ws Ident wx ( ~ParameterList wx ~ParameterList
-                                              / ~ParameterList ) wx ~Constraint? wx AllBetween(LBrace,RBrace))
+    FunctionDecl    <- wx ~(AnnotationList? wx ~Type ws Ident wx
+                            ( ~ParameterList wx ~ParameterList
+                            / ~ParameterList )
+                            wx AnnotationList? wx ~Constraint? wx AllBetween(LBrace,RBrace))
+
+    AnnotationList  <- Seq(Annotation / UDA)
 
     ParameterList   <- BwParens(.)
 
@@ -115,7 +119,9 @@ ReplParse:
             / ;'(' wx Symbol wx ;')'
 
     Auto        <- 'auto'
-    Storage     <- 'const' / 'shared' / 'immutable' / 'inout'
+    Storage     <- 'static' / 'const' / 'shared' / 'immutable' / 'inout'
+    Annotation  <~ '@' wx ('property' / 'safe' / 'trusted' / 'system' / 'disable')
+    UDA         <~ '@' wx AllBetween(LBracket,RBracket)
 
     TypeSuffix <- '*' / AllBetween('[',']')
 

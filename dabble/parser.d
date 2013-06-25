@@ -82,8 +82,12 @@ ReplParse:
 
     BaseClassList   <- Seq(~Symbol, ',')
 
-    FunctionDecl    <- wx ~(~Type ws Ident wx ( ~ParameterList wx ~ParameterList
-                                              / ~ParameterList ) wx ~Constraint? wx AllBetween(LBrace,RBrace))
+    FunctionDecl    <- wx ~(AnnotationList? wx ~Type ws Ident wx
+                            ( ~ParameterList wx ~ParameterList
+                            / ~ParameterList )
+                            wx AnnotationList? wx ~Constraint? wx AllBetween(LBrace,RBrace))
+
+    AnnotationList  <- Seq(Annotation / UDA)
 
     ParameterList   <- BwParens(.)
 
@@ -112,7 +116,9 @@ ReplParse:
             / ;'(' wx Symbol wx ;')'
 
     Auto        <- 'auto'
-    Storage     <- 'const' / 'shared' / 'immutable' / 'inout'
+    Storage     <- 'static' / 'const' / 'shared' / 'immutable' / 'inout'
+    Annotation  <~ '@' wx ('property' / 'safe' / 'trusted' / 'system' / 'disable')
+    UDA         <~ '@' wx AllBetween(LBracket,RBracket)
 
     TypeSuffix <- '*' / AllBetween('[',']')
 
@@ -295,6 +301,7 @@ struct GenericReplParse(TParseTree)
         rules["Constraint"] = toDelegate(&ReplParse.Constraint);
         rules["BaseClassList"] = toDelegate(&ReplParse.BaseClassList);
         rules["FunctionDecl"] = toDelegate(&ReplParse.FunctionDecl);
+        rules["AnnotationList"] = toDelegate(&ReplParse.AnnotationList);
         rules["ParameterList"] = toDelegate(&ReplParse.ParameterList);
         rules["Var"] = toDelegate(&ReplParse.Var);
         rules["VarDecl"] = toDelegate(&ReplParse.VarDecl);
@@ -308,6 +315,8 @@ struct GenericReplParse(TParseTree)
         rules["Symbol"] = toDelegate(&ReplParse.Symbol);
         rules["Auto"] = toDelegate(&ReplParse.Auto);
         rules["Storage"] = toDelegate(&ReplParse.Storage);
+        rules["Annotation"] = toDelegate(&ReplParse.Annotation);
+        rules["UDA"] = toDelegate(&ReplParse.UDA);
         rules["TypeSuffix"] = toDelegate(&ReplParse.TypeSuffix);
         rules["BasicType"] = toDelegate(&ReplParse.BasicType);
         rules["TypeOf"] = toDelegate(&ReplParse.TypeOf);
@@ -910,20 +919,39 @@ struct GenericReplParse(TParseTree)
     static TParseTree FunctionDecl(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.fuse!(pegged.peg.and!(pegged.peg.fuse!(Type), ws, Ident, wx, pegged.peg.or!(pegged.peg.and!(pegged.peg.fuse!(ParameterList), wx, pegged.peg.fuse!(ParameterList)), pegged.peg.fuse!(ParameterList)), wx, pegged.peg.fuse!(pegged.peg.option!(Constraint)), wx, AllBetween!(LBrace, RBrace)))), "ReplParse.FunctionDecl")(p);
+            return         pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.fuse!(pegged.peg.and!(pegged.peg.option!(AnnotationList), wx, pegged.peg.fuse!(Type), ws, Ident, wx, pegged.peg.or!(pegged.peg.and!(pegged.peg.fuse!(ParameterList), wx, pegged.peg.fuse!(ParameterList)), pegged.peg.fuse!(ParameterList)), wx, pegged.peg.option!(AnnotationList), wx, pegged.peg.fuse!(pegged.peg.option!(Constraint)), wx, AllBetween!(LBrace, RBrace)))), "ReplParse.FunctionDecl")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.fuse!(pegged.peg.and!(pegged.peg.fuse!(Type), ws, Ident, wx, pegged.peg.or!(pegged.peg.and!(pegged.peg.fuse!(ParameterList), wx, pegged.peg.fuse!(ParameterList)), pegged.peg.fuse!(ParameterList)), wx, pegged.peg.fuse!(pegged.peg.option!(Constraint)), wx, AllBetween!(LBrace, RBrace)))), "ReplParse.FunctionDecl"), "FunctionDecl")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.fuse!(pegged.peg.and!(pegged.peg.option!(AnnotationList), wx, pegged.peg.fuse!(Type), ws, Ident, wx, pegged.peg.or!(pegged.peg.and!(pegged.peg.fuse!(ParameterList), wx, pegged.peg.fuse!(ParameterList)), pegged.peg.fuse!(ParameterList)), wx, pegged.peg.option!(AnnotationList), wx, pegged.peg.fuse!(pegged.peg.option!(Constraint)), wx, AllBetween!(LBrace, RBrace)))), "ReplParse.FunctionDecl"), "FunctionDecl")(p);
     }
     static TParseTree FunctionDecl(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.fuse!(pegged.peg.and!(pegged.peg.fuse!(Type), ws, Ident, wx, pegged.peg.or!(pegged.peg.and!(pegged.peg.fuse!(ParameterList), wx, pegged.peg.fuse!(ParameterList)), pegged.peg.fuse!(ParameterList)), wx, pegged.peg.fuse!(pegged.peg.option!(Constraint)), wx, AllBetween!(LBrace, RBrace)))), "ReplParse.FunctionDecl")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.fuse!(pegged.peg.and!(pegged.peg.option!(AnnotationList), wx, pegged.peg.fuse!(Type), ws, Ident, wx, pegged.peg.or!(pegged.peg.and!(pegged.peg.fuse!(ParameterList), wx, pegged.peg.fuse!(ParameterList)), pegged.peg.fuse!(ParameterList)), wx, pegged.peg.option!(AnnotationList), wx, pegged.peg.fuse!(pegged.peg.option!(Constraint)), wx, AllBetween!(LBrace, RBrace)))), "ReplParse.FunctionDecl")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.fuse!(pegged.peg.and!(pegged.peg.fuse!(Type), ws, Ident, wx, pegged.peg.or!(pegged.peg.and!(pegged.peg.fuse!(ParameterList), wx, pegged.peg.fuse!(ParameterList)), pegged.peg.fuse!(ParameterList)), wx, pegged.peg.fuse!(pegged.peg.option!(Constraint)), wx, AllBetween!(LBrace, RBrace)))), "ReplParse.FunctionDecl"), "FunctionDecl")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.fuse!(pegged.peg.and!(pegged.peg.option!(AnnotationList), wx, pegged.peg.fuse!(Type), ws, Ident, wx, pegged.peg.or!(pegged.peg.and!(pegged.peg.fuse!(ParameterList), wx, pegged.peg.fuse!(ParameterList)), pegged.peg.fuse!(ParameterList)), wx, pegged.peg.option!(AnnotationList), wx, pegged.peg.fuse!(pegged.peg.option!(Constraint)), wx, AllBetween!(LBrace, RBrace)))), "ReplParse.FunctionDecl"), "FunctionDecl")(TParseTree("", false,[], s));
     }
     static string FunctionDecl(GetName g)
     {
         return "ReplParse.FunctionDecl";
+    }
+
+    static TParseTree AnnotationList(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(Seq!(pegged.peg.or!(Annotation, UDA)), "ReplParse.AnnotationList")(p);
+        else
+            return hooked!(pegged.peg.named!(Seq!(pegged.peg.or!(Annotation, UDA)), "ReplParse.AnnotationList"), "AnnotationList")(p);
+    }
+    static TParseTree AnnotationList(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(Seq!(pegged.peg.or!(Annotation, UDA)), "ReplParse.AnnotationList")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(Seq!(pegged.peg.or!(Annotation, UDA)), "ReplParse.AnnotationList"), "AnnotationList")(TParseTree("", false,[], s));
+    }
+    static string AnnotationList(GetName g)
+    {
+        return "ReplParse.AnnotationList";
     }
 
     static TParseTree ParameterList(TParseTree p)
@@ -1157,20 +1185,58 @@ struct GenericReplParse(TParseTree)
     static TParseTree Storage(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.keywords!("const", "shared", "immutable", "inout"), "ReplParse.Storage")(p);
+            return         pegged.peg.named!(pegged.peg.keywords!("static", "const", "shared", "immutable", "inout"), "ReplParse.Storage")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.keywords!("const", "shared", "immutable", "inout"), "ReplParse.Storage"), "Storage")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.keywords!("static", "const", "shared", "immutable", "inout"), "ReplParse.Storage"), "Storage")(p);
     }
     static TParseTree Storage(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.keywords!("const", "shared", "immutable", "inout"), "ReplParse.Storage")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.keywords!("static", "const", "shared", "immutable", "inout"), "ReplParse.Storage")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.keywords!("const", "shared", "immutable", "inout"), "ReplParse.Storage"), "Storage")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.keywords!("static", "const", "shared", "immutable", "inout"), "ReplParse.Storage"), "Storage")(TParseTree("", false,[], s));
     }
     static string Storage(GetName g)
     {
         return "ReplParse.Storage";
+    }
+
+    static TParseTree Annotation(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("@"), wx, pegged.peg.keywords!("property", "safe", "trusted", "system", "disable"))), "ReplParse.Annotation")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("@"), wx, pegged.peg.keywords!("property", "safe", "trusted", "system", "disable"))), "ReplParse.Annotation"), "Annotation")(p);
+    }
+    static TParseTree Annotation(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("@"), wx, pegged.peg.keywords!("property", "safe", "trusted", "system", "disable"))), "ReplParse.Annotation")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("@"), wx, pegged.peg.keywords!("property", "safe", "trusted", "system", "disable"))), "ReplParse.Annotation"), "Annotation")(TParseTree("", false,[], s));
+    }
+    static string Annotation(GetName g)
+    {
+        return "ReplParse.Annotation";
+    }
+
+    static TParseTree UDA(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("@"), wx, AllBetween!(LBracket, RBracket))), "ReplParse.UDA")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("@"), wx, AllBetween!(LBracket, RBracket))), "ReplParse.UDA"), "UDA")(p);
+    }
+    static TParseTree UDA(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("@"), wx, AllBetween!(LBracket, RBracket))), "ReplParse.UDA")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("@"), wx, AllBetween!(LBracket, RBracket))), "ReplParse.UDA"), "UDA")(TParseTree("", false,[], s));
+    }
+    static string UDA(GetName g)
+    {
+        return "ReplParse.UDA";
     }
 
     static TParseTree TypeSuffix(TParseTree p)

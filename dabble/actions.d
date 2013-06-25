@@ -467,8 +467,12 @@ void deleteVar(ref ReplContext repl, string name)
     repl.share.symbols = keep;
 }
 
-
 unittest
+{
+    stressParser();
+}
+
+void stressParser()
 {
     writeln("/** Testing ", __FILE__, " **/");
 
@@ -556,6 +560,12 @@ unittest
     Parser.go("class A(T)   if (is(T == class)) : B!(((int))) {}", repl);
     assert(repl.share.symbols[0].type == Symbol.Type.UserType &&
            repl.share.symbols[0].u.decl == "class A(T) if (is(T == class)) :B!(((int))){}",
+           "Parse user type failure: " ~ repl.share.symbols[0].u.decl);
+
+    repl.reset();
+    Parser.go("@safe void foo() {}", repl);
+    assert(repl.share.symbols[0].type == Symbol.Type.UserType &&
+           repl.share.symbols[0].u.decl == "@safe void foo() {}",
            "Parse user type failure: " ~ repl.share.symbols[0].u.decl);
 }
 
