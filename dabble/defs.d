@@ -1120,6 +1120,7 @@ template Iota(size_t i, size_t n)
 
 version(Windows)
 {
+    // look away!
     void fixUp()
     {
         import core.sys.windows.dll, core.sys.windows.windows;
@@ -1142,7 +1143,7 @@ version(Windows)
 
         core.stdc.string.memcpy( _tlsdata, _tlsstart, sz );
 
-        auto tlsindex = 1;
+        auto tlsindex = 1; // clearly a bad thing
 
         // create copy of tls pointer array
         void** array = cast(void**) (*fnAlloc)( heap, 0xc0000, (tlsindex + 1) * (void*).sizeof );
