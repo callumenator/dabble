@@ -341,7 +341,10 @@ static:
 
                 string init;
                 if (p.name == "ReplParse.VarDeclInit")
+                {
                     init = strip(p.children[$-1].matches[0]);
+                    init = ReplParse.StringDupSearch(init).matches[0];
+                }
 
                 if (implicitAuto)
                     repl.rawCode.append("auto " ~ inputCopy[p.begin..p.end], false);

@@ -164,7 +164,6 @@ string eval(string sessionId,
                 codeBuffer.clear();
                 multiLine = false;
             }
-
         }
     }
 
