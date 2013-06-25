@@ -133,6 +133,8 @@ static:
     {
         if (repl && t.successful)
         {
+            t.matches[0] = ReplParse.StringDupSearch(t.matches[0]).matches[0];
+
             repl.rawCode.append(t.matches[0], isGlobal(t.matches[0], false));
 
             repl.share.symbols ~= Symbol(Alias(t.matches[0], isGlobal(t.matches[0])));
@@ -149,6 +151,8 @@ static:
     {
         if (repl && t.successful) {
 
+            t.matches[0] = ReplParse.StringDupSearch(t.matches[0]).matches[0];
+
             repl.rawCode.append(t.matches[0], isGlobal(t.matches[0], false));
 
             repl.share.symbols ~= Symbol(Enum(t.matches[0], isGlobal(t.matches[0])));
@@ -164,6 +168,8 @@ static:
     T userType(T)(T t)
     {
         if (repl && t.successful) {
+
+            t.matches[0] = ReplParse.StringDupSearch(t.matches[0]).matches[0];
 
             repl.rawCode.append(t.matches[0], true);
 
