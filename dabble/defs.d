@@ -309,7 +309,7 @@ struct Var
                 return code;
             }
 
-            // TODO: _Type is fragile in applyToType
+            // TODO: __x_Type_x__ is fragile in applyToType
 
             import std.regex, std.string;
             if (!type.match(`\bauto\b`).empty) // has initializer but no type
@@ -320,9 +320,10 @@ struct Var
 
                 put(c.prefix,
                     generateFuncLitSection("typeof("~init~")"), " else {\n",
-                    "    " ~ sym(index) ~ ".v.addr =  _REPL.newExpr(", init, ");\n",
-                    applyToType(init, "*cast(Unqual!(_REPL.TypeOf!(__x_Type_x__))*)" ~ sym(index) ~ ".v.addr = " ~ init ~ ";\n"),
-                    applyToType(init, "    " ~ type ~ " " ~ name ~ " = cast(" ~ qualifiers ~ "_REPL.TypeOf!(__x_Type_x__)*)" ~ sym(index) ~ ".v.addr;\n"),
+                    "    auto ___lam = () { return ", init, ";}; "
+                    "    " ~ sym(index) ~ ".v.addr =  _REPL.newExpr(___lam());\n",
+                    "    *cast(Unqual!(typeof(___lam()))*)" ~ sym(index) ~ ".v.addr = ___lam();\n",
+                    "    auto " ~ name ~ " = cast(" ~ qualifiers ~ " typeof(___lam())*)" ~ sym(index) ~ ".v.addr;\n",
                     "}\n");
 
                 put(c.prefix, applyToType(init, "\n  " ~ sym(index) ~ ".v.type = q{__x_Type_x__}.idup;\n"));
