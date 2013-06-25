@@ -303,7 +303,7 @@ struct Var
                     code ~=
                     "    {\n"
                     "      auto _temp = " ~ init ~ ";\n"
-                    "      " ~ name ~ " = &_temp;\n"
+                    "      " ~ name ~ " = cast(" ~ useType ~ "*)&_temp;\n"
                     "    }\n";
 
                 code ~= "}";
@@ -366,11 +366,11 @@ struct Var
             {
                 put(c.prefix, type, "* ", name, ";\n{\n");
                 if (init == "null")
-                    put(c.prefix, "  ", type, " _temp = cast(", type, ") null;\n");
+                    put(c.prefix, "  auto _temp = cast(", type, ") null;\n");
                 else
-                    put(c.prefix, "  ", type, " _temp = ", init, ";\n");
+                    put(c.prefix, "  auto _temp = ", init, ";\n");
 
-                put(c.prefix, "  ", name, " = &_temp;\n}\n");
+                put(c.prefix, "  ", name, " = cast(", type, "*)&_temp;\n}\n");
             }
             else
             {

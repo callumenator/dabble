@@ -300,7 +300,7 @@ struct ReplContext
     long[string] symbolSet;
     uint debugLevel = Debug.none;
 
-    static ReplContext opCall(string filename = "replDll", uint debugLevel = Debug.none)
+    static ReplContext opCall(string filename = "repl", uint debugLevel = Debug.none)
     {
         import std.path : dirSeparator;
         import std.file : readText, exists;
@@ -693,8 +693,8 @@ bool build(Tuple!(string,string) code,
     {
         file = File(repl.paths.fullName ~ ".def", "w");
 
-        enum def = "LIBRARY replDll\n"
-                   "DESCRIPTION 'replDll'\n"
+        enum def = "LIBRARY repl\n"
+                   "DESCRIPTION 'repl'\n"
                    "EXETYPE	 NT\n"
                    "CODE PRELOAD\n"
                    "DATA PRELOAD";
@@ -1331,7 +1331,7 @@ void libTest()
 */
 ReplContext run(string[] code, uint debugLevel = 0)
 {
-    auto repl = ReplContext("replDll", debugLevel);
+    auto repl = ReplContext("repl", debugLevel);
 
     string err;
     evaluate("import std.stdio, std.conv, std.traits, std.typecons, std.algorithm, std.range;", repl, err);
