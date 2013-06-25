@@ -665,10 +665,6 @@ bool build(Tuple!(string,string) code,
     import std.parallelism;
     import core.thread;
 
-    // Launch a compile test in a background thread, we wait on this before returning.
-    auto testCompileTask = task!testCompile(repl, repl.rawCode.toString());
-    testCompileTask.executeInNewThread();
-
     auto text =
         code[0] ~
         "\n\nexport extern(C) int _main(ref _REPL.ReplShare _repl_)\n"
@@ -725,21 +721,26 @@ bool build(Tuple!(string,string) code,
     string tempMessage;
     bool buildAttempt = attempt(repl, cmd, tempMessage, repl.paths.fullName ~ ".d");
 
-    while(testCompileTask.done() == 0) { Thread.sleep(dur!"msecs"(10)); }
-
-    if (testCompileTask.workForce().length > 0)
-    {
-        message ~= testCompileTask.workForce();
-        repl.rawCode.fail();
-        return false;
-    }
-
-    // Test compile passed, but build failed, this is a problem
     if (!buildAttempt)
     {
-        message ~= "Internal error: test compile passed, full build failed. Error follows:\n" ~ tempMessage;
-        repl.rawCode.fail();
-        return false;
+        // If the full build fails, try to get a better error message by compiling the
+        // raw code. (Originally this was done in a background thread along with the
+        // full build, but it adds latency for all code, not just that which is wrong).
+
+        auto test = testCompile(repl);
+
+        if (test.length > 0)
+        {
+            message ~= test;
+            repl.rawCode.fail();
+            return false;
+        }
+        else
+        {
+            message ~= "Internal error: test compile passed, full build failed. Error follows:\n" ~ tempMessage;
+            repl.rawCode.fail();
+            return false;
+        }
     }
 
     repl.rawCode.pass();
@@ -754,17 +755,17 @@ bool build(Tuple!(string,string) code,
 *   error message string if compilation failed
 *   else an empty string
 */
-string testCompile(const ReplContext repl, string code)
+string testCompile(/* const */ ReplContext repl)
 {
     import std.file : exists, remove;
     import std.process : system, escapeShellFileName;
 
-    auto file = File(repl.paths.tempPath ~ "testCompile.d", "w");
-    file.write(code);
-    file.close();
-
     auto srcFile = repl.paths.tempPath ~ "testCompile.d";
     auto errFile = repl.paths.tempPath ~ "testCompileErrout.txt";
+
+    auto rawFile = File(srcFile, "w");
+    rawFile.write(repl.rawCode.toString());
+    rawFile.close();
 
     if (errFile.exists()) {
         try { errFile.remove(); } catch(Exception e) {}

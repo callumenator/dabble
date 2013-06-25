@@ -17,7 +17,8 @@ import
     std.typetuple,
     std.algorithm,
     std.traits,
-    std.range;
+    std.range,
+    std.uuid;
 
 
 /**
@@ -309,6 +310,7 @@ struct Var
                 return code;
             }
 
+
             // TODO: __x_Type_x__ is fragile in applyToType
 
             import std.regex, std.string;
@@ -317,17 +319,19 @@ struct Var
                 assert(init.length > 0, "Auto var without initializer");
 
                 auto qualifiers = replace(type, regex(`\bauto\b`, `g`), "");
+                auto initLambda = "___replInitLambda_" ~ randomUUID().to!string().split("-").join("");
 
                 put(c.prefix,
                     generateFuncLitSection("typeof("~init~")"), " else {\n",
-                    "    auto ___lam = () { return ", init, ";}; "
-                    "    " ~ sym(index) ~ ".v.addr =  _REPL.newExpr(___lam());\n",
-                    "    *cast(Unqual!(typeof(___lam()))*)" ~ sym(index) ~ ".v.addr = ___lam();\n",
-                    "    auto " ~ name ~ " = cast(" ~ qualifiers ~ " typeof(___lam())*)" ~ sym(index) ~ ".v.addr;\n",
-                    "}\n");
+                    "  auto ", initLambda, " = () { return ", init, ";}; "
+                    "  ", sym(index), ".v.addr =  _REPL.newExpr(", initLambda, "());\n",
+                    "  *cast(Unqual!(typeof(", initLambda, "()))*)", sym(index), ".v.addr = ", initLambda, "();\n",
+                    "  auto ", name, " = cast(", qualifiers, " typeof(", initLambda, "())*)", sym(index), ".v.addr;\n}\n");
 
-                put(c.prefix, applyToType(init, "\n  " ~ sym(index) ~ ".v.type = q{__x_Type_x__}.idup;\n"));
-
+                if (qualifiers.strip().length > 0)
+                    put(c.prefix, applyToType(init, "\n  " ~ sym(index) ~ ".v.type = q{cast(" ~ qualifiers ~ ") __x_Type_x__}.idup;\n"));
+                else
+                    put(c.prefix, applyToType(init, "\n  " ~ sym(index) ~ ".v.type = q{__x_Type_x__}.idup;\n"));
             }
             else if (init.length > 0) // has type and initializer
             {
