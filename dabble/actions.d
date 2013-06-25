@@ -573,6 +573,18 @@ void stressParser()
     assert(repl.share.symbols[0].type == Symbol.Type.UserType &&
            repl.share.symbols[0].u.decl == "@safe void foo() {}",
            "Parse user type failure: " ~ repl.share.symbols[0].u.decl);
+
+    repl.reset();
+    Parser.go("@safe   @(`myvar`, 1) void foo()   @trusted {}", repl);
+    assert(repl.share.symbols[0].type == Symbol.Type.UserType &&
+           repl.share.symbols[0].u.decl == "@safe @(`myvar`.idup, 1) void foo() @trusted {}",
+           "Parse user type failure: " ~ repl.share.symbols[0].u.decl);
+
+    repl.reset();
+    Parser.go("template foo(T, S, R) {}", repl);
+    assert(repl.share.symbols[0].type == Symbol.Type.UserType &&
+           repl.share.symbols[0].u.decl == "template foo(T, S, R) {}",
+           "Parse user type failure: " ~ repl.share.symbols[0].u.decl);
 }
 
 

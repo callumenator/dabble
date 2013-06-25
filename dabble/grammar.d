@@ -90,7 +90,7 @@ ReplParse:
                             / ~ParameterList )
                             wx AnnotationList? wx ~Constraint? wx AllBetween(LBrace,RBrace))
 
-    AnnotationList  <- Seq(Annotation / UDA)
+    AnnotationList  <- wx ((Annotation / UDA) ;ws AnnotationList?)
 
     ParameterList   <- BwParens(.)
 

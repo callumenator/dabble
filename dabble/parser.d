@@ -87,7 +87,7 @@ ReplParse:
                             / ~ParameterList )
                             wx AnnotationList? wx ~Constraint? wx AllBetween(LBrace,RBrace))
 
-    AnnotationList  <- Seq(Annotation / UDA)
+    AnnotationList  <- wx ((Annotation / UDA) ;ws AnnotationList?)
 
     ParameterList   <- BwParens(.)
 
@@ -938,16 +938,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree AnnotationList(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(Seq!(pegged.peg.or!(Annotation, UDA)), "ReplParse.AnnotationList")(p);
+            return         pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.and!(pegged.peg.or!(Annotation, UDA), pegged.peg.drop!(ws), pegged.peg.option!(AnnotationList))), "ReplParse.AnnotationList")(p);
         else
-            return hooked!(pegged.peg.named!(Seq!(pegged.peg.or!(Annotation, UDA)), "ReplParse.AnnotationList"), "AnnotationList")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.and!(pegged.peg.or!(Annotation, UDA), pegged.peg.drop!(ws), pegged.peg.option!(AnnotationList))), "ReplParse.AnnotationList"), "AnnotationList")(p);
     }
     static TParseTree AnnotationList(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(Seq!(pegged.peg.or!(Annotation, UDA)), "ReplParse.AnnotationList")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.and!(pegged.peg.or!(Annotation, UDA), pegged.peg.drop!(ws), pegged.peg.option!(AnnotationList))), "ReplParse.AnnotationList")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(Seq!(pegged.peg.or!(Annotation, UDA)), "ReplParse.AnnotationList"), "AnnotationList")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.and!(pegged.peg.or!(Annotation, UDA), pegged.peg.drop!(ws), pegged.peg.option!(AnnotationList))), "ReplParse.AnnotationList"), "AnnotationList")(TParseTree("", false,[], s));
     }
     static string AnnotationList(GetName g)
     {
