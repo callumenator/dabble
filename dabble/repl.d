@@ -400,9 +400,14 @@ bool handleMetaCommand(ref ReplContext repl,
         {
             if (args.length == 0 || canFind(args, "all")) // print all vars
             {
-                auto vars = repl.share.symbols.filter!(s => s.type == Symbol.Type.Var && s.v.ty.type !is null)();
-                foreach(val; vars)
-                    message.append(val.v.name, " (", val.v.displayType, ") = ", val.v.ty.valueOf([], val.v.addr, repl.share.map));
+                auto vars = repl.share.symbols.filter!(s => s.type == Symbol.Type.Var)();
+                foreach(s; vars)
+                {
+                    if (s.v.ty !is null)
+                        message.append(s.v.name, " (", s.v.displayType, ") = ", s.v.ty.valueOf([], s.v.addr, repl.share.map));
+                    else if (s.v.func == true)
+                        message.append(s.v.name, " (", s.v.displayType, ") = ", s.v.init);
+                }
             }
             else if (args.length == 1 && args[0] == "__keepAlive")
             {
@@ -415,9 +420,14 @@ bool handleMetaCommand(ref ReplContext repl,
                 foreach(a; args)
                 {
                     auto p = parseExpr(a);
-                    auto vars = repl.share.symbols.filter!(s => s.isVar() && s.v.name == p[0] && s.v.ty !is null)();
+                    auto vars = repl.share.symbols.filter!(s => s.isVar() && s.v.name == p[0])();
                     foreach(s; vars)
-                        message.append(s.v.ty.valueOf(p[1], s.v.addr, repl.share.map));
+                    {
+                        if (s.v.ty !is null)
+                            message.append(s.v.ty.valueOf(p[1], s.v.addr, repl.share.map));
+                        else if (s.v.func == true)
+                            message.append(s.v.name, " (", s.v.displayType, ") = ", s.v.init);
+                    }
                 }
             }
             break;
