@@ -110,8 +110,8 @@ string genHeader()
 `
 // ################################################################################
 
-    import std.stdio, std.conv, std.algorithm, std.range, std.typecons, std.typetuple, std.traits;
-    import core.sys.windows.dll, core.runtime, core.memory;
+    import std.traits, std.stdio, std.range, std.algorithm;
+    import core.sys.windows.dll, core.thread, core.runtime, core.memory;
     import std.c.string, std.c.stdlib, std.c.windows.windows;
 
     import _REPL = defs;

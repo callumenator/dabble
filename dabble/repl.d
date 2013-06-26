@@ -273,7 +273,12 @@ struct RawCode
     */
     string toString()
     {
-        return _header.join("\n") ~ "\nvoid main() {\n" ~ _body.join("\n") ~ "\n}";
+        auto autoImports =
+            "import std.traits, std.stdio, std.range, std.algorithm;\n"
+            "import core.sys.windows.dll, core.thread, core.runtime, core.memory;\n"
+            "import std.c.string, std.c.stdlib, std.c.windows.windows;\n";
+
+        return autoImports ~ _header.join("\n") ~ "\nvoid main() {\n" ~ _body.join("\n") ~ "\n}";
     }
 }
 
@@ -678,7 +683,7 @@ bool build(Tuple!(string,string) code,
         code[0] ~
         "\n\nexport extern(C) int _main(ref _REPL.ReplShare _repl_)\n"
         "{\n"
-        "    import std.exception;\n"
+        "    import std.exception, std.stdio;\n"
         "    _repl_.keepAlive = false;\n"
         "    gc_setProxy(_repl_.gc);\n"
         "    auto saveOut = stdout;\n"
