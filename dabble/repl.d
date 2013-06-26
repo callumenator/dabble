@@ -502,8 +502,7 @@ bool handleMetaCommand(ref ReplContext repl,
         default: return false;
     }
 
-    // If we got to here, we successfully parsed a meta command, so
-    // clear the code buffer
+    // If we got to here, we successfully parsed a meta command, so clear the code buffer
     codeBuffer.clear();
     return true;
 }
