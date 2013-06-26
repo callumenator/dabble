@@ -144,7 +144,7 @@ string eval(string sessionId,
     // Try to handle meta command, else assume input is code
     if (newInput.length > 0 && !handleMetaCommand(sessionMap[sessionId], newInput, codeBuffer, message))
     {
-        codeBuffer ~= newInput ~ "\n";
+        codeBuffer ~= inBuffer ~ "\n";
         Parser.braceCount = 0;
         auto balanced = ReplParse.BalancedBraces(codeBuffer.to!string());
 
