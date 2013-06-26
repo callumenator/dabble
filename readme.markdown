@@ -29,7 +29,7 @@ git clone https://github.com/callumenator/dabble
 
 (The idea for this comes from http://neugierig.org/software/c-repl/).
 
-User input is minimally parsed to search for declarations (new variables, classes, structs, enums, aliases). 
+User input is minimally parsed (using Pegged: https://github.com/PhilippeSigaud/Pegged) to search for declarations (new variables, classes, structs, enums, aliases). 
 
 Variable declarations are replaced by code which places the variables on the heap, and references to existing variables are redirected to point at these heap copies. User type declarations and functions are extracted verbatim to be placed at module scope. All other statements are placed inside a dummy main function. 
 
