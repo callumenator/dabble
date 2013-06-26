@@ -37,6 +37,7 @@ The parsed/modified code is then written to a temporary .d file, and compiled in
 
 If the user's code resulted in a value, that value is printed to the screen. Else, 'OK' is printed to indicate success. The loop then continues.
 
+Read-eval-print latency is usually acceptable, since DMD compiles simple code blazingly fast. 
 ### Example session
 A short example session is shown below:
 ```
