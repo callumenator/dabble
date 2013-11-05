@@ -11,17 +11,15 @@ git clone https://github.com/callumenator/dabble
 ```
 3. Build a configuration. There are two configurations available:
     * console: builds dabble as a stand-alone Windows command line application.
-    * server: builds dabble as a web-server using vibe.d, and a supplied client web page is used to interact with the REPL.
+    * server (not available): builds dabble as a web-server using vibe.d, and a supplied client web page is used to interact with the REPL.
 
    ```
    cd dabble
    dub build --config=console
-   or
-   dub build --config=server
    ```
 4. Run the application. 
     * console mode: ```dabble-console```
-    * server mode: ```dabble-server```, then launch a browser and point it to http://localhost:8080/repl.html.
+    * server mode (not available): ```dabble-server```, then launch a browser and point it to http://localhost:8080/repl.html.
     (To allow searching the std lib, provide a path to Phobos src as argument to dabble-server, ie: ```dabble-server ../dmd2/src/phobos/std```
 
 
