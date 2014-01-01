@@ -811,8 +811,7 @@ bool buildUserModules(ReplContext repl,
 
     if (init) // Compile defs.d
     {
-        rebuildLib = true;        
-        writeln(getcwd());
+        rebuildLib = true;                
         auto text = "module defs;\n"
                   ~ readText(`..\` ~ dabble.defs.moduleFileName()).findSplitAfter("module dabble.defs;")[1];
 
