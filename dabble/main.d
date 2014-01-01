@@ -28,6 +28,7 @@ void parseArgs(string id, char[][] args)
     {
         switch(arg)
         {
+            case "--noConsole":     dabble.repl.consoleSession = false;      break;
             case "--showTimes":     id.addDebugLevel(Debug.times);      break;
             case "--showStages":    id.addDebugLevel(Debug.stages);     break;
             case "--parseOnly":     id.addDebugLevel(Debug.parseOnly);  break;

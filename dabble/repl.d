@@ -25,11 +25,14 @@ import
 
 public import dabble.defs;
 
+bool consoleSession = true;
+
 private
 {
     SharedLib[] keepAlive;
     __gshared ReplContext[string] sessionMap;
 }
+
 
 /**
 * Available levels of debug info.
@@ -91,20 +94,29 @@ void loop(string sessionId)
     if (!isValidSessionId(sessionId))
         return;
 
-    clearScreen();
-    writeln(title());
-    stdout.flush();
+    if (consoleSession) 
+        clearScreen();
+    
+    writeln(title()); 
+        
     char[] inBuffer, codeBuffer;
-
-    write(prompt());
+       
+    if (consoleSession) 
+        write(prompt()); 
+   
+    stdout.flush();
     stdin.readln(inBuffer);
     bool multiLine = false;
 
     while (strip(inBuffer) != "exit")
     {
         auto result = sessionId.eval(inBuffer, codeBuffer).chomp().chomp();
-        writeln(result);
-        stdout.flush();            
+        writeln(result);       
+        
+        if (consoleSession) 
+            write(prompt()); 
+        
+        stdout.flush();  
         stdin.readln(inBuffer);
     }
     return;
