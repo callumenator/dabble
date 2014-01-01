@@ -93,6 +93,7 @@ void loop(string sessionId)
 
     clearScreen();
     writeln(title());
+    stdout.flush();
     char[] inBuffer, codeBuffer;
 
     write(prompt());
@@ -103,7 +104,7 @@ void loop(string sessionId)
     {
         auto result = sessionId.eval(inBuffer, codeBuffer).chomp().chomp();
         writeln(result);
-        write(prompt());
+        stdout.flush();            
         stdin.readln(inBuffer);
     }
     return;

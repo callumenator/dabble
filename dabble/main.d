@@ -15,8 +15,8 @@ import dabble.repl;
 void main(char[][] args)
 {
     auto session = initiateSession();
-    parseArgs(session, args[1..$]);
-    session.loop();
+    parseArgs(session, args[1..$]);    
+    session.loop();    
     return;
 }
 
