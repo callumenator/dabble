@@ -805,15 +805,16 @@ bool buildUserModules(ReplContext repl,
 {
     import std.datetime;
     import std.path : dirSeparator, stripExtension;
-    import std.file : getTimes, readText;
+    import std.file : getTimes, readText, getcwd;
 
     bool rebuildLib = false;
 
     if (init) // Compile defs.d
     {
-        rebuildLib = true;
+        rebuildLib = true;        
+        writeln(getcwd());
         auto text = "module defs;\n"
-                  ~ readText(dabble.defs.moduleFileName()).findSplitAfter("module dabble.defs;")[1];
+                  ~ readText(`..\` ~ dabble.defs.moduleFileName()).findSplitAfter("module dabble.defs;")[1];
 
         auto f = File(repl.paths.tempPath ~ "defs.d", "w");
         f.write(text);
@@ -1106,7 +1107,7 @@ private string getTempDir()
         tmpRoot ~= dirSeparator ~ ".dabble";
 
     DirEntry tmpRootEntry;
-    const tmpRootExists = collectException(tmpRootEntry = dirEntry(tmpRoot)) is null;
+    const tmpRootExists = collectException(tmpRootEntry = DirEntry(tmpRoot)) is null;
 
     if (!tmpRootExists)
         mkdirRecurse(tmpRoot);

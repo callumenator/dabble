@@ -5,29 +5,30 @@
 	"homepage": "",
 	"license": "Boost v1.0",
 
-  "dependencies": {  
-    "pegged":   "~master",    
-	},
+    "dependencies": {  
+        "pegged":"~master"    
+    },
 
-  "targetPath":"./",
+    "targetPath":"./build",
     
-  "configurations": [
-		{
-			"name": "console",
-			"targetType": "executable",
-			"platforms": ["windows"],     
+    "configurations": [		
+        {
+            "name": "console",
+            "targetType": "executable",
+            "platforms": ["windows"],     
             "versions": ["VibeCustomMain"],      
             "targetName":"dabble-console",
-			
-          "sourceFiles": [        
-            "dabble/main.d",
-            "dabble/actions.d",
-            "dabble/defs.d",
-            "dabble/loader.d",
-            "dabble/parser.d",
-            "dabble/repl.d",
-            "dabble/sharedlib.d",
-            "dabble/util.d"    
-          ]
-		}]
+                        
+            "sourceFiles": [        
+                "dabble/main.d",
+                "dabble/actions.d",
+                "dabble/defs.d",
+                "dabble/loader.d",
+                "dabble/parser.d",
+                "dabble/repl.d",
+                "dabble/sharedlib.d",
+                "dabble/util.d"    
+            ]
+        }
+    ]
 }

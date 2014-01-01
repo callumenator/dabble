@@ -756,8 +756,8 @@ struct Type
             if (trace) writeln("getMe: isAggregate, ", this.toString());
 
             // these byKey, byVal version are necessary, probably a bug
-            auto keys = _object.byKey.array();
-            auto vals = _object.byValue.array();
+            auto keys = _object.byKey().array();
+            auto vals = _object.byValue().array();
 
             // index the AA by increasing data offset
             auto index = new size_t[vals.length];
@@ -823,8 +823,8 @@ struct Type
             if (expand)
             {
                 s ~= "(";
-                auto keys = _object.byKey.array();
-                auto vals = _object.byValue.array();
+                auto keys = _object.byKey().array();
+                auto vals = _object.byValue().array();
                 auto index = new size_t[vals.length];
                 makeIndex!("a.offset < b.offset")(vals, index);
 
