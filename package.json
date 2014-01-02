@@ -4,20 +4,18 @@
 	"authors": ["cal"],
 	"homepage": "",
 	"license": "Boost v1.0",
-
-    "dependencies": {  
-        "pegged":"~master"    
-    },
-
-    "targetPath":"./build",
     
-    "configurations": [		
-        {
-            "name": "console",
+    "subPackages": [
+ 		{
+            "name": "repl",
             "targetType": "executable",
-            "platforms": ["windows"],     
-            "versions": ["VibeCustomMain"],      
-            "targetName":"dabble-console",
+            "targetPath":"./build",
+            "platforms": ["windows"],                 
+            "targetName":"repl",
+            
+            "dependencies": {  
+                "pegged":"~master"    
+            },
                         
             "sourceFiles": [        
                 "dabble/main.d",
@@ -29,6 +27,17 @@
                 "dabble/sharedlib.d",
                 "dabble/util.d"    
             ]
-        }
-    ]
+        },
+ 		{
+ 			"name": "browser",
+ 			"targetType": "executable",
+            "targetPath":"./build",
+            "platforms": ["windows"],                 
+            "targetName":"browser",
+            
+ 			"sourceFiles": [
+                "dabble/sourcebrowser.d"
+            ]
+ 		}
+ 	]        
 }
