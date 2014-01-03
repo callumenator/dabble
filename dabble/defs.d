@@ -19,18 +19,15 @@ import
     std.traits,
     std.range,
     std.uuid;
-
-
+    
 /**
 * Info shared between DLL and REPL executable.
 */
 struct ReplShare
 {
     Symbol[] symbols;
-    Vtbl[] vtbls;
-    void*[] imageBounds; /// memory bounds of the dll image (dmd 2.062 bug prevents static array)
-    Type*[string] map; /// map used by typeBuilder and friends
-    bool keepAlive; /// keep this dll in memory, something has a pointer into it
+    Vtbl[] vtbls;    
+    Type*[string] map; /// map used by typeBuilder and friends    
     void* gc; /// host gc instance
     string logFile; /// result of the eval
 

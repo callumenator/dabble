@@ -14,12 +14,22 @@ module dabble.sharedlib;
 * Encapsulate shared lib functions.
 */
 version(Windows)
-{
+{    
+
+    import core.runtime;
     import std.file : read;
     import std.string : toStringz;
     import std.typecons;
     import dabble.loader;
-
+       
+    import core.sys.windows.windows;
+    
+    extern(Windows) 
+    {
+        void* GetProcAddress(HMODULE hModule,  LPCSTR lpProcName);
+    }
+    
+        
     struct SharedLib
     {
         string filename;
@@ -37,9 +47,11 @@ version(Windows)
         }
 
         bool load()
-        {
-            handle = MemoryLoadLibrary(read(filename).ptr);
-
+        {   
+        import std.stdio;
+            writeln(filename);
+            handle = Runtime.loadLibrary(filename);                    
+            
             if (handle == null)
                 return false;
 
@@ -48,24 +60,18 @@ version(Windows)
 
         void free(bool callDetach = true)
         {
-            if (handle is null)
-                return;
-
-            MemoryFreeLibrary(handle, callDetach);
+            Runtime.unloadLibrary(handle);
         }
 
         void*[2] bounds()
         {
-            import std.stdio;
-            assert(handle !is null);
-            void*[2] bounds;
-            getImageBounds(handle, bounds[0], bounds[1]);
-            return bounds;
+            void*[2] arr;
+            return arr;                        
         }
 
         T getFunction(T)(string name) in {assert(handle !is null, "Null handle");} body
-        {
-            return cast(T) MemoryGetProcAddress(handle, cast(char*)(name.toStringz()));
+        {            
+            return cast(T) GetProcAddress(handle, cast(char*)(name.toStringz()));         
         }
     }
 }

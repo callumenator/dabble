@@ -16,7 +16,7 @@ import
     dabble.actions,
     dabble.repl;
 
-extern(C) void* gc_getProxy();
+import dabble.mgc.proxy;
 
 /**
 * The DLL replaces the runtime _d_newclass in order to intercept
@@ -112,21 +112,35 @@ string genHeader()
 
     import std.traits, std.stdio, std.range, std.algorithm;
     import core.sys.windows.dll, core.thread, core.runtime, core.memory;
-    import std.c.string, std.c.stdlib, std.c.windows.windows;
+    import std.c.string, std.c.stdlib, std.c.windows.windows;      
 
+    import dabble.mgc.proxy;
+    
     import _REPL = defs;
 
-    extern (C) void gc_setProxy(void*);
+    //extern (C) void gc_setProxy(void*);
+    
+    HINSTANCE   g_hInst;
 
+    /*
+    extern (C)
+    {
+        void  gc_setProxy(void* p);
+        void  gc_clrProxy();
+    }
+    */
+    
     extern(Windows) BOOL DllMain(HINSTANCE hInstance,DWORD ulReason,LPVOID lpvReserved)
     {
         final switch (ulReason)
         {
-            case DLL_PROCESS_ATTACH:
-                _REPL.fixUp();
+            case DLL_PROCESS_ATTACH:                
                 Runtime.initialize();
                 break;
             case DLL_PROCESS_DETACH:
+                _fcloseallp = null;
+                //gc_clrProxy();
+                Runtime.terminate();
                 break;
             case DLL_THREAD_ATTACH:
                 break;

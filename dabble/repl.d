@@ -22,6 +22,8 @@ import
     dabble.parser,
     dabble.sharedlib,
     dabble.util;
+    
+import dabble.mgc.proxy;
 
 public import dabble.defs;
 
@@ -265,7 +267,7 @@ struct RawCode
     }
 
     /**
-    * New code compiled, to clear markers.
+    * New code compiled, so clear markers.
     */
     void pass()
     {
@@ -299,7 +301,7 @@ struct RawCode
 /**
 * Holds REPL state.
 */
-extern(C) void* gc_getProxy();
+
 struct ReplContext
 {
 
@@ -311,12 +313,23 @@ struct ReplContext
     Tuple!(string,"path",
            string,"name",
            long,"modified")[] userModules;
-
+    
     RawCode rawCode;
     ReplShare share;
     string vtblFixup;
     long[string] symbolSet;
     uint debugLevel = Debug.none;
+    
+    @property string filename()
+    {
+        return paths.filename;
+    }
+    
+    @property string fullName()
+    {
+        import std.path : dirSeparator;
+        return paths.tempPath ~ dirSeparator ~ paths.filename;
+    }
 
     static ReplContext opCall(string filename = "repl", uint debugLevel = Debug.none)
     {
@@ -691,13 +704,14 @@ bool build(Tuple!(string,string) code,
     import std.process : system, escapeShellFileName;
     import std.parallelism;
     import core.thread;
+    
+    
 
     auto text =
         code[0] ~
         "\n\nexport extern(C) int _main(ref _REPL.ReplShare _repl_)\n"
         "{\n"
-        "    import std.exception, std.stdio;\n"
-        "    _repl_.keepAlive = false;\n"
+        "    import std.exception, std.stdio;\n"        
         "    gc_setProxy(_repl_.gc);\n"
         "    auto saveOut = stdout;\n"
         "    scope(exit) { stdout = saveOut; } \n"
@@ -712,13 +726,13 @@ bool build(Tuple!(string,string) code,
         code[1] ~
         "}\n";
 
-    auto file = File(repl.paths.fullName ~ ".d", "w");
+    auto file = File(repl.fullName ~ ".d", "w");
     file.write(text ~ genHeader());
     file.close();
 
-    if (!exists(repl.paths.fullName ~ ".def"))
+    if (!exists(repl.fullName ~ ".def"))
     {
-        file = File(repl.paths.fullName ~ ".def", "w");
+        file = File(repl.fullName ~ ".def", "w");
 
         enum def = "LIBRARY repl\n"
                    "DESCRIPTION 'repl'\n"
@@ -731,10 +745,10 @@ bool build(Tuple!(string,string) code,
     }
 
     auto dirChange = "cd " ~ escapeShellFileName(repl.paths.tempPath);
-    auto linkFlags = " -L/NORELOCATIONCHECK -L/NOMAP ";
+    auto linkFlags = " -L/NORELOCATIONCHECK -L/NOMAP ";        
 
-    string cmd = dirChange ~ " & dmd " ~ linkFlags ~ repl.paths.filename
-               ~ ".d " ~ repl.paths.filename ~ ".def extra.lib ";
+    string cmd = dirChange ~ " & dmd -Ic:/cal/d/dsource/dabble -shared " ~ linkFlags ~ repl.filename
+               ~ ".d " ~ repl.filename ~ ".def extra.lib";
 
     if (!buildUserModules(repl, message))
         return false;
@@ -746,7 +760,7 @@ bool build(Tuple!(string,string) code,
     }
 
     string tempMessage;
-    bool buildAttempt = attempt(repl, cmd, tempMessage, repl.paths.fullName ~ ".d");
+    bool buildAttempt = attempt(repl, cmd, tempMessage, repl.fullName ~ ".d");
 
     if (!buildAttempt)
     {
@@ -824,6 +838,10 @@ bool buildUserModules(ReplContext repl,
 
     if (init) // Compile defs.d
     {
+        import std.process;
+        auto proxyIncs = ["os.d","stats.d","bits.d","proxy.d","gc.d"];
+        system("cd c:/cal/d/dsource/dabble/dabble/mgc & dmd -release -noboundscheck -O -lib -ofproxy.lib " ~ proxyIncs.join(" ") ~ " & mv proxy.lib " ~ repl.paths.tempPath);
+            
         rebuildLib = true;                
         auto text = "module defs;\n"
                   ~ readText(`..\` ~ dabble.defs.moduleFileName()).findSplitAfter("module dabble.defs;")[1];
@@ -831,7 +849,7 @@ bool buildUserModules(ReplContext repl,
         auto f = File(repl.paths.tempPath ~ "defs.d", "w");
         f.write(text);
         f.close();
-        if (!attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -c defs.d", message, repl.paths.tempPath ~ "defs.d"))
+        if (!attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -c -release -noboundscheck -O defs.d", message, repl.paths.tempPath ~ "defs.d"))
             return false;
     }
 
@@ -860,9 +878,9 @@ bool buildUserModules(ReplContext repl,
     }
 
     if (rebuildLib)
-    {
+    {        
         auto objs = repl.userModules.map!(a => stripExtension(a.name)~".obj")().join(" ");
-        if (!attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -lib -ofextra.lib defs.obj " ~ objs, message, ""))
+        if (!attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -lib -ofextra.lib defs.obj proxy.lib " ~ objs, message, ""))
             return false;
     }
 
@@ -878,8 +896,8 @@ void cleanup(ReplContext repl)
     import std.file : exists, remove;
 
     auto clean = [
-        repl.paths.fullName ~ ".obj",
-        repl.paths.fullName ~ ".map",
+        repl.fullName ~ ".obj",
+        repl.fullName ~ ".map",
         repl.paths.tempPath ~ "errout.txt"
     ];
 
@@ -895,22 +913,15 @@ void cleanup(ReplContext repl)
 CallResult call(ref ReplContext repl, ref string message)
 {
     import core.memory : GC;
+    import std.exception;
     import std.file : readText, exists, remove;
 
-    static SharedLib lastLib; // XP hack
     alias extern(C) int function(ref ReplShare) funcType;
 
-    auto lib = SharedLib(repl.paths.fullName ~ ".dll");
-
-    if (lastLib.handle !is null)
-        lastLib.free(false);
-
-    lastLib = lib;
-
+    auto lib = SharedLib(repl.fullName ~ ".dll");
+    
     if (!lib.loaded)
         return CallResult.loadError;
-
-    repl.share.imageBounds = (lib.bounds())[];
 
     auto funcPtr = lib.getFunction!(funcType)("_main");
 
@@ -931,85 +942,18 @@ CallResult call(ref ReplContext repl, ref string message)
         }
         catch(Exception e) {}
     }
+    
+    lib.free();
+    
+    //scope(exit) GC.removeRange(getSectionBase(lib.handle, ".CRT"));
 
-    if (repl.share.keepAlive)
-    {
-        keepAlive ~= lib;
-        lastLib.handle = null;
-    }
-
-    scope(exit) GC.removeRange(getSectionBase(lib.handle, ".CRT"));
-
-    if (res == -1)
-    {
-        GC.collect();
-        return CallResult.runtimeError;
-    }
+    //if (res == -1)
+    //{
+    //auto e = collectException!Throwable(GC.collect());
+    //    return CallResult.runtimeError;
+    //}
 
     return CallResult.success;
-}
-
-
-
-version(none) {
-/**
-* Do some processing on errors returned by DMD.
-*/
-import std.range;
-string parseError(const ReplContext repl,
-                  string error,
-                  string codeFilename,
-                  bool dederef = true)
-{
-    import std.string : splitLines;
-    import std.file : readText, exists;
-    import std.regex;
-    import std.path : baseName;
-
-    if (!exists(codeFilename))
-        return error;
-
-    if (error.length == 0)
-        return "";
-
-    // Remove * from user defined vars.
-    string deDereference(string s, bool parens = true) @safe
-    {
-        if (!dederef)
-            return s;
-
-        if (parens)
-            return replace(s, regex(`(\(\*)([_a-zA-Z][_0-9a-zA-Z]*)(\))`, "g"), "$2");
-        else
-            return replace(s, regex(`(\*)([_a-zA-Z][_0-9a-zA-Z]*)`, "g"), "$2");
-    }
-
-    // Remove any references to the filename
-    error = replace(error, regex(repl.paths.filename ~ ".", "g"), "");
-
-    // Read the code, so we can refer to lines
-    auto code = splitLines(readText(codeFilename));
-
-    string filePrepend;
-    if (codeFilename != repl.paths.fullName ~ ".d")
-        filePrepend = "(" ~ baseName(codeFilename) ~ ")";
-
-    string res;
-    auto lines = splitLines(error);
-    foreach(line; lines)
-    {
-        if (strip(line).length == 0)
-            continue;
-
-        auto stripped = stripDmdErrorLine(line);
-
-        if (stripped[1] > 0 && stripped[1] < code.length)
-            res ~= filePrepend ~ " < " ~ strip(deDereference(code[stripped[1]])) ~ " >\n";
-
-        res ~= "   " ~ strip(deDereference(stripped[0], false)) ~ "\n";
-    }
-    return res;
-}
 }
 
 
@@ -1251,7 +1195,7 @@ ReplContext stress()
     "foreach(val; arr3[]){ writeln(val); }",
     "int foo(int i) { return 5*i + 1; }",
     "foo(100);",
-    "immutable int int1 = 45;",
+    "immutable int int1 = 45;", 
     "const(int) int2 = foo(3);",
     "Array!int arr4;",
     "arr4 ~= [1,2,3,4];",
@@ -1272,7 +1216,7 @@ ReplContext stress()
     "arr5 = [1,2,3,4,5];",
     "arr5 = arr5.map!( a => a + 4).array();",
     "writeln(arr5);"
-    ]);
+    ], Debug.times);
 }
 
 
