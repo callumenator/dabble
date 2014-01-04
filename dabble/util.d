@@ -16,7 +16,7 @@ import
     dabble.actions,
     dabble.repl;
 
-import dabble.mgc.proxy;
+extern(C) void* gc_getProxy();
 
 /**
 * The DLL replaces the runtime _d_newclass in order to intercept
@@ -113,22 +113,13 @@ string genHeader()
     import std.traits, std.stdio, std.range, std.algorithm;
     import core.sys.windows.dll, core.thread, core.runtime, core.memory;
     import std.c.string, std.c.stdlib, std.c.windows.windows;      
-
-    import dabble.mgc.proxy;
     
-    import _REPL = defs;
-
-    //extern (C) void gc_setProxy(void*);
+    extern(C) void gc_setProxy(void*); 
+    extern(C) void gc_clrProxy(); 
     
-    HINSTANCE   g_hInst;
-
-    /*
-    extern (C)
-    {
-        void  gc_setProxy(void* p);
-        void  gc_clrProxy();
-    }
-    */
+    import _REPL = defs;    
+    
+    HINSTANCE g_hInst;
     
     extern(Windows) BOOL DllMain(HINSTANCE hInstance,DWORD ulReason,LPVOID lpvReserved)
     {
@@ -139,7 +130,7 @@ string genHeader()
                 break;
             case DLL_PROCESS_DETACH:
                 _fcloseallp = null;
-                //gc_clrProxy();
+                gc_clrProxy();
                 Runtime.terminate();
                 break;
             case DLL_THREAD_ATTACH:
@@ -149,15 +140,18 @@ string genHeader()
         }
         return true;
     }
+    
+    extern(C) { extern __gshared { int _xi_a; } }    
+    export extern(C) void* _gcRange() { return &_xi_a; }
 
     extern (C) Object _d_newclass(const ClassInfo ci)
     {
         import core.memory, std.string, core.sys.windows.stacktrace;
         void* p;
 
-        bool leak = false;
+        bool leak = true; /** TODO: if leak is false (meaning GC.malloc instead of malloc) = invalidMemOpErr */
         auto curr = cast(ClassInfo)ci;
-
+        
         while(curr)
         {
             if (curr == typeid(Throwable) || curr == typeid(StackTrace))
@@ -167,7 +161,6 @@ string genHeader()
             }
             curr = curr.base;
         }
-
 
         if (leak)
         {

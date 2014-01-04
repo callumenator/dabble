@@ -14,8 +14,11 @@ import dabble.repl;
 
 void main(char[][] args)
 {
+import std.stdio;
+    writeln("REPL PATH: ", replPath());
     auto session = initiateSession();
     parseArgs(session, args[1..$]);        
+    stress();
     session.loop();    
     return;
 }
@@ -28,12 +31,11 @@ void parseArgs(string id, char[][] args)
     {
         switch(arg)
         {
-            case "--noConsole":     dabble.repl.consoleSession = false;      break;
-            case "--showTimes":     id.addDebugLevel(Debug.times);      break;
-            case "--showStages":    id.addDebugLevel(Debug.stages);     break;
-            case "--parseOnly":     id.addDebugLevel(Debug.parseOnly);  break;
-            default:
-                writeln("Unrecognized argument: ", arg); break;
+            case "--noConsole":  dabble.repl.consoleSession = false; break;
+            case "--showTimes":  id.addDebugLevel(Debug.times);      break;
+            case "--showStages": id.addDebugLevel(Debug.stages);     break;
+            case "--parseOnly":  id.addDebugLevel(Debug.parseOnly);  break;
+            default: writeln("Unrecognized argument: ", arg);        break;
         }
     }
 }

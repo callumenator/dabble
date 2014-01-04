@@ -23,7 +23,6 @@ import
     dabble.sharedlib,
     dabble.util;
     
-import dabble.mgc.proxy;
 
 public import dabble.defs;
 
@@ -31,7 +30,7 @@ bool consoleSession = true;
 
 private
 {
-    SharedLib[] keepAlive;
+    version(none) { SharedLib[] keepAlive; }
     __gshared ReplContext[string] sessionMap;
 }
 
@@ -304,8 +303,6 @@ struct RawCode
 
 struct ReplContext
 {
-
-
     Tuple!(string,"filename",
            string,"tempPath",
            string,"fullName") paths;
@@ -442,9 +439,12 @@ bool handleMetaCommand(ref ReplContext repl,
             }
             else if (args.length == 1 && args[0] == "__keepAlive")
             {
-                message.append("SharedLibs still alive:");
-                foreach(s; keepAlive)
-                    message.append("  ", s);
+                version(none) 
+                {
+                    message.append("SharedLibs still alive:");
+                    foreach(s; keepAlive)
+                        message.append("  ", s);
+                }
             }
             else // print selected symbols
             {
@@ -487,7 +487,7 @@ bool handleMetaCommand(ref ReplContext repl,
             if (canFind(args, "session"))
             {
                 repl.reset();
-                keepAlive.clear();
+                version(none) { keepAlive.clear(); }
                 message.append("Session reset");
             }
             break;
@@ -546,6 +546,9 @@ void clearScreen()
 {
     import std.process : system;
 
+    if (!consoleSession)
+        return;
+    
     version(Windows)
     {
         system("cls");
@@ -704,9 +707,7 @@ bool build(Tuple!(string,string) code,
     import std.process : system, escapeShellFileName;
     import std.parallelism;
     import core.thread;
-    
-    
-
+       
     auto text =
         code[0] ~
         "\n\nexport extern(C) int _main(ref _REPL.ReplShare _repl_)\n"
@@ -747,7 +748,7 @@ bool build(Tuple!(string,string) code,
     auto dirChange = "cd " ~ escapeShellFileName(repl.paths.tempPath);
     auto linkFlags = " -L/NORELOCATIONCHECK -L/NOMAP ";        
 
-    string cmd = dirChange ~ " & dmd -Ic:/cal/d/dsource/dabble -shared " ~ linkFlags ~ repl.filename
+    string cmd = dirChange ~ " & dmd -shared " ~ linkFlags ~ repl.filename
                ~ ".d " ~ repl.filename ~ ".def extra.lib";
 
     if (!buildUserModules(repl, message))
@@ -832,19 +833,15 @@ bool buildUserModules(ReplContext repl,
 {
     import std.datetime;
     import std.path : dirSeparator, stripExtension;
-    import std.file : getTimes, readText, getcwd;
+    import std.file : getTimes, readText, getcwd, copy;
 
     bool rebuildLib = false;
 
     if (init) // Compile defs.d
-    {
-        import std.process;
-        auto proxyIncs = ["os.d","stats.d","bits.d","proxy.d","gc.d"];
-        system("cd c:/cal/d/dsource/dabble/dabble/mgc & dmd -release -noboundscheck -O -lib -ofproxy.lib " ~ proxyIncs.join(" ") ~ " & mv proxy.lib " ~ repl.paths.tempPath);
-            
+    {        
         rebuildLib = true;                
         auto text = "module defs;\n"
-                  ~ readText(`..\` ~ dabble.defs.moduleFileName()).findSplitAfter("module dabble.defs;")[1];
+                  ~ readText(replPath() ~ "/dabble/defs.d").findSplitAfter("module dabble.defs;")[1];
 
         auto f = File(repl.paths.tempPath ~ "defs.d", "w");
         f.write(text);
@@ -880,7 +877,7 @@ bool buildUserModules(ReplContext repl,
     if (rebuildLib)
     {        
         auto objs = repl.userModules.map!(a => stripExtension(a.name)~".obj")().join(" ");
-        if (!attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -lib -ofextra.lib defs.obj proxy.lib " ~ objs, message, ""))
+        if (!attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -lib -ofextra.lib defs.obj " ~ objs, message, ""))
             return false;
     }
 
@@ -916,14 +913,18 @@ CallResult call(ref ReplContext repl, ref string message)
     import std.exception;
     import std.file : readText, exists, remove;
 
-    alias extern(C) int function(ref ReplShare) funcType;
+    alias extern(C) int function(ref ReplShare) FuncType;
+    alias extern(C) void* function() GCFunc;
 
     auto lib = SharedLib(repl.fullName ~ ".dll");
     
     if (!lib.loaded)
         return CallResult.loadError;
 
-    auto funcPtr = lib.getFunction!(funcType)("_main");
+    auto rangeBottom = (lib.getFunction!(GCFunc)("_gcRange"))();
+    GC.removeRange(rangeBottom);
+    
+    auto funcPtr = lib.getFunction!(FuncType)("_main");
 
     if (funcPtr is null)
     {
@@ -931,8 +932,9 @@ CallResult call(ref ReplContext repl, ref string message)
         return CallResult.loadError;
     }
 
-    auto res = funcPtr(repl.share);
-
+    auto res = funcPtr(repl.share);    
+    GC.removeRange(rangeBottom);
+            
     if (exists(repl.share.logFile))
     {
         try
@@ -947,11 +949,11 @@ CallResult call(ref ReplContext repl, ref string message)
     
     //scope(exit) GC.removeRange(getSectionBase(lib.handle, ".CRT"));
 
-    //if (res == -1)
-    //{
-    //auto e = collectException!Throwable(GC.collect());
-    //    return CallResult.runtimeError;
-    //}
+    if (res == -1)
+    {
+        auto e = collectException!Throwable(GC.collect());
+        return CallResult.runtimeError;
+    }
 
     return CallResult.success;
 }
@@ -1042,6 +1044,28 @@ string parseDmdErrorFile(string srcFile, string errFile, bool dederef)
         previousLineNumber = split[1];
     }
     return result;
+}
+
+/**
+* Try to find the absolute path of the repl executable
+*/
+string replPath()
+{
+    version(Windows)
+    {
+        import core.sys.windows.windows;        
+        import std.path : dirName, pathSplitter, dirSeparator;
+                
+        char[100] filename;
+        GetModuleFileNameA(null, filename.ptr, filename.length);
+        auto path = dirName((filename ~ "\0").to!string());
+        
+        return path.splitter(dirSeparator).array()[0..$-1].join(dirSeparator);
+    }
+    else 
+    {
+        static assert(false, "Need to implement replPath!");
+    }
 }
 
 

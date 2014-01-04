@@ -25,12 +25,7 @@
                 "dabble/parser.d",
                 "dabble/repl.d",
                 "dabble/sharedlib.d",
-                "dabble/util.d",
-                "dabble/mgc/gc.d",                
-                "dabble/mgc/proxy.d",                
-                "dabble/mgc/stats.d",                
-                "dabble/mgc/bits.d",                
-                "dabble/mgc/os.d"                
+                "dabble/util.d"                
             ]
         },
  		{
