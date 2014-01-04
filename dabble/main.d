@@ -14,12 +14,11 @@ import dabble.repl;
 
 void main(char[][] args)
 {
-import std.stdio;
-    writeln("REPL PATH: ", replPath());
+    scope(exit) { onExit(); }    
     auto session = initiateSession();
-    parseArgs(session, args[1..$]);        
+    parseArgs(session, args[1..$]);            
     stress();
-    session.loop();    
+    session.loop();           
     return;
 }
 

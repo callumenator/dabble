@@ -12,6 +12,7 @@ module dabble.repl;
 
 import
     std.algorithm,
+    std.conv,
     std.range,
     std.stdio,
     std.string;
@@ -28,7 +29,7 @@ bool consoleSession = true;
 
 private
 {
-    version(none) { SharedLib[] keepAlive; }
+    SharedLib[] keepAlive;
     __gshared ReplContext[string] sessionMap;
 }
 
@@ -117,8 +118,22 @@ void loop(string sessionId)
         
         stdout.flush();  
         stdin.readln(inBuffer);
-    }
+    }    
     return;
+}
+
+
+/**
+* Free any shared libs that were kept alive.
+*/
+void onExit()
+{
+    while(!keepAlive.empty)
+    {
+        debug { writeln("Free'ing lib: ", keepAlive.front.filename); }
+        keepAlive.front.free();
+        keepAlive.popFront();
+    }
 }
 
 
@@ -131,7 +146,6 @@ string eval(string sessionId, const char[] inBuffer)
     char[] dummyBuffer;
     return sessionId.eval(inBuffer, dummyBuffer);
 }
-
 
 
 /**
@@ -309,6 +323,7 @@ struct ReplContext
            string,"name",
            long,"modified")[] userModules;
     
+    uint count = 0;
     RawCode rawCode;
     ReplShare share;
     string vtblFixup;
@@ -317,13 +332,13 @@ struct ReplContext
     
     @property string filename()
     {
-        return paths.filename;
+        return paths.filename ~ count.to!string();
     }
     
     @property string fullName()
     {
         import std.path : dirSeparator;
-        return paths.tempPath ~ dirSeparator ~ paths.filename;
+        return paths.tempPath ~ dirSeparator ~ paths.filename ~ count.to!string();
     }
 
     static ReplContext opCall(string filename = "repl", uint debugLevel = Debug.none)
@@ -750,10 +765,17 @@ bool build(Tuple!(string,string) code,
     }
 
     auto dirChange = "cd " ~ escapeShellFileName(repl.paths.tempPath);
-    auto linkFlags = " -L/NORELOCATIONCHECK -L/NOMAP ";        
-
-    string cmd = dirChange ~ " & dmd -shared " ~ linkFlags ~ repl.filename
-               ~ ".d " ~ repl.filename ~ ".def extra.lib";
+    auto linkFlags = ["-L/NORELOCATIONCHECK", "-L/NOMAP"];   
+    auto dmdFlags = ["-shared"];
+    
+    debug
+    {
+        dmdFlags ~= ["-debug"];
+    } 
+    
+    string cmd = std.conv.text(dirChange, " & dmd ", dmdFlags.join(" "), " ", 
+                               linkFlags.join(" "), " ", repl.filename, ".d ", 
+                               repl.filename, ".def extra.lib");
 
     if (!buildUserModules(repl, message))
         return false;
@@ -915,7 +937,7 @@ CallResult call(ref ReplContext repl, ref string message)
 {
     import core.memory : GC;
     import std.exception;
-    import std.file : readText, exists, remove;
+    import std.file : DirEntry, readText, exists, remove;
 
     alias extern(C) int function(ref ReplShare) FuncType;
     alias extern(C) void* function() GCFunc;
@@ -932,14 +954,19 @@ CallResult call(ref ReplContext repl, ref string message)
     {
         static assert(false, "Platform not supported");
     }
-    
-
+        
     auto lib = SharedLib(repl.fullName ~ ext);
+    
+    /** Experimental over-estimate image memory bounds */
+    
+    repl.share.imageBounds[0] = lib.handle; 
+    repl.share.imageBounds[1] = lib.handle + DirEntry(repl.fullName ~ ext).size();
+    
+    /** ------------ */
     
     if (!lib.loaded)
         return CallResult.loadError;
-    
-    
+       
     version(Windows)
     {
         auto rangeBottom = (lib.getFunction!(GCFunc)("_gcRange"))();
@@ -958,7 +985,7 @@ CallResult call(ref ReplContext repl, ref string message)
     }
     else
     {
-        static assert(false, "Need to implement call for this platform");
+        static assert(false, "Need to implement dabble.repl.call for this platform");
     }
                
                
@@ -971,8 +998,16 @@ CallResult call(ref ReplContext repl, ref string message)
         }
         catch(Exception e) {}
     }
-    
-    lib.free();
+        
+    if (repl.share.keepAlive)
+    {
+        repl.count ++;
+        keepAlive ~= lib;
+    } 
+    else 
+    {
+        lib.free();
+    }
         
     if (res == -1)
     {
@@ -1274,7 +1309,7 @@ void libTest()
     auto repl = ReplContext();
     string err;
 
-    void test(string i) { assert(evaluate(i, repl, err) == EvalResult.noError, err); }
+    void test(string i) { writeln(i); assert(evaluate(i, repl, err) == EvalResult.noError, err); }
 
     test("import std.typecons;");
     test("Nullable!int a;");

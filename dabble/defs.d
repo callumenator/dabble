@@ -26,10 +26,12 @@ import
 struct ReplShare
 {
     Symbol[] symbols;
-    Vtbl[] vtbls;    
-    Type*[string] map; /// map used by typeBuilder and friends    
-    void* gc; /// host gc instance
-    string logFile; /// result of the eval
+    Vtbl[] vtbls;        
+    Type*[string] map;      /// map used by typeBuilder and friends    
+    void*[2] imageBounds;   
+    bool keepAlive;
+    void* gc;               /// host gc instance    
+    string logFile;         /// result of the eval
 
     void init()
     {
@@ -168,6 +170,21 @@ void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
         static if (needsDup!(ArrayElement!T))
         {
             debug { writeln("dupSearch: check array elements ", T.stringof); }
+            
+            
+            /**
+            if (t.length > 0 && false)
+            {
+                debug { writeln("dupSearch: duping array ", T.stringof); }
+                auto newMem = new void[]((ArrayElement!T).sizeof * t.length);            
+                memcpy(newMem.ptr, t.ptr, (ArrayElement!T).sizeof * t.length);
+                
+                void* p0 = &t;                    
+                void** ptrAddr = cast(void**)(cast(size_t)p0 + 4);
+                *ptrAddr = newMem.ptr;
+            }
+            */
+            
             foreach(ref e; t)
                 dupSearch(e, start, stop, keepAlive);
         }
@@ -565,9 +582,10 @@ struct QualifiedType
                 case Slice:
                     return tuple(QualifiedType(), "Error: slicing not supported");
                 case Member:
-                    if (!currType.type.isAggregate || i.val !in currType.type._object)
+                    auto m = currType.type._object.find!((a,b) => a.name==b)(i.val);
+                    if (!currType.type.isAggregate || m.empty)
                         return tuple(QualifiedType(), "Error: no member "~i.val~" for type "~currType.toString());
-                    currType = currType.type._object[i.val].type;
+                    currType = m.front.type;
                     break;
                 case Cast:
                     currType = buildType(i.val, map);
@@ -644,7 +662,7 @@ struct Type
     union
     {
         QualifiedType _ref; /// for pointer and array types
-        Tuple!(QualifiedType,"type",size_t,"offset")[string] _object; /// for aggregates
+        Tuple!(string,"name",QualifiedType,"type",size_t,"offset")[] _object; /// for aggregates
     }
 
     uint flag;
@@ -701,7 +719,8 @@ struct Type
             return QualifiedType();
         }
 
-        absAddr = newBaseAddr(absAddr) + i * _ref.typeSize;
+        //absAddr = cast(void*)( (cast(size_t)newBaseAddr(absAddr)) + i * _ref.typeSize);
+        absAddr = newBaseAddr(absAddr).padd(i * _ref.typeSize);
         return _ref;
     }
 
@@ -714,17 +733,20 @@ struct Type
     {
         assert(isAggregate);
 
-        if (name in _object)
+        auto m = _object.find!((a,b) => a.name==b)(name);
+        
+        if (!m.empty)
         {
-            absAddr = newBaseAddr(absAddr) + _object[name].offset;
-            return _object[name].type;
+            //absAddr = cast(void*)((cast(size_t)newBaseAddr(absAddr)) + m.front.offset);
+            absAddr = newBaseAddr(absAddr).padd(m.front.offset);
+            return m.front.type;
         }
         return QualifiedType();
     }
 
     string getMe(void* absAddr)
     {
-        if (trace) writeln("GetMe: ", this.typeName);
+        if (trace) write("GetMe: ", this.typeName);
 
         enum types = ["byte", "ubyte", "char", "dchar", "wchar",
                       "short", "ushort", "int", "uint", "long", "ulong",
@@ -742,46 +764,51 @@ struct Type
 
         if (isBasic)
         {
-            if (trace) writeln("getMe: isBasic, ", this.toString());
+            if (trace) writeln(" (isBasic)");
             switch(typeName) { mixin(generateCases!(types)()); }
         }
         else if (isAggregate)
         {
+            if (trace) writeln(" (isAggregate)");
+        
             if (isClass)
-                absAddr = newBaseAddr(absAddr);
-
-            if (trace) writeln("getMe: isAggregate, ", this.toString());
-
-            // these byKey, byVal version are necessary, probably a bug
-            auto keys = _object.byKey().array();
-            auto vals = _object.byValue().array();
-
-            // index the AA by increasing data offset
-            auto index = new size_t[vals.length];
-            makeIndex!("a.offset < b.offset")(vals, index);
-
-            string s = typeName ~ "(";
-            foreach(count, idx; index)
             {
-                s ~= vals[idx].type.getMe(absAddr + vals[idx].offset);
-                if (count < index.length - 1) s ~= ", ";
+                if (trace) writeln(" isClass, getting address...");
+                absAddr = newBaseAddr(absAddr);
+            }                   
+            
+            string s = typeName ~ "(";
+            
+            foreach(count, m; _object)
+            {
+                if (trace) writeln(" member ", m.name, " (offset: ", m.offset, ")");
+                //s ~= m.type.getMe(cast(void*)(cast(size_t)absAddr + m.offset));
+                s ~= m.type.getMe(absAddr.padd(m.offset));
+                if (count < _object.length - 1) s ~= ", ";
             }
+          
             return s ~= ")";
         }
         else if (isDynamicArr)
         {
-            if (trace) writeln("getMe: isDynamicArr, length: ", *cast(size_t*)absAddr);
+            if (trace) writeln(" (isDynamicArr: length:", *cast(size_t*)absAddr, ")");
             return _ref.getMeArray(newBaseAddr(absAddr), 0, *cast(size_t*)absAddr);
         }
         else if (isStaticArr)
         {
-            if (trace) writeln("getMe: isStaticArr, ", this.toString());
+            if (trace) writeln(" (isStaticArr: length:", this.toString(), ")");
             return _ref.getMeArray(newBaseAddr(absAddr), 0, length, true);
         }
         else if (isPointer)
+        {
+            if (trace) writeln(" (isPointer: ", absAddr, ")");
             return (*cast(void**)absAddr).to!string();
+        }
         else
+        {
+            if (trace) writeln(" (no handled type!)");
             return "";
+        }
 
         assert(false);
     }
@@ -792,7 +819,8 @@ struct Type
         string s = "[";
         foreach(i; iota(start, stop))
         {
-            s ~= getMe(arrBase + i*typeSize);
+            //s ~= getMe(cast(void*)(cast(size_t)arrBase + i*typeSize));
+            s ~= getMe(arrBase.padd(i*typeSize));
             if (i < stop - 1) s ~= ",";
         }
         return s ~ "]";
@@ -819,17 +847,14 @@ struct Type
 
             if (expand)
             {
-                s ~= "(";
-                auto keys = _object.byKey().array();
-                auto vals = _object.byValue().array();
-                auto index = new size_t[vals.length];
-                makeIndex!("a.offset < b.offset")(vals, index);
-
-                foreach(count, idx; index)
+                s ~= "(";                
+                
+                foreach(i, m; _object)
                 {
-                    s ~= keys[idx] ~ ": " ~ vals[idx].type.toString(false);
-                    if (count < index.length - 1) s ~= ", ";
-                }
+                    s ~= m.name ~ ": " ~ m.type.toString(false);
+                    if (i < _object.length - 1) s ~= ", ";
+                }                               
+                
                 s ~= ")";
             }
         }
@@ -838,8 +863,17 @@ struct Type
             s = typeName;
         }
         return s;
+    }        
+}
+
+private
+{       
+    void* padd(void* p, size_t i)
+    {
+        return cast(void*)(cast(size_t)p + i);
     }
 }
+
 
 /**
 * Operations to carry out in a print expression.
@@ -1025,15 +1059,15 @@ QualifiedType buildType(T)(ref Type*[string] map, QualifiedType* ptr = null)
                 static if (!isFunctionPointer!_Type)
                 {
                     enum _name = ((splitter(T.tupleof[i].stringof, ".")).array())[$-1];
-                    enum _offset = T.tupleof[i].offsetof;
-                    mixin("qt.type._object[`"~_name~"`.idup]=Tuple!(QualifiedType,`type`,size_t,`offset`)(buildType!(_Type)(map), _offset);");
+                    enum _offset = T.tupleof[i].offsetof;                    
+                    mixin("qt.type._object ~= Tuple!(string,`name`,QualifiedType,`type`,size_t,`offset`)(`"~_name~"`.idup,buildType!(_Type)(map), _offset);");                    
                 }
             }
 
             // Here we get inner defs, that may not be directly used by the type
             foreach(m; __traits(allMembers, T))
-            static if (__traits(compiles, mixin("{TypeBuilder.buildType!(T."~m~")(map);}")))
-                mixin("TypeBuilder.buildType!(T."~m~")(map);");
+                static if (__traits(compiles, mixin("{TypeBuilder.buildType!(T."~m~")(map);}")))
+                    mixin("TypeBuilder.buildType!(T."~m~")(map);");
         }
         else static if (isPointer!T)
         {

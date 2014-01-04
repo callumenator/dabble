@@ -45,9 +45,13 @@ struct SharedLib
         return handle !is null;                       
     }
 
-    void free(bool callDetach = true)
+    void free()
     {
-        Runtime.unloadLibrary(handle);
+        if (handle is null)
+            return;
+            
+        if (Runtime.unloadLibrary(handle))
+            handle = null;
     }
 
     T getFunction(T)(string name) in {assert(handle !is null, "Null handle");} body

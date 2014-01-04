@@ -50,8 +50,7 @@ static:
         Code code;
         foreach(idx, ref sym; repl.share.symbols)
             sym.generate(code, idx);
-
-        /**
+        
         foreach(d; stringDups)
         {
             size_t index;
@@ -59,7 +58,6 @@ static:
             code.suffix.put("if (!_repl_.symbols["~index.to!(string)()~"].v.func) { "
                             "_REPL.dupSearch(*"~d~", _repl_.imageBounds[0], _repl_.imageBounds[1], _repl_.keepAlive); }\n");
         }
-        */
 
         auto leftOver = join(p.matches);
         auto dupSearch = ReplParse.StringDupSearch(leftOver);
