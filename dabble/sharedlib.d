@@ -13,69 +13,52 @@ module dabble.sharedlib;
 /**
 * Encapsulate shared lib functions.
 */
+
 version(Windows)
-{    
-
-    import core.runtime;
-    import std.file : read;
-    import std.string : toStringz;
-    import std.typecons;
-    import dabble.loader;
-       
-    import core.sys.windows.windows;
-    
-    extern(Windows) 
-    {
-        void* GetProcAddress(HMODULE hModule,  LPCSTR lpProcName);
-    }
-    
-        
-    struct SharedLib
-    {
-        string filename;
-        void* handle = null;
-
-        @property bool loaded() { return handle !is null; }
-
-        /**
-        * Load a shared lib given a filename.
-        */
-        this(string file)
-        {
-            filename = file;
-            load();
-        }
-
-        bool load()
-        {   
-        import std.stdio;
-            writeln(filename);
-            handle = Runtime.loadLibrary(filename);                    
-            
-            if (handle == null)
-                return false;
-
-            return true;
-        }
-
-        void free(bool callDetach = true)
-        {
-            Runtime.unloadLibrary(handle);
-        }
-
-        void*[2] bounds()
-        {
-            void*[2] arr;
-            return arr;                        
-        }
-
-        T getFunction(T)(string name) in {assert(handle !is null, "Null handle");} body
-        {            
-            return cast(T) GetProcAddress(handle, cast(char*)(name.toStringz()));         
-        }
-    }
-}
-else
 {
-    static assert(false, "Windows only");
+    import core.sys.windows.windows;
+    extern(Windows) void* GetProcAddress(HMODULE hModule,  LPCSTR lpProcName);                                           
+}
+
+import core.runtime;
+import std.string : toStringz;          
+
+struct SharedLib
+{
+    string filename;
+    void* handle = null;
+
+    @property bool loaded() { return handle !is null; }
+
+    /**
+    * Load a shared lib given a filename.
+    */
+    this(string file)
+    {
+        filename = file;
+        load();
+    }
+
+    bool load()
+    {            
+        handle = Runtime.loadLibrary(filename);                    
+        return handle !is null;                       
+    }
+
+    void free(bool callDetach = true)
+    {
+        Runtime.unloadLibrary(handle);
+    }
+
+    T getFunction(T)(string name) in {assert(handle !is null, "Null handle");} body
+    {            
+        version(Windows) 
+        {                       
+            return cast(T) GetProcAddress(handle, cast(char*)(name.toStringz()));                     
+        }
+        else
+        {
+            static assert(false, "SharedLib getFunction - platform not supported");
+        }
+    }
 }

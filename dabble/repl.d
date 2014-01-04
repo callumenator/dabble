@@ -17,13 +17,11 @@ import
     std.string;
 
 import
-    dabble.actions,
-    dabble.loader,
+    dabble.actions,    
     dabble.parser,
     dabble.sharedlib,
     dabble.util;
     
-
 public import dabble.defs;
 
 bool consoleSession = true;

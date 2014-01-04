@@ -20,8 +20,7 @@
             "sourceFiles": [        
                 "dabble/main.d",
                 "dabble/actions.d",
-                "dabble/defs.d",
-                "dabble/loader.d",
+                "dabble/defs.d",                
                 "dabble/parser.d",
                 "dabble/repl.d",
                 "dabble/sharedlib.d",
