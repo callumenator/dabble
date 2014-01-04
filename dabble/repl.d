@@ -551,8 +551,14 @@ void clearScreen()
     {
         system("cls");
     }
+    else version(Posix)
+    {
+        system("clear");
+    }
     else
-        static assert(false, "Only Windows is supported.");
+    {
+        pragma(msg, "Need to implement clearScreen for this platform");
+    }
 }
 
 
@@ -913,26 +919,49 @@ CallResult call(ref ReplContext repl, ref string message)
 
     alias extern(C) int function(ref ReplShare) FuncType;
     alias extern(C) void* function() GCFunc;
+    
+    version(Windows)
+    {
+        string ext = ".dll";
+    }
+    else version(Posix)
+    {
+        string ext = ".so";
+    }
+    else
+    {
+        static assert(false, "Platform not supported");
+    }
+    
 
-    auto lib = SharedLib(repl.fullName ~ ".dll");
+    auto lib = SharedLib(repl.fullName ~ ext);
     
     if (!lib.loaded)
         return CallResult.loadError;
-
-    auto rangeBottom = (lib.getFunction!(GCFunc)("_gcRange"))();
-    GC.removeRange(rangeBottom);
     
-    auto funcPtr = lib.getFunction!(FuncType)("_main");
-
-    if (funcPtr is null)
+    
+    version(Windows)
     {
-        message.append("Unable to obtain function pointer");
-        return CallResult.loadError;
-    }
+        auto rangeBottom = (lib.getFunction!(GCFunc)("_gcRange"))();
+        GC.removeRange(rangeBottom);     
+        
+        auto funcPtr = lib.getFunction!(FuncType)("_main");
 
-    auto res = funcPtr(repl.share);    
-    GC.removeRange(rangeBottom);
-            
+        if (funcPtr is null)
+        {
+            message.append("Unable to obtain function pointer");
+            return CallResult.loadError;
+        }
+
+        auto res = funcPtr(repl.share);       
+        GC.removeRange(rangeBottom); 
+    }
+    else
+    {
+        static assert(false, "Need to implement call for this platform");
+    }
+               
+               
     if (exists(repl.share.logFile))
     {
         try
@@ -944,9 +973,7 @@ CallResult call(ref ReplContext repl, ref string message)
     }
     
     lib.free();
-    
-    //scope(exit) GC.removeRange(getSectionBase(lib.handle, ".CRT"));
-
+        
     if (res == -1)
     {
         auto e = collectException!Throwable(GC.collect());

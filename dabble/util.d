@@ -104,6 +104,9 @@ extern(C) void hookNewClass(TypeInfo_Class ti,
 * Generate the DLL header. This needs to be done dynamically, as we
 * take the address of hookNewClass, and hard-code it in the DLL (!)
 */
+version(Windows)
+{
+
 string genHeader()
 {
     return
@@ -116,6 +119,7 @@ string genHeader()
     
     extern(C) void gc_setProxy(void*); 
     extern(C) void gc_clrProxy(); 
+    extern(C) void* gc_getProxy(); 
     
     import _REPL = defs;    
     
@@ -125,13 +129,13 @@ string genHeader()
     {
         final switch (ulReason)
         {
-            case DLL_PROCESS_ATTACH:                
-                Runtime.initialize();
+            case DLL_PROCESS_ATTACH:                            
+                Runtime.initialize();                                
                 break;
-            case DLL_PROCESS_DETACH:
+            case DLL_PROCESS_DETACH:                
                 _fcloseallp = null;
                 gc_clrProxy();
-                Runtime.terminate();
+                Runtime.terminate();                
                 break;
             case DLL_THREAD_ATTACH:
                 break;
@@ -185,5 +189,11 @@ string genHeader()
     }
 
 `;
+}
+
+}
+else
+{
+    static assert(false, "Need to implement genHeader on this platform");
 }
 
