@@ -18,6 +18,7 @@ import
     std.algorithm,
     std.traits,
     std.range,
+    std.regex,
     std.uuid;
     
 /**
@@ -101,7 +102,7 @@ string NewTypeof(string S, T...)(T t) // for tuples
 {
     return "Tuple!" ~ T.stringof;
 }
-
+     
 
 T* getVar(T)(const(Symbol[]) symbols, size_t index)
 {
@@ -112,12 +113,12 @@ T* getVar(T)(const(Symbol[]) symbols, size_t index)
 string exprResult(E)(lazy E expr)
 {
     import std.exception;
-
+    
     auto temp = expr();
     string result;
     if (collectException!Throwable(result = temp.to!string()))
-        return "";
-
+        return "";    
+    
     return result;
 }
 
@@ -254,31 +255,6 @@ string sym(size_t index)
 }
 
 
-import std.regex;
-
-string applyToType(string Init, string Code)
-{
-    auto r = regex(`__x_Type_x__`, "g");
-
-    auto s1 = std.regex.replace(Code, r, "typeof("~Init~")");
-    auto s2 = std.regex.replace(Code, r, "typeof("~Init~"())");
-    auto s3 = std.regex.replace(Code, r, "ReturnType!("~Init~")");
-
-    return
-    "
-    static if (__traits(compiles, mixin(q{typeof("~Init~")}))) {
-        mixin(q{" ~ s1 ~ "});
-    }
-    else static if (__traits(compiles, mixin(q{typeof("~Init~"())}))) {
-        mixin(q{" ~ s2 ~ "});
-    }
-    else static if (__traits(compiles, {alias ReturnType!("~Init~") RT;})) {
-        mixin(q{" ~ s3 ~ "});
-    }
-    else static assert(false);
-    ";
-}
-
 struct Code { Appender!string header, prefix, suffix; }
 
 struct Var
@@ -300,20 +276,21 @@ struct Var
         if (first)
         {
             first = false;
-            string test;
-
+            string test;                        
+            
+            if (std.string.strip(type).length == 0 || !type.match(`\bauto\b`).empty)            
+                type = text("typeof( (() => (", init,"))() )");                            
+                          
             string generateFuncLitSection(string useType)
-            {
-                if (init == "")
-                    init = "null";
-
+            {                
                 string code =
                 "  static if ((__traits(compiles, isFunctionPointer!(" ~ useType ~ ")) && isFunctionPointer!(" ~ useType ~ "))"
                 "  || is(" ~ useType ~ " == delegate)) {\n"
-                "    " ~ sym(index) ~ ".v.func = true;\n"
-                "    " ~ useType ~ "* " ~ name ~ ";\n";
+                "    " ~ sym(index) ~ ".v.func = true;\n"                
+                "    " ~ useType ~ "* " ~ name ~ ";\n"
+                "    " ~ sym(index) ~ ".v.type = q{" ~ useType ~ "}.idup;\n";
 
-                if (init != "null")
+                if (init != "")
                     code ~=
                     "    {\n"
                     "      auto _temp = " ~ init ~ ";\n"
@@ -322,6 +299,28 @@ struct Var
 
                 code ~= "}";
                 return code;
+            }                        
+            
+            string _maker()
+            {   
+                string s = "{\n";                                    
+                auto _uqualType = text("Unqual!(", type, ")");
+                
+                //s ~= text(" pragma(msg, Type);");          
+                
+                s ~= text("  static if (is(",_uqualType," == class)) {\n");
+                s ~= text("    auto chunk = new void[](__traits(classInstanceSize, ",type,"));\n");        
+                s ~= text("  } else {\n");
+                s ~= text("    auto chunk = new void[]((",type,").sizeof);\n");        
+                s ~= text("  }\n");
+                s ~= text("  ", sym(index), ".v.addr = cast(void*)emplace!(",_uqualType,")(chunk);\n");
+                
+                if (std.string.strip(init).length == 0)                    
+                    return s ~ "}\n";
+                                
+                s ~= text("  ", _uqualType, " temp = ", init, ";\n");
+                s ~= text("  move(temp, *cast(", _uqualType, "*)", sym(index), ".v.addr);\n}\n");        
+                return s;        
             }
 
 
@@ -332,40 +331,34 @@ struct Var
             {
                 assert(init.length > 0, "Auto var without initializer");
 
-                auto qualifiers = replace(type, regex(`\bauto\b`, `g`), "");
-                auto initLambda = "___replInitLambda_" ~ randomUUID().to!string().split("-").join("");
-
+                //auto qualifiers = replace(type, regex(`\bauto\b`, `g`), "");
+                //auto initLambda = "___replInitLambda_" ~ randomUUID().to!string().split("-").join("");
+                               
                 put(c.prefix,
-                    generateFuncLitSection("typeof("~init~")"), " else {\n",
-                    "  auto ", initLambda, " = () { return ", init, ";}; "
-                    "  ", sym(index), ".v.addr =  _REPL.newExpr(", initLambda, "());\n",
-                    "  *cast(Unqual!(typeof(", initLambda, "()))*)", sym(index), ".v.addr = ", initLambda, "();\n",
-                    "  auto ", name, " = cast(", qualifiers, " typeof(", initLambda, "())*)", sym(index), ".v.addr;\n}\n");
-
-                if (qualifiers.strip().length > 0)
-                    put(c.prefix, applyToType(init, "\n  " ~ sym(index) ~ ".v.type = q{cast(" ~ qualifiers ~ ") __x_Type_x__}.idup;\n"));
-                else
-                    put(c.prefix, applyToType(init, "\n  " ~ sym(index) ~ ".v.type = q{__x_Type_x__}.idup;\n"));
+                    generateFuncLitSection(type), " else {\n",
+                    "  ", _maker(), "\n",
+                    "  auto ", name, " = cast(", type, "*)", sym(index), ".v.addr;\n}\n");                               
             }
             else if (init.length > 0) // has type and initializer
             {
                 put(c.prefix,
-                    "  " ~ sym(index) ~ ".v.addr =  _REPL.newExpr(", init, ");\n",
-                    "  *cast(Unqual!(", type, ")*)(" ~ sym(index) ~ ".v.addr) = ", init, ";\n"
-                    "  ", type, "* ", name, " = cast(", type, "*)" ~ sym(index) ~ ".v.addr;\n");
+                    generateFuncLitSection(type), " else {\n",
+                    "  ", _maker(), "\n",
+                    "  auto ", name, " = cast(", type, "*)", sym(index), ".v.addr;\n}\n");                               
             }
             else // just has type
             {
                 put(c.prefix,
                     generateFuncLitSection(type), " else {\n",
-                    type, "* ", name, " = cast(", type, "*)_REPL.newType!(", type, ");\n",
-                    sym(index) ~ ".v.addr = cast(void*)", name, ";\n"
-                    "}\n");
+                    "  ", _maker(), "\n",
+                    "  auto ", name, " = cast(", type, "*)", sym(index), ".v.addr;\n}\n");                               
             }
 
             put(c.prefix,
-                "  " ~ sym(index) ~ ".v.displayType = typeof(*", name, ").stringof.idup;\n",
-                "  if (!" ~ sym(index) ~ ".v.func) _expressionResult = _REPL.exprResult(\n*"~name~"\n);\n");
+                "  ", sym(index), ".v.displayType = typeof(*", name, ").stringof.idup;\n",
+                "  static if (__traits(compiles, _REPL.exprResult(*", name, ")))\n",
+                "    if (!", sym(index), ".v.func)\n",
+                "      _expressionResult = _REPL.exprResult(\n*", name, "\n);\n");
 
             put(c.suffix,
                 "  if (" ~ sym(index) ~ ".v.func) {\n"
@@ -379,7 +372,7 @@ struct Var
             if (func)
             {
                 put(c.prefix, type, "* ", name, ";\n{\n");
-                if (init == "null")
+                if (init == "")
                     put(c.prefix, "  auto _temp = cast(", type, ") null;\n");
                 else
                     put(c.prefix, "  auto _temp = ", init, ";\n");

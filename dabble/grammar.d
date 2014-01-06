@@ -61,6 +61,7 @@ ReplParse:
     UserType <-  EnumDecl {Parser.enumDecl}
               /  ( StructDecl
                  /  UnionDecl
+                 /  InterfaceDecl
                  /  ClassDecl
                  /  FunctionDecl ) {Parser.userType}
 
@@ -74,9 +75,11 @@ ReplParse:
 
     EnumBody        <- wx AllBetween(LBrace,RBrace) ';'?
 
-    StructDecl      <- wx ~("struct" ws Ident wx ( ParameterList? wx Constraint? wx AllBetween(LBrace,RBrace) / ';' ) )
+    StructDecl      <- wx ~("struct" ws Ident wx ( ParameterList? wx Constraint? wx AllBetween(LBrace,RBrace) / ';' ) )        
 
     UnionDecl       <- wx ~("union" ws Ident wx ( ParameterList? wx Constraint? wx AllBetween(LBrace,RBrace) / ';' ) )
+    
+    InterfaceDecl   <- wx ~("interface" ws Ident wx ( ParameterList? wx Constraint? wx AllBetween(LBrace,RBrace) / ';' ) )
 
     ClassDecl       <- wx ~("class" ws Ident wx ParameterList? wx Constraint? wx (':' BaseClassList)?
                        wx AllBetween(LBrace,RBrace))

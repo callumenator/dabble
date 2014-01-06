@@ -29,7 +29,7 @@ extern(C) void hookNewClass(TypeInfo_Class ti,
                             void* repl /** ReplContext* **/,
                             bool clear = false)
 {
-    import std.algorithm : countUntil;
+    import std.algorithm : countUntil, canFind;
     import std.c.string : memcpy;
     import std.array;
 
@@ -40,11 +40,11 @@ extern(C) void hookNewClass(TypeInfo_Class ti,
 
     if (count == 0 && ti.name == "core.thread.Thread")
         return;
-
+       
     if (repl is null)
-    {
+    {        
         count++;
-        infos ~= _Info(ti.name.idup, ti.vtbl.dup, cptr);
+        infos ~= _Info(ti.name.idup, ti.vtbl.dup, cptr);        
     }
     else if (clear)
     {
@@ -53,42 +53,35 @@ extern(C) void hookNewClass(TypeInfo_Class ti,
         return;
     }
     else
-    {
+    {            
         auto _repl = cast(ReplContext*)repl;
 
         foreach(i; infos)
         {
             void* vtblPtr = null;
-            size_t index = countUntil!"a.name == b"(_repl.share.vtbls, i.name);
+            size_t index = countUntil!"a.name == b"(_repl.share.vtbls, i.name);                        
 
             if (index == -1) // No entry exists, need to dup the vtable
             {
                 _repl.share.vtbls ~= Vtbl(i.name, i.vtbl);
                 index = _repl.share.vtbls.length - 1;
 
-                // Template classes have an extra .Name on the end, remove it
-                auto n = i.name;
-                bool templ = false;
-                int parens = 0, len = 0;
-                foreach(ii, char c; n)
-                {
-                    len++;
-                    switch(c)
-                    {
-                        case '!': templ = true; continue;
-                        case '(': if (templ) parens++; break;
-                        case ')': if (templ) parens--; break;
-                        default: break;
-                    }
-                    if (templ && parens == 0) break;
-                }
-                i.name = i.name[0..len];
-
+                // Template classes have an extra .Name on the end, remove it                                                
+                auto n = i.name.idup;
+                if (n.canFind('!'))
+                {                               
+                    while( !n.empty && n.back != '.' )
+                        n.popBack();
+                        
+                    if (!n.empty && n.back == '.')
+                        n.popBack();
+                        
+                    i.name = n;
+                }                                                                
                 _repl.vtblFixup ~= Parser.genFixup(i.name, index);
             }
 
             vtblPtr = _repl.share.vtbls[index].vtbl.ptr;
-
             assert(vtblPtr !is null, "Null vtbl pointer");
 
             // Now redirect the vtable pointer in the class
@@ -113,7 +106,7 @@ string genHeader()
 `
 // ################################################################################
 
-    import std.traits, std.stdio, std.range, std.algorithm;
+    import std.traits, std.stdio, std.range, std.algorithm, std.conv;
     import core.sys.windows.dll, core.thread, core.runtime, core.memory;
     import std.c.string, std.c.stdlib, std.c.windows.windows;      
     
@@ -152,40 +145,45 @@ string genHeader()
     {
         import core.memory, std.string, core.sys.windows.stacktrace;
         void* p;
-
-        bool leak = true; /** TODO: if leak is false (meaning GC.malloc instead of malloc) = invalidMemOpErr */
+        bool leak = false; /** TODO: if leak is false (meaning GC.malloc instead of malloc) = invalidMemOpErr */
+        bool hook = true;        
         auto curr = cast(ClassInfo)ci;
-        
+                        
         while(curr)
         {
             if (curr == typeid(Throwable) || curr == typeid(StackTrace))
             {
                 leak = true;
+                hook = false;  
                 break;
             }
             curr = curr.base;
         }
-
+        
+        
         if (leak)
         {
-            p = malloc(ci.init.length); // let it leak for now
-            (cast(byte*) p)[0 .. ci.init.length] = ci.init[];
-            return cast(Object)p;
+            p = malloc(ci.init.length); // let it leak           
         }
         else
+        {  
+            GC.BlkAttr attr;            
+            if (ci.m_flags & TypeInfo_Class.ClassFlags.noPointers)
+                attr |= GC.BlkAttr.NO_SCAN;                        
+            p = GC.malloc(ci.init.length, attr);            
+        }
+        
+        (cast(byte*) p)[0 .. ci.init.length] = ci.init[];            
+        auto obj = cast(Object) p;
+        
+        if (hook)
         {
-            p = GC.malloc(ci.init.length,
-                          GC.BlkAttr.FINALIZE | (ci.m_flags & 2 ? GC.BlkAttr.NO_SCAN : 0));
-
-            (cast(byte*) p)[0 .. ci.init.length] = ci.init[];
-
-            auto obj = cast(Object) p;
-
             alias extern(C) void function(TypeInfo_Class, void*, void*, bool) cb;
             auto fp = cast(cb)(0x` ~ (&hookNewClass).to!string() ~ `);
-            fp(typeid(obj), p, null, false);
-            return obj;
+            fp(typeid(obj), p, null, false);            
         }
+        
+        return obj;
     }
 
 `;

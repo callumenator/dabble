@@ -218,7 +218,7 @@ static:
             t.matches[0] =
             "static if (__traits(compiles, mixin(q{is(typeof(" ~ expr ~ "))}))) {\n"
             "  mixin(q{ static if (is(typeof(" ~ expr ~ ") == void)) {\n  " ~ expr ~ ";\n"
-            "  } else {\n  _expressionResult = _REPL.exprResult(\n  " ~ expr ~ "\n  );}});\n"
+            "  } else {\n  static if (__traits(compiles, _REPL.exprResult(" ~ expr ~ "))) _expressionResult = _REPL.exprResult(\n  " ~ expr ~ "\n  );}});\n"
             "} else {\n"
             "  " ~ expr ~ ";\n}\n\n";
         }

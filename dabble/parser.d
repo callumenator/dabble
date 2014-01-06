@@ -58,6 +58,7 @@ ReplParse:
     UserType <-  EnumDecl {Parser.enumDecl}
               /  ( StructDecl
                  /  UnionDecl
+                 /  InterfaceDecl
                  /  ClassDecl
                  /  FunctionDecl ) {Parser.userType}
 
@@ -71,9 +72,11 @@ ReplParse:
 
     EnumBody        <- wx AllBetween(LBrace,RBrace) ';'?
 
-    StructDecl      <- wx ~("struct" ws Ident wx ( ParameterList? wx Constraint? wx AllBetween(LBrace,RBrace) / ';' ) )
+    StructDecl      <- wx ~("struct" ws Ident wx ( ParameterList? wx Constraint? wx AllBetween(LBrace,RBrace) / ';' ) )        
 
     UnionDecl       <- wx ~("union" ws Ident wx ( ParameterList? wx Constraint? wx AllBetween(LBrace,RBrace) / ';' ) )
+    
+    InterfaceDecl   <- wx ~("interface" ws Ident wx ( ParameterList? wx Constraint? wx AllBetween(LBrace,RBrace) / ';' ) )
 
     ClassDecl       <- wx ~("class" ws Ident wx ParameterList? wx Constraint? wx (':' BaseClassList)?
                        wx AllBetween(LBrace,RBrace))
@@ -297,6 +300,7 @@ struct GenericReplParse(TParseTree)
         rules["EnumBody"] = toDelegate(&ReplParse.EnumBody);
         rules["StructDecl"] = toDelegate(&ReplParse.StructDecl);
         rules["UnionDecl"] = toDelegate(&ReplParse.UnionDecl);
+        rules["InterfaceDecl"] = toDelegate(&ReplParse.InterfaceDecl);
         rules["ClassDecl"] = toDelegate(&ReplParse.ClassDecl);
         rules["Constraint"] = toDelegate(&ReplParse.Constraint);
         rules["BaseClassList"] = toDelegate(&ReplParse.BaseClassList);
@@ -767,16 +771,16 @@ struct GenericReplParse(TParseTree)
     static TParseTree UserType(TParseTree p)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.action!(EnumDecl, Parser.enumDecl), pegged.peg.action!(pegged.peg.or!(StructDecl, UnionDecl, ClassDecl, FunctionDecl), Parser.userType)), "ReplParse.UserType")(p);
+            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.action!(EnumDecl, Parser.enumDecl), pegged.peg.action!(pegged.peg.or!(StructDecl, UnionDecl, InterfaceDecl, ClassDecl, FunctionDecl), Parser.userType)), "ReplParse.UserType")(p);
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.action!(EnumDecl, Parser.enumDecl), pegged.peg.action!(pegged.peg.or!(StructDecl, UnionDecl, ClassDecl, FunctionDecl), Parser.userType)), "ReplParse.UserType"), "UserType")(p);
+            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.action!(EnumDecl, Parser.enumDecl), pegged.peg.action!(pegged.peg.or!(StructDecl, UnionDecl, InterfaceDecl, ClassDecl, FunctionDecl), Parser.userType)), "ReplParse.UserType"), "UserType")(p);
     }
     static TParseTree UserType(string s)
     {
         if(__ctfe)
-            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.action!(EnumDecl, Parser.enumDecl), pegged.peg.action!(pegged.peg.or!(StructDecl, UnionDecl, ClassDecl, FunctionDecl), Parser.userType)), "ReplParse.UserType")(TParseTree("", false,[], s));
+            return         pegged.peg.named!(pegged.peg.or!(pegged.peg.action!(EnumDecl, Parser.enumDecl), pegged.peg.action!(pegged.peg.or!(StructDecl, UnionDecl, InterfaceDecl, ClassDecl, FunctionDecl), Parser.userType)), "ReplParse.UserType")(TParseTree("", false,[], s));
         else
-            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.action!(EnumDecl, Parser.enumDecl), pegged.peg.action!(pegged.peg.or!(StructDecl, UnionDecl, ClassDecl, FunctionDecl), Parser.userType)), "ReplParse.UserType"), "UserType")(TParseTree("", false,[], s));
+            return hooked!(pegged.peg.named!(pegged.peg.or!(pegged.peg.action!(EnumDecl, Parser.enumDecl), pegged.peg.action!(pegged.peg.or!(StructDecl, UnionDecl, InterfaceDecl, ClassDecl, FunctionDecl), Parser.userType)), "ReplParse.UserType"), "UserType")(TParseTree("", false,[], s));
     }
     static string UserType(GetName g)
     {
@@ -857,6 +861,25 @@ struct GenericReplParse(TParseTree)
     static string UnionDecl(GetName g)
     {
         return "ReplParse.UnionDecl";
+    }
+
+    static TParseTree InterfaceDecl(TParseTree p)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("interface"), ws, Ident, wx, pegged.peg.or!(pegged.peg.and!(pegged.peg.option!(ParameterList), wx, pegged.peg.option!(Constraint), wx, AllBetween!(LBrace, RBrace)), pegged.peg.literal!(";"))))), "ReplParse.InterfaceDecl")(p);
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("interface"), ws, Ident, wx, pegged.peg.or!(pegged.peg.and!(pegged.peg.option!(ParameterList), wx, pegged.peg.option!(Constraint), wx, AllBetween!(LBrace, RBrace)), pegged.peg.literal!(";"))))), "ReplParse.InterfaceDecl"), "InterfaceDecl")(p);
+    }
+    static TParseTree InterfaceDecl(string s)
+    {
+        if(__ctfe)
+            return         pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("interface"), ws, Ident, wx, pegged.peg.or!(pegged.peg.and!(pegged.peg.option!(ParameterList), wx, pegged.peg.option!(Constraint), wx, AllBetween!(LBrace, RBrace)), pegged.peg.literal!(";"))))), "ReplParse.InterfaceDecl")(TParseTree("", false,[], s));
+        else
+            return hooked!(pegged.peg.named!(pegged.peg.and!(wx, pegged.peg.fuse!(pegged.peg.and!(pegged.peg.literal!("interface"), ws, Ident, wx, pegged.peg.or!(pegged.peg.and!(pegged.peg.option!(ParameterList), wx, pegged.peg.option!(Constraint), wx, AllBetween!(LBrace, RBrace)), pegged.peg.literal!(";"))))), "ReplParse.InterfaceDecl"), "InterfaceDecl")(TParseTree("", false,[], s));
+    }
+    static string InterfaceDecl(GetName g)
+    {
+        return "ReplParse.InterfaceDecl";
     }
 
     static TParseTree ClassDecl(TParseTree p)

@@ -1310,7 +1310,7 @@ void libTest()
     string err;
 
     void test(string i) { writeln(i); assert(evaluate(i, repl, err) == EvalResult.noError, err); }
-
+    
     test("import std.typecons;");
     test("Nullable!int a;");
     test("a = 5;");
@@ -1319,9 +1319,9 @@ void libTest()
     test("bref = NullableRef!int(&b);");
     test("bref = 5;");
     test("bref;");
-    test("c = tuple(1, `hello`);");
-    //test("Unique!int f = new int;");
-    //test("f = 7;");
+    test("c = tuple(1, `hello`);");    
+    //test("class C { int x; }; Unique!C f = new C;");
+    //test("f.x = 7;");
 
     repl.reset();
 
@@ -1373,12 +1373,31 @@ void libTest()
 
     repl.reset();
 
-    //test("import std.regex;");
-    //test("r0 = regex(`[a-z]*`,`g`);");
-    //test("m0 = match(`abdjsadfjg`,r0);");
-    //test("r1 = regex(`[0-9]+`,`g`);");
-    //test("m1 = match(`12345`,r1);");
+    test("import std.regex;");
+    test("r0 = regex(`[a-z]*`,`g`);");
+    test("m0 = match(`abdjsadfjg`,r0);");
+    test("r1 = regex(`[0-9]+`,`g`);");
+    test("m1 = match(`12345`,r1);");
+
 }
+
+
+auto test0()
+{
+    return run(["class C { int x; }","c = new C;"]);
+}
+
+auto test1()
+{
+    return run([
+    "interface I { bool foo(); } ", 
+    "class C : I { int x; bool foo() { return true; } }", 
+    "c = new C;",
+    "writeln(c);",
+    "writeln(c.foo());"
+    ]);
+}
+
 
 
 /**
