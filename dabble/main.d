@@ -18,7 +18,7 @@ void main(char[][] args)
     auto session = initiateSession();
     parseArgs(session, args[1..$]);                
     stress();
-    libTest();
+    libTest();     
     session.loop();           
     return;
 }

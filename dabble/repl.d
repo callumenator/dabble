@@ -1398,6 +1398,13 @@ auto test1()
     ]);
 }
 
+auto test2()
+{
+    return run([
+    "import std.typecons; int i = 7; ", "Unique!int ui = &i;", "writeln(ui);"
+    ]);
+}
+
 
 
 /**

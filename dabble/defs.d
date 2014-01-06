@@ -320,7 +320,7 @@ struct Var
                 string assign;
                 
                 assign = text("*cast(",utype,"*)",sym(index),".v.addr = ",utype,"(",init,");");    
-                s ~= text("  static if (__traits(compiles, { ",assign," }))\n  {\n");                
+                s ~= text("  static if (__traits(compiles,",utype,"(",init,")))\n  {\n");                
                 s ~= text("    ",assign,"\n  }\n");
                 
                 assign = text("*cast(",utype,"*)",sym(index),".v.addr = ",init,";");    
@@ -333,14 +333,17 @@ struct Var
                         
                 return s;
             }
-                        
+            
+            put(c.prefix,
+                    generateFuncLitSection(type), " else {\n",
+                    "  ", _maker(), "\n",
+                    "  auto ", name, " = cast(", type, "*)", sym(index), ".v.addr;\n}\n");                               
+
+            /**
             if (!type.match(`\bauto\b`).empty) // has initializer but no type
             {
                 assert(init.length > 0, "Auto var without initializer");
-
-                //auto qualifiers = replace(type, regex(`\bauto\b`, `g`), "");
-                //auto initLambda = "___replInitLambda_" ~ randomUUID().to!string().split("-").join("");
-                               
+                              
                 put(c.prefix,
                     generateFuncLitSection(type), " else {\n",
                     "  ", _maker(), "\n",
@@ -360,7 +363,8 @@ struct Var
                     "  ", _maker(), "\n",
                     "  auto ", name, " = cast(", type, "*)", sym(index), ".v.addr;\n}\n");                               
             }
-
+            **/
+            
             put(c.prefix,
                 "  ", sym(index), ".v.displayType = typeof(*", name, ").stringof.idup;\n",
                 "  static if (__traits(compiles, _REPL.exprResult(*", name, ")))\n",
