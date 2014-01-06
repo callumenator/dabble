@@ -145,7 +145,7 @@ string genHeader()
     {
         import core.memory, std.string, core.sys.windows.stacktrace;
         void* p;
-        bool leak = false; /** TODO: if leak is false (meaning GC.malloc instead of malloc) = invalidMemOpErr */
+        bool leak = false;
         bool hook = true;        
         auto curr = cast(ClassInfo)ci;
                         
@@ -167,7 +167,7 @@ string genHeader()
         }
         else
         {  
-            GC.BlkAttr attr;            
+            GC.BlkAttr attr;
             if (ci.m_flags & TypeInfo_Class.ClassFlags.noPointers)
                 attr |= GC.BlkAttr.NO_SCAN;                        
             p = GC.malloc(ci.init.length, attr);            

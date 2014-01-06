@@ -19,6 +19,7 @@ import
     std.traits,
     std.range,
     std.regex,
+    std.string,
     std.uuid;
     
 /**
@@ -300,33 +301,39 @@ struct Var
                 code ~= "}";
                 return code;
             }                        
-            
+
             string _maker()
-            {   
-                string s = "{\n";                                    
-                auto _uqualType = text("Unqual!(", type, ")");
-                
-                //s ~= text(" pragma(msg, Type);");          
-                
-                s ~= text("  static if (is(",_uqualType," == class)) {\n");
-                s ~= text("    auto chunk = new void[](__traits(classInstanceSize, ",type,"));\n");        
+            {                               
+                string s = "{\n";
+                            
+                string utype = text("Unqual!(",type,")");
+                        
+                s ~= text("  static if (is(",type," == class)) {\n");
+                s ~= text("    ",sym(index),".v.addr = cast(void*)emplace!(",utype,")(new void[](__traits(classInstanceSize,",utype,")));\n");
                 s ~= text("  } else {\n");
-                s ~= text("    auto chunk = new void[]((",type,").sizeof);\n");        
-                s ~= text("  }\n");
-                s ~= text("  ", sym(index), ".v.addr = cast(void*)emplace!(",_uqualType,")(chunk);\n");
-                
-                if (std.string.strip(init).length == 0)                    
+                s ~= text("    ",sym(index),".v.addr = cast(void*)emplace!(",utype,")(new void[]((",utype,").sizeof));\n");
+                s ~= text("  }\n");  
+
+                if (std.string.strip(init).length == 0)
                     return s ~ "}\n";
-                                
-                s ~= text("  ", _uqualType, " temp = ", init, ";\n");
-                s ~= text("  move(temp, *cast(", _uqualType, "*)", sym(index), ".v.addr);\n}\n");        
-                return s;        
+                
+                string assign;
+                
+                assign = text("*cast(",utype,"*)",sym(index),".v.addr = ",utype,"(",init,");");    
+                s ~= text("  static if (__traits(compiles, { ",assign," }))\n  {\n");                
+                s ~= text("    ",assign,"\n  }\n");
+                
+                assign = text("*cast(",utype,"*)",sym(index),".v.addr = ",init,";");    
+                s ~= text("  else static if (__traits(compiles, { ",assign," }))\n  {\n");                
+                s ~= text("    ",assign,"\n  }\n");
+                
+                assign = text("*cast(",utype,"*)",sym(index),".v.addr = cast(",utype,")(",init,");");    
+                s ~= text("  else\n  {\n");                
+                s ~= text("    ",assign,"\n  }\n}\n");
+                        
+                return s;
             }
-
-
-            // TODO: __x_Type_x__ is fragile in applyToType
-
-            import std.regex, std.string;
+                        
             if (!type.match(`\bauto\b`).empty) // has initializer but no type
             {
                 assert(init.length > 0, "Auto var without initializer");
