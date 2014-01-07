@@ -12,8 +12,7 @@ module dabble.util;
 
 import std.conv : to;
 
-import
-    dabble.actions,
+import    
     dabble.repl;
 
 extern(C) void* gc_getProxy();

@@ -17,8 +17,7 @@ import
     std.stdio,
     std.string;
 
-import
-    dabble.actions,    
+import    
     dabble.parser,
     dabble.sharedlib,
     dabble.util;
@@ -31,6 +30,14 @@ private
 {
     SharedLib[] keepAlive;
     __gshared ReplContext[string] sessionMap;
+}
+
+
+DabbleParser parser;
+
+shared static this()
+{
+    parser = new DabbleParser;    
 }
 
 
@@ -171,20 +178,22 @@ string eval(string sessionId,
     if (newInput.length > 0 && !handleMetaCommand(sessionMap[sessionId], newInput, codeBuffer, message))
     {
         codeBuffer ~= inBuffer ~ "\n";
-        Parser.braceCount = 0;
-        auto balanced = ReplParse.BalancedBraces(codeBuffer.to!string());
+        //Parser.braceCount = 0;        
+        //auto balanced = ReplParse.BalancedBraces(codeBuffer.to!string());
+        auto braceCount = 0;
+        bool balanced = true;
 
         // TODO: Need to handle things like: a = 5; print a <- note no trailing ';' but 0 braces
 
-        if (!multiLine && balanced.successful && newInput[$-1] == ';')
+        if (!multiLine && balanced && newInput[$-1] == ';')
         {
             evaluate(codeBuffer.to!string(), sessionMap[sessionId], message);
             codeBuffer.clear();
         }
         else
         {
-            if ((balanced.successful && Parser.braceCount > 0) ||
-                (balanced.successful && Parser.braceCount == 0 && newInput[$-1] == ';'))
+            if ((balanced && braceCount > 0) ||
+                (balanced && braceCount == 0 && newInput[$-1] == ';'))
             {
                 evaluate(codeBuffer.to!string(), sessionMap[sessionId], message);
                 codeBuffer.clear();
@@ -312,7 +321,6 @@ struct RawCode
 /**
 * Holds REPL state.
 */
-
 struct ReplContext
 {
     Tuple!(string,"filename",
@@ -404,6 +412,43 @@ void append(Args...)(ref string message, Args msg)
 /**
 * Handle meta commands
 */
+
+enum string metaParser = `
+
+MetaParser:
+
+    MetaCommand <- MetaPrint MetaArgs?
+                 / MetaType MetaArgs?
+                 / MetaDelete MetaArgs
+                 / MetaReset MetaArgs
+                 / MetaDebugOn MetaArgs
+                 / MetaDebugOff MetaArgs
+                 / MetaUse MetaArgs
+                 / MetaClear MetaArgs?
+                 / MetaVersion
+
+    MetaPrint    <- 'print'
+    MetaType     <- 'type'
+    MetaDelete   <- 'delete'
+    MetaReset    <- 'reset'
+    MetaUse      <- 'use'
+    MetaDebugOn  <~ ('debug' wx 'on')
+    MetaDebugOff <~ ('debug' wx 'off')
+    MetaClear    <- 'clear'
+    MetaVersion  <- 'version'
+
+    MetaArgs <- (wxd Seq(MetaArg, ','))
+    MetaArg  <- ~((!(endOfLine / ',') .)*)
+
+    w   <- ' ' / '\t' / endOfLine    
+    wx  <- ;(w?) :(w*)
+    wxd  <- :(w*)   
+    Seq(T, Sep) <- wxd T wxd (Sep wxd T wxd)*
+    
+`;
+
+mixin(grammar(metaParser));
+
 bool handleMetaCommand(ref ReplContext repl,
                        ref const(char[]) inBuffer,
                        ref char[] codeBuffer,
@@ -411,7 +456,7 @@ bool handleMetaCommand(ref ReplContext repl,
 {
     import std.process : system;
 
-    auto parse = ReplParse.decimateTree(ReplParse.MetaCommand(inBuffer.to!string()));
+    auto parse = MetaParser.decimateTree(MetaParser(inBuffer.to!string()));
 
     if (!parse.successful) return false;
 
@@ -508,9 +553,14 @@ bool handleMetaCommand(ref ReplContext repl,
 
         case "delete":
         {
-            foreach(a; args)
-                deleteVar(repl, a);
-            break;
+            assert(false);
+            version(none) 
+            {
+                foreach(a; args)            
+                    deleteVar(repl, a);
+            
+                break;
+            }
         }
 
         case "use":
@@ -640,7 +690,12 @@ EvalResult evaluate(string code,
     if (repl.debugLevel & Debug.stages) message.append("PARSE...");
 
     bool showParse = cast(bool)(repl.debugLevel & Debug.parseOnly);
-    auto text = timeIt!(Parser.go)(code, repl, showParse, sw, times.parse);
+    auto text = parser.parse(code);
+    
+    writeln(text);
+    return EvalResult.noError; /** **/
+
+    version(none) {
 
     if (Parser.error.length != 0)
     {
@@ -686,6 +741,7 @@ EvalResult evaluate(string code,
     }
 
     assert(false);
+    }
 }
 
 

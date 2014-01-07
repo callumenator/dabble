@@ -18,13 +18,16 @@
             },
                         
             "sourceFiles": [        
-                "dabble/main.d",
-                "dabble/actions.d",
+                "dabble/main.d",                
                 "dabble/defs.d",                
                 "dabble/parser.d",
                 "dabble/repl.d",
                 "dabble/sharedlib.d",
-                "dabble/util.d"                
+                "dabble/util.d",
+                "dabble/stdx/d/ast.d",
+                "dabble/stdx/d/lexer.d",                                 
+                "dabble/stdx/d/parser.d",
+                "dabble/stdx/d/entities.d"                
             ]
         },
  		{
