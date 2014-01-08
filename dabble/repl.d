@@ -689,11 +689,15 @@ EvalResult evaluate(string code,
     writeln("-----------------------------------------------------------------------------------\n");    
         
 
-    if (parser.error.length != 0)
+    if (parser.errors.length != 0)
     {
-        message.append(parser.error);
+        message.append("Parse errors:\n", parser.errors);
+        repl.rawCode.fail();
+        pruneSymbols(repl);
         return EvalResult.parseError;
     }
+    
+    writeln(repl.share.symbols);
 
     if (repl.debugLevel & Debug.parseOnly)
     {

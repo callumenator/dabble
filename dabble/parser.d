@@ -34,45 +34,54 @@ class DabbleParser : Parser
 	Insert[] inserts; // sorted list of inserts
     
     ReplContext* repl;
-    LexerConfig config;    
-    uint funcBody = 0;    
+    LexerConfig config;        
     string source, original;
         
     string lastType, lastInit;
-    size_t typeStart = 0;    
-    
+    size_t typeStart = 0;        
     uint blockDepth = 0;
-    uint startDepth = 1;
-    uint funcDepth = 0;
+    uint startDepth = 0;    
     
     string head, pre, post, exprResult;
     
     string[] stringDups; 
     
-    string error;
+    string errors;
+    
+    override void error(lazy string message, bool shouldAdvance = true)
+    {
+        if (suppressMessages <= 0)        
+            errors ~= message ~ "\n";         
+        super.error(message, shouldAdvance);
+    }
               
     auto parse(string _source, ref ReplContext r)
     {     
         inserts.clear();
         stringDups.clear();        
         
-        error = "";
+        errors = "";
         repl = &r;
         head = "";
         pre = "";
         post = "";
         exprResult = "";
         
-        source = "{" ~ _source ~ "}";        
+        lastType = "";
+        lastInit = "";
+        typeStart = 0;        
+        blockDepth = 0;
+        startDepth = 0;    
+        
+        source = _source;        
         original = source;        
         
         // Reset parent state
         tokens = byToken(cast(ubyte[]) source, config).array();		
         suppressMessages = 0;
         index = 0;
-        
-		
-        parseBlockStatement();
+        		
+        parseDeclarationsAndStatements();                
                
         Defs.Code code;
         foreach(idx, ref sym; repl.share.symbols)
@@ -90,7 +99,7 @@ class DabbleParser : Parser
             "string _expressionResult;\n" ~
             repl.vtblFixup ~
             code.prefix.data ~
-            source[1..$-1] ~ 
+            source ~ 
             code.suffix.data ~
             "if (_expressionResult.length == 0) _expressionResult = `OK`; writeln(`=> `, _expressionResult);\n";
 
@@ -160,8 +169,8 @@ class DabbleParser : Parser
 
     int endIndex(bool expr)
     {
-        auto _index = expr ? index : index - 1;            
-        return 0 < _index && _index < tokens.length ? 
+        auto _index = expr ? index : (index > 0) ? index - 1 : 0;            
+        return _index < tokens.length ? 
             tokens[_index].startIndex + tokens[_index].value.length : 
                 source.length;
     }
@@ -190,24 +199,15 @@ class DabbleParser : Parser
     override VariableDeclaration parseVariableDeclaration(Type type = null, bool isAuto = false)
     {
         auto t = wrap(super.parseVariableDeclaration(type, isAuto));        
+        debug { writeln("VAR DECL: ", original[t[1]..t[2]]); }
         varDecl(t[1],t[2],t[0]);        
         return t[0];
     }
     
-    override AutoDeclaration parseAutoDeclaration()
-    {
-        auto t = wrap(super.parseAutoDeclaration());        
-        //varDecl(t[1],t[2],t[0]);        
-        writeln("AUTO: ", grab(t[1],t[2]));
-        return t[0];
-    }
-    
     override FunctionDeclaration parseFunctionDeclaration(Type type = null, bool isAuto = false)
-    {        
-        funcDepth++;
+    {                
         auto t = wrap(super.parseFunctionDeclaration(type, isAuto));        
-        userTypeDecl(typeStart, t[2], t[0].name.value, "function");        
-        funcDepth--;                
+        userTypeDecl(typeStart, t[2], t[0].name.value, "function");               
         return t[0];
     }
     
@@ -235,6 +235,7 @@ class DabbleParser : Parser
         auto slice = original[t[1]..t[2]];                
         repl.rawCode.append(slice, true);        
         repl.share.symbols ~= Defs.Symbol(Defs.Import(slice));                
+        blank(t[1],t[2]);
         return t[0];    
     }
     
@@ -246,20 +247,21 @@ class DabbleParser : Parser
     }
         
     override Type parseType()    
-    {           
+    {        
         auto t = wrap(super.parseType());                                
-        if (suppressMessages == 0 && funcDepth == 0)
+                
+        if (t[0] !is null && suppressMessages == 0 && blockDepth == startDepth)
         {
             lastType = original[t[1]..t[2]];                        
             typeStart = t[1];                                       
-        }
+        }         
         return t[0];
     }                        
     
     override Initializer parseInitializer()    
     {        
         auto t = wrap(super.parseInitializer(), true);               
-        lastInit = original[t[1]..t[2]];
+        lastInit = grab(t[1],t[2]);
         return t[0];
     }          
  
@@ -269,17 +271,31 @@ class DabbleParser : Parser
         auto t = wrap(super.parseIdentifierOrTemplateInstance());        
         if (suppressMessages == 0)
         {                        
-            if (i > 0 && tokens[i - 1].type != TokenType.dot)
+            if (i == 0 || (i > 0 && tokens[i - 1].type != TokenType.dot))
             {                
                 auto ident = original[t[1]..t[2]];
                 if (isDefined(ident))
-                {
+                {                  
                     stringDups ~= ident;
                     insert(t[1], "(*");
                     insert(t[2], ")");
-                }                
+                }                                
             }            
         }
+        return t[0];
+    }
+    
+    override PrimaryExpression parsePrimaryExpression()
+    {
+        auto t = wrap(super.parsePrimaryExpression(), true);                           
+                
+        if (t[0].primary.type == TokenType.stringLiteral ||
+            t[0].primary.type == TokenType.dstringLiteral ||
+            t[0].primary.type == TokenType.wstringLiteral )                
+        {
+            /// string dup
+            insert(t[2]-1, ".idup");
+        }               
         return t[0];
     }
     
@@ -393,9 +409,38 @@ class DabbleParser : Parser
         assert(false, "Tried to find un-defined variable " ~ name);
     }
     
+    /**
+    * Return true if input does not reference any local vars (i.e. can be
+    * put in code header.
+    */
+    bool isGlobal(string input, bool pointer = true)
+    {
+        import std.regex;
+
+        if (pointer)
+        {
+            auto r = regex(`(\(\*)([_a-zA-Z][_0-9a-zA-Z]*)(\))`, "g");
+            foreach(m; match(input, r))
+            if (isDefined(m.captures[2]))
+               return false;
+            return true;
+        }
+        else
+        {
+            auto r = regex(`(([_a-zA-Z][_0-9a-zA-Z]*))`, "g");
+            foreach(m; match(input, r))
+                if (isDefined(m.captures[1]))
+                    return false;
+            return true;
+        }
+
+        assert(false);
+    }
+
+    
     void parseError(string msg)
     {
-        error ~= msg ~ "\n";
+        errors ~= msg ~ "\n";
     }
 }
 
@@ -411,11 +456,18 @@ void pruneSymbols(ref ReplContext repl)
     foreach(s; repl.share.symbols)
     {
         if (s.valid)
-            keep ~= s;
+        {
+            debug { writeln(__FUNCTION__, ": keeping ", s); }
+            keep ~= s;            
+        }
         else
         {
+            debug { writeln(__FUNCTION__, ": pruning ", s); }
             if (s.type == Defs.Symbol.Type.Var)
+            {
                 repl.symbolSet.remove(s.v.name);
+                debug { writeln(__FUNCTION__, ": deleting var ", s); }
+            }            
         }
     }
     repl.share.symbols = keep;
