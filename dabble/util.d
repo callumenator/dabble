@@ -13,7 +13,8 @@ module dabble.util;
 import std.conv : to;
 
 import    
-    dabble.repl;
+    dabble.repl,
+    dabble.defs;
 
 extern(C) void* gc_getProxy();
 
@@ -77,7 +78,7 @@ extern(C) void hookNewClass(TypeInfo_Class ti,
                         
                     i.name = n;
                 }                                                                
-                _repl.vtblFixup ~= Parser.genFixup(i.name, index);
+                _repl.vtblFixup ~= genFixup(i.name, index);
             }
 
             vtblPtr = _repl.share.vtbls[index].vtbl.ptr;
@@ -89,6 +90,13 @@ extern(C) void hookNewClass(TypeInfo_Class ti,
         count = 0;
         infos.clear();
     }
+}
+
+string genFixup(string name, size_t index)
+{
+    return "memcpy(_repl_.vtbls["~to!(string)(index)~"].vtbl.ptr, "
+            "typeid("~name~").vtbl.ptr, "
+           "typeid("~name~").vtbl.length * (void*).sizeof);\n";
 }
 
 

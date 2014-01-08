@@ -432,7 +432,7 @@ struct Import
 
     void generate(ref Code c, size_t index)
     {
-        c.header.put("import " ~ decl ~ ";\n");
+        c.header.put(decl~"\n");
     }
 }
 

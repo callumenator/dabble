@@ -20,9 +20,8 @@ import
 import    
     dabble.parser,
     dabble.sharedlib,
-    dabble.util;
-    
-public import dabble.defs;
+    dabble.util,
+    dabble.defs;   
 
 bool consoleSession = true;
 
@@ -185,7 +184,7 @@ string eval(string sessionId,
 
         // TODO: Need to handle things like: a = 5; print a <- note no trailing ';' but 0 braces
 
-        if (!multiLine && balanced && newInput[$-1] == ';')
+        if (!multiLine && balanced /** && newInput[$-1] == ';' **/ )
         {
             evaluate(codeBuffer.to!string(), sessionMap[sessionId], message);
             codeBuffer.clear();
@@ -496,13 +495,10 @@ bool handleMetaCommand(ref ReplContext repl,
                 }
             }
             else if (args.length == 1 && args[0] == "__keepAlive")
-            {
-                version(none) 
-                {
-                    message.append("SharedLibs still alive:");
-                    foreach(s; keepAlive)
-                        message.append("  ", s);
-                }
+            {               
+                message.append("SharedLibs still alive:");
+                foreach(s; keepAlive)
+                    message.append("  ", s);             
             }
             else // print selected symbols
             {
@@ -545,22 +541,17 @@ bool handleMetaCommand(ref ReplContext repl,
             if (canFind(args, "session"))
             {
                 repl.reset();
-                version(none) { keepAlive.clear(); }
+                keepAlive.clear();
                 message.append("Session reset");
             }
             break;
         }
 
         case "delete":
-        {
-            assert(false);
-            version(none) 
-            {
-                foreach(a; args)            
-                    deleteVar(repl, a);
-            
-                break;
-            }
+        {                
+            foreach(a; args)            
+                deleteVar(repl, a);
+            break;            
         }
 
         case "use":
@@ -690,16 +681,17 @@ EvalResult evaluate(string code,
     if (repl.debugLevel & Debug.stages) message.append("PARSE...");
 
     bool showParse = cast(bool)(repl.debugLevel & Debug.parseOnly);
-    auto text = parser.parse(code);
+    auto text = parser.parse(code, repl);    
     
-    writeln(text);
-    return EvalResult.noError; /** **/
+    writeln("Parse -----------------------------------------------------------------------------");
+    writeln(text[0]);
+    writeln(text[1]);
+    writeln("-----------------------------------------------------------------------------------\n");    
+        
 
-    version(none) {
-
-    if (Parser.error.length != 0)
+    if (parser.error.length != 0)
     {
-        message.append(Parser.error);
+        message.append(parser.error);
         return EvalResult.parseError;
     }
 
@@ -741,7 +733,7 @@ EvalResult evaluate(string code,
     }
 
     assert(false);
-    }
+    
 }
 
 
@@ -998,8 +990,10 @@ CallResult call(ref ReplContext repl, ref string message)
     alias extern(C) int function(ref ReplShare) FuncType;
     alias extern(C) void* function() GCFunc;
     
+    repl.share.keepAlive = false;
+    
     version(Windows)
-    {
+    {        
         string ext = ".dll";
     }
     else version(Posix)
@@ -1058,7 +1052,7 @@ CallResult call(ref ReplContext repl, ref string message)
     if (repl.share.keepAlive)
     {
         repl.count ++;
-        keepAlive ~= lib;
+        keepAlive ~= lib;        
     } 
     else 
     {
