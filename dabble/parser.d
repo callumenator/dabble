@@ -22,12 +22,11 @@ import
     stdx.d.lexer, 
     stdx.d.parser, 
     stdx.d.ast;
-
+    
 import dabble.repl;
 
 import Defs = dabble.defs;
  
-
 class DabbleParser : Parser
 {
     alias Insert = Tuple!(uint,uint); // index, length
@@ -150,22 +149,17 @@ class DabbleParser : Parser
         auto t = mapIndices(from, to);
         return source[t[0]..t[1]];
     }
-
-    int startIndex()
-    {
-        return tokens[index].startIndex;
-    }
-
-    int endIndex()
+    
+    int charIndex()
     {        
         return index < tokens.length ? tokens[index].startIndex : original.length;
     }
     
     auto wrap(E)(lazy E func)
     {
-        auto s = startIndex();
+        auto s = charIndex();
         auto r = func;
-        auto e = endIndex();       
+        auto e = charIndex();       
         return tuple(r,s,e);
     }        
     
@@ -175,7 +169,7 @@ class DabbleParser : Parser
         
         if (!suppressMessages && depth == 0)
         {
-            declStart = startIndex();
+            declStart = charIndex();
             declCanBeGlobal = true;
             types.clear();
         }
@@ -258,7 +252,7 @@ class DabbleParser : Parser
         static depth = 0, start = 0;
                                 
         if (!suppressMessages && !blockDepth && depth == 0)        
-            start = startIndex();       
+            start = charIndex();       
             
         if (!suppressMessages) depth++;
     
@@ -267,7 +261,7 @@ class DabbleParser : Parser
         if (!suppressMessages) depth--;
         
         if (!suppressMessages && !blockDepth && depth == 0)        
-            types = original[start..endIndex()] ~ types;                 
+            types = original[start..charIndex()] ~ types;                 
                 
         return t[0];
     }                        
@@ -279,7 +273,7 @@ class DabbleParser : Parser
         if (!suppressMessages)
         {    
             if (depth == 0)
-                start = startIndex();
+                start = charIndex();
             depth++;
         }
                 
@@ -477,20 +471,11 @@ void pruneSymbols(ref ReplContext repl)
     keep.reserve(repl.share.symbols.length);
     foreach(s; repl.share.symbols)
     {
-        if (s.valid)
-        {
-            debug { writeln(__FUNCTION__, ": keeping ", s); }
-            keep ~= s;            
-        }
-        else
-        {
-            debug { writeln(__FUNCTION__, ": pruning ", s); }
-            if (s.type == Defs.Symbol.Type.Var)
-            {
-                repl.symbolSet.remove(s.v.name);
-                debug { writeln(__FUNCTION__, ": deleting var ", s); }
-            }            
-        }
+        if (s.valid)        
+            keep ~= s;                    
+        else        
+            if (s.type == Defs.Symbol.Type.Var)          
+                repl.symbolSet.remove(s.v.name);                                
     }
     repl.share.symbols = keep;
 }
@@ -509,4 +494,3 @@ void deleteVar(ref ReplContext repl, string name)
             keep ~= s;
     repl.share.symbols = keep;
 }
-

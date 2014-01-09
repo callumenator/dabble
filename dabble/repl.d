@@ -17,11 +17,13 @@ import
     std.stdio,
     std.string;
 
+    
 import    
     dabble.parser,
     dabble.sharedlib,
     dabble.util,
-    dabble.defs;   
+    dabble.defs,
+    dabble.grammars;   
 
 bool consoleSession = true;
 
@@ -112,8 +114,7 @@ void loop(string sessionId)
    
     stdout.flush();
     stdin.readln(inBuffer);
-    bool multiLine = false;
-
+    
     while (strip(inBuffer) != "exit")
     {
         auto result = sessionId.eval(inBuffer, codeBuffer).chomp().chomp();
@@ -176,12 +177,14 @@ string eval(string sessionId,
     // Try to handle meta command, else assume input is code
     if (newInput.length > 0 && !handleMetaCommand(sessionMap[sessionId], newInput, codeBuffer, message))
     {
-        codeBuffer ~= inBuffer ~ "\n";
+        codeBuffer ~= inBuffer ~ "    \n"; /// whitespace is intended, adds a buffer for range violations in stdx.d.parser
         //Parser.braceCount = 0;        
         //auto balanced = ReplParse.BalancedBraces(codeBuffer.to!string());
-        auto braceCount = 0;
-        bool balanced = true;
-
+        //bool balanced = true;
+        
+        auto balanced = Balanced.test(codeBuffer.to!string());
+        auto braceCount = Balanced.braceCount;
+        
         // TODO: Need to handle things like: a = 5; print a <- note no trailing ';' but 0 braces
 
         if (!multiLine && balanced /** && newInput[$-1] == ';' **/ )
@@ -408,45 +411,7 @@ void append(Args...)(ref string message, Args msg)
 }
 
 
-/**
-* Handle meta commands
-*/
 
-enum string metaParser = `
-
-MetaParser:
-
-    MetaCommand <- MetaPrint MetaArgs?
-                 / MetaType MetaArgs?
-                 / MetaDelete MetaArgs
-                 / MetaReset MetaArgs
-                 / MetaDebugOn MetaArgs
-                 / MetaDebugOff MetaArgs
-                 / MetaUse MetaArgs
-                 / MetaClear MetaArgs?
-                 / MetaVersion
-
-    MetaPrint    <- 'print'
-    MetaType     <- 'type'
-    MetaDelete   <- 'delete'
-    MetaReset    <- 'reset'
-    MetaUse      <- 'use'
-    MetaDebugOn  <~ ('debug' wx 'on')
-    MetaDebugOff <~ ('debug' wx 'off')
-    MetaClear    <- 'clear'
-    MetaVersion  <- 'version'
-
-    MetaArgs <- (wxd Seq(MetaArg, ','))
-    MetaArg  <- ~((!(endOfLine / ',') .)*)
-
-    w   <- ' ' / '\t' / endOfLine    
-    wx  <- ;(w?) :(w*)
-    wxd  <- :(w*)   
-    Seq(T, Sep) <- wxd T wxd (Sep wxd T wxd)*
-    
-`;
-
-mixin(grammar(metaParser));
 
 bool handleMetaCommand(ref ReplContext repl,
                        ref const(char[]) inBuffer,
@@ -1212,81 +1177,6 @@ private string getTempDir()
 }
 
 
-/**
-* Print-expression parser
-*/
-import
-    pegged.peg,
-    pegged.grammar;
-
-mixin(grammar(`
-
-ExprParser:
-
-    Expr    < ( IndexExpr / SubExpr / CastExpr / DerefExpr / MemberExpr / Ident )*
-
-    SubExpr < '(' Expr ')'
-
-    Ident   < identifier
-    Number  <~ [0-9]+
-    Index   < '[' Number ']'
-    CastTo  <~ (!')' .)*
-
-    IndexExpr   < (SubExpr / MemberExpr / Ident) Index+
-    CastExpr    < 'cast' '(' CastTo ')' Expr
-    DerefExpr   < '*' Expr
-    MemberExpr  < '.' Ident
-
-`));
-
-Tuple!(string,Operation[]) parseExpr(string s)
-{
-    Operation[] list;
-    auto p = ExprParser(s);
-    expressionList(p, list);
-    return tuple(list[0].val, list[1..$]);
-}
-
-
-void expressionList(ParseTree p, ref Operation[] list)
-{
-    enum Prefix = "ExprParser";
-    switch(p.name) with(Operation)
-    {
-        case Prefix:
-            expressionList(p.children[0], list);
-            break;
-        case Prefix ~ ".Expr":
-            foreach(c; p.children)
-                expressionList(c, list);
-            break;
-        case Prefix ~ ".SubExpr":
-            expressionList(p.children[0], list);
-            break;
-        case Prefix ~ ".IndexExpr":
-            expressionList(p.children[0], list);
-            foreach(c; p.children[1..$])
-                list ~= Operation(Op.Index, c.children[0].matches[0]);
-            break;
-        case Prefix ~ ".CastExpr":
-            expressionList(p.children[1], list);
-            list ~= Operation(Op.Cast, p.children[0].matches[0]);
-            break;
-        case Prefix ~ ".DerefExpr":
-            expressionList(p.children[0], list);
-            list ~= Operation(Op.Deref);
-            break;
-        case Prefix ~ ".MemberExpr":
-            list ~= Operation(Op.Member, p.children[0].matches[0]);
-            break;
-        case Prefix ~ ".Ident":
-            list ~= Operation(Op.Member, p.matches[0]);
-            break;
-        default: writeln("No clause for ", p.name);
-    }
-}
-
-
 unittest
 {
     writeln("/** Testing ", __FILE__, " **/");
@@ -1479,3 +1369,5 @@ ReplContext run(string[] code, uint debugLevel = 0)
     }
     return repl;
 }
+
+
