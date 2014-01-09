@@ -480,6 +480,7 @@ void pruneSymbols(ref ReplContext repl)
     repl.share.symbols = keep;
 }
 
+
 /**
 * Remove a variable with the given name.
 */

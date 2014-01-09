@@ -72,6 +72,15 @@ void setDebugLevel(uint level) in { assert(context.initalized, "Context not init
 
 
 /**
+* Reset the repl session
+*/
+void resetSession()
+{    
+    context.reset();
+}
+
+
+/**
 * Main repl entry point. Keep reading lines from stdin, handle any
 * repl commands, pass the rest onto eval.
 */

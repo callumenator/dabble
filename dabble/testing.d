@@ -9,6 +9,7 @@ import dabble.repl;
 */
 void run(string[] code, uint debugLevel = Debug.times)
 {    
+    import std.stdio;
     string err;
     evaluate("import std.stdio, std.conv, std.traits, std.typecons, std.algorithm, std.range;", err);
 
@@ -20,6 +21,7 @@ void run(string[] code, uint debugLevel = Debug.times)
         writeln(err);
     }    
 }
+
 
 void stress()
 {
@@ -86,6 +88,7 @@ void stress()
 
 void libTest()
 {    
+    import std.stdio;
     string err;
 
     void test(string i) { writeln(i); assert(evaluate(i, err) == EvalResult.noError, err); }
@@ -102,7 +105,7 @@ void libTest()
     //test("class C { int x; }; Unique!C f = new C;");
     //test("f.x = 7;");
 
-    context.reset();
+    resetSession();
 
     test("import std.algorithm, std.range;");
     test("auto r0 = iota(0, 50, 10);");
@@ -114,7 +117,7 @@ void libTest()
     test("[1,2,3,4,5].filter!(a => a > 3).array();");
     test("[1,2,3,4,5].isSorted();");
 
-    context.reset();
+    resetSession();
 
     test("import std.range;");
     test("auto r0 = iota(0, 50, 10);");
@@ -128,7 +131,7 @@ void libTest()
     test("takeExactly(iota(20), 5);");
     test("radial(iota(20).array(), 10);");
 
-    context.reset();
+    resetSession();
 
     test("import std.container;");
     test("SList!int slist0;");
@@ -150,7 +153,7 @@ void libTest()
     test("BinaryHeap!(Array!int) heap0 = BinaryHeap!(Array!int)(Array!int(1,2,3,4));");
     //test("heap0.insert(1);");
 
-    context.reset();
+    resetSession();
 
     test("import std.regex;");
     test("auto r0 = regex(`[a-z]*`,`g`);");
@@ -166,6 +169,7 @@ auto test0()
     return run(["class C { int x; }","c = new C;"]);
 }
 
+
 auto test1()
 {
     return run([
@@ -176,6 +180,7 @@ auto test1()
     "writeln(c.foo());"
     ]);
 }
+
 
 auto test2()
 {
