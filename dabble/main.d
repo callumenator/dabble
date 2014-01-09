@@ -14,25 +14,28 @@ import dabble.repl;
    
 void main(char[][] args)
 {
-    scope(exit) { onExit(); }    
-    auto session = initiateSession();
-    parseArgs(session, args[1..$]);                    
-    session.loop();           
-    return;
+    scope(exit) { onExit(); }        
+    parseArgs(args[1..$]);
+    
+    import dabble.testing;
+    stress();    
+    
+    loop();               
 }
 
-void parseArgs(string id, char[][] args)
+void parseArgs(char[][] args)
 {
     import std.stdio;
-
+    import std.string : toLower;
+    
     foreach(arg; args)
     {
-        switch(arg)
+        switch(arg.toLower())
         {
-            case "--noConsole":  dabble.repl.consoleSession = false; break;
-            case "--showTimes":  id.addDebugLevel(Debug.times);      break;
-            case "--showStages": id.addDebugLevel(Debug.stages);     break;
-            case "--parseOnly":  id.addDebugLevel(Debug.parseOnly);  break;
+            case "--noconsole":  dabble.repl.consoleSession = false; break;
+            case "--showtimes":  addDebugLevel(Debug.times);      break;
+            case "--showstages": addDebugLevel(Debug.stages);     break;
+            case "--parseonly":  addDebugLevel(Debug.parseOnly);  break;
             default: writeln("Unrecognized argument: ", arg);        break;
         }
     }

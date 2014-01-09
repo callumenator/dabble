@@ -27,18 +27,17 @@ import
 
 bool consoleSession = true;
 
-private
+private 
 {
-    SharedLib[] keepAlive;
-    __gshared ReplContext[string] sessionMap;
+    SharedLib[] keepAlive;    
+    ReplContext context;
+    DabbleParser parser;
 }
-
-
-DabbleParser parser;
 
 shared static this()
 {
-    parser = new DabbleParser;    
+    context.init();
+    parser = new DabbleParser;      
 }
 
 
@@ -57,39 +56,18 @@ enum Debug
 /**
 * Add a debug level to the session.
 */
-void addDebugLevel(string sessionId, Debug level)
-{
-    if (isValidSessionId(sessionId))
-        sessionMap[sessionId].debugLevel |= level;
-    else
-        writeln("Invalid session id: ", sessionId);
+void addDebugLevel(Debug level) in { assert(context.initalized, "Context not initalized"); } body 
+{    
+    context.debugLevel |= level;    
 }
 
 
 /**
 * Set the debug level to the session.
 */
-void setDebugLevel(string sessionId, uint level)
-{
-    if (isValidSessionId(sessionId))
-        sessionMap[sessionId].debugLevel = level;
-    else
-        writeln("Invalid session id: ", sessionId);
-}
-
-
-/**
-* Create a ReplContext and return a unique session ID for it.
-*/
-string initiateSession()
-{
-    import std.uuid;
-
-    auto id = randomUUID().toString();
-    auto context = ReplContext();
-    sessionMap[id] = context;
-
-    return id;
+void setDebugLevel(uint level) in { assert(context.initalized, "Context not initalized"); } body 
+{    
+    context.debugLevel = level;  
 }
 
 
@@ -97,10 +75,9 @@ string initiateSession()
 * Main repl entry point. Keep reading lines from stdin, handle any
 * repl commands, pass the rest onto eval.
 */
-void loop(string sessionId)
+void loop()
 {
-    if (!isValidSessionId(sessionId))
-        return;
+    assert(context.initalized, "Context not initalized");
 
     if (consoleSession) 
         clearScreen();
@@ -117,7 +94,7 @@ void loop(string sessionId)
     
     while (strip(inBuffer) != "exit")
     {
-        auto result = sessionId.eval(inBuffer, codeBuffer).chomp().chomp();
+        auto result = eval(inBuffer, codeBuffer).chomp().chomp();
         writeln(result);       
         
         if (consoleSession) 
@@ -148,25 +125,23 @@ void onExit()
 * Evaluate code in the context of the supplied ReplContext. This version assumes
 * inBuffer does not contain multiline input.
 */
-string eval(string sessionId, const char[] inBuffer)
+string eval(const char[] inBuffer)
 {
     char[] dummyBuffer;
-    return sessionId.eval(inBuffer, dummyBuffer);
+    return eval(inBuffer, dummyBuffer);
 }
 
 
 /**
 * Evaluate code in the context of the supplied ReplContext.
 */
-string eval(string sessionId,
-            const char[] inBuffer,
+string eval(const char[] inBuffer,
             ref char[] codeBuffer)
 {
+    assert(context.initalized, "Context not initalized");
+
     import std.string;
-
-    if (!isValidSessionId(sessionId))
-        return "Invalid session id: " ~ sessionId;
-
+   
     string message;
     bool multiLine = codeBuffer.length > 0;
     char[] newInput = strip(inBuffer.dup);
@@ -175,9 +150,9 @@ string eval(string sessionId,
         return "";
 
     // Try to handle meta command, else assume input is code
-    if (newInput.length > 0 && !handleMetaCommand(sessionMap[sessionId], newInput, codeBuffer, message))
+    if (newInput.length > 0 && !handleMetaCommand(newInput, codeBuffer, message))
     {
-        codeBuffer ~= inBuffer ~ "    \n"; /// whitespace is intended, adds a buffer for range violations in stdx.d.parser
+        codeBuffer ~= inBuffer ~ "\n"; 
         //Parser.braceCount = 0;        
         //auto balanced = ReplParse.BalancedBraces(codeBuffer.to!string());
         //bool balanced = true;
@@ -189,7 +164,7 @@ string eval(string sessionId,
 
         if (!multiLine && balanced /** && newInput[$-1] == ';' **/ )
         {
-            evaluate(codeBuffer.to!string(), sessionMap[sessionId], message);
+            evaluate(codeBuffer.to!string(), message);
             codeBuffer.clear();
         }
         else
@@ -197,7 +172,7 @@ string eval(string sessionId,
             if ((balanced && braceCount > 0) ||
                 (balanced && braceCount == 0 && newInput[$-1] == ';'))
             {
-                evaluate(codeBuffer.to!string(), sessionMap[sessionId], message);
+                evaluate(codeBuffer.to!string(), message);
                 codeBuffer.clear();
                 multiLine = false;
             }
@@ -207,14 +182,6 @@ string eval(string sessionId,
     return message;
 }
 
-
-/**
-* Check for a valid session id.
-*/
-bool isValidSessionId(string sessionId)
-{
-    return (sessionId in sessionMap) !is null;
-}
 
 
 /**
@@ -324,15 +291,7 @@ struct RawCode
 * Holds REPL state.
 */
 struct ReplContext
-{
-    Tuple!(string,"filename",
-           string,"tempPath",
-           string,"fullName") paths;
-
-    Tuple!(string,"path",
-           string,"name",
-           long,"modified")[] userModules;
-    
+{        
     uint count = 0;
     RawCode rawCode;
     ReplShare share;
@@ -340,6 +299,16 @@ struct ReplContext
     long[string] symbolSet;
     uint debugLevel = Debug.none;
     
+    Tuple!(string,"filename",string,"tempPath") paths;
+    Tuple!(string,"path",string,"name",long,"modified")[] userModules;
+ 
+    private bool _initalized = false;
+     
+    @property bool initalized()
+    {
+        return _initalized;
+    }
+     
     @property string filename()
     {
         return paths.filename ~ count.to!string();
@@ -348,35 +317,31 @@ struct ReplContext
     @property string fullName()
     {
         import std.path : dirSeparator;
-        return paths.tempPath ~ dirSeparator ~ paths.filename ~ count.to!string();
+        return paths.tempPath ~ dirSeparator ~ filename;
     }
-
-    static ReplContext opCall(string filename = "repl", uint debugLevel = Debug.none)
+        
+    void init()
     {
         import std.path : dirSeparator;
         import std.file : readText, exists;
+        
+        paths.filename = "repl";
+        paths.tempPath = getTempDir() ~ dirSeparator;        
+        debugLevel = debugLevel;
+        share.gc = gc_getProxy();
+        share.logFile = paths.tempPath ~ "__dabbleTemp";
 
-        ReplContext repl;
-
-        repl.paths.filename = filename;
-        repl.paths.tempPath = getTempDir() ~ dirSeparator;
-        repl.paths.fullName = repl.paths.tempPath ~ dirSeparator ~ filename;
-        repl.debugLevel = debugLevel;
-        repl.share.gc = gc_getProxy();
-        repl.share.logFile = repl.paths.tempPath ~ "__dabbleTemp";
-
-        repl.share.init();
+        share.init();
 
         string error;
-        if (!buildUserModules(repl, error, true))
+        if (!buildUserModules(error, true))
             throw new Exception("Unable to build defs.d, " ~ error);
 
-        return repl;
+        _initalized = true;
     }
-
-    /// Reset a REPL session
+    
     void reset()
-    {
+    {        
         rawCode.reset();
         share.reset();
         symbolSet.clear();
@@ -411,10 +376,7 @@ void append(Args...)(ref string message, Args msg)
 }
 
 
-
-
-bool handleMetaCommand(ref ReplContext repl,
-                       ref const(char[]) inBuffer,
+bool handleMetaCommand(ref const(char[]) inBuffer,
                        ref char[] codeBuffer,
                        ref string message)
 {
@@ -450,11 +412,11 @@ bool handleMetaCommand(ref ReplContext repl,
         {
             if (args.length == 0 || canFind(args, "all")) // print all vars
             {
-                auto vars = repl.share.symbols.filter!(s => s.type == Symbol.Type.Var)();
+                auto vars = context.share.symbols.filter!(s => s.type == Symbol.Type.Var)();
                 foreach(s; vars)
                 {
                     if (s.v.ty !is null)
-                        message.append(s.v.name, " (", s.v.displayType, ") = ", s.v.ty.valueOf([], s.v.addr, repl.share.map));
+                        message.append(s.v.name, " (", s.v.displayType, ") = ", s.v.ty.valueOf([], s.v.addr, context.share.map));
                     else if (s.v.func == true)
                         message.append(s.v.name, " (", s.v.displayType, ") = ", s.v.init);
                 }
@@ -470,11 +432,11 @@ bool handleMetaCommand(ref ReplContext repl,
                 foreach(a; args)
                 {
                     auto p = parseExpr(a);
-                    auto vars = repl.share.symbols.filter!(s => s.isVar() && s.v.name == p[0])();
+                    auto vars = context.share.symbols.filter!(s => s.isVar() && s.v.name == p[0])();
                     foreach(s; vars)
                     {
                         if (s.v.ty !is null)
-                            message.append(s.v.ty.valueOf(p[1], s.v.addr, repl.share.map));
+                            message.append(s.v.ty.valueOf(p[1], s.v.addr, context.share.map));
                         else if (s.v.func == true)
                             message.append(s.v.name, " (", s.v.displayType, ") = ", s.v.init);
                     }
@@ -488,10 +450,10 @@ bool handleMetaCommand(ref ReplContext repl,
             foreach(a; args)
             {
                 auto p = parseExpr(a);
-                auto vars = repl.share.symbols.filter!(s => s.isVar() && s.v.name == p[0] && s.v.ty.type !is null)();
+                auto vars = context.share.symbols.filter!(s => s.isVar() && s.v.name == p[0] && s.v.ty.type !is null)();
                 foreach(s; vars)
                 {
-                    auto typeOf = s.v.ty.typeOf(p[1], repl.share.map);
+                    auto typeOf = s.v.ty.typeOf(p[1], context.share.map);
                     if (typeOf[1].length > 0)
                         message.append(typeOf[1]);
                     else
@@ -505,7 +467,7 @@ bool handleMetaCommand(ref ReplContext repl,
         {
             if (canFind(args, "session"))
             {
-                repl.reset();
+                context.reset();
                 keepAlive.clear();
                 message.append("Session reset");
             }
@@ -515,7 +477,7 @@ bool handleMetaCommand(ref ReplContext repl,
         case "delete":
         {                
             foreach(a; args)            
-                deleteVar(repl, a);
+                deleteVar(context, a);
             break;            
         }
 
@@ -523,12 +485,12 @@ bool handleMetaCommand(ref ReplContext repl,
         {
             import std.path, std.datetime, std.range;
             import std.file : exists;
-            alias ElementType!(typeof(repl.userModules)) TupType;
+            alias ElementType!(typeof(context.userModules)) TupType;
 
             foreach(a; args)
             {
                 if (exists(a))
-                    repl.userModules ~= TupType(dirName(a), baseName(a), SysTime(0).stdTime());
+                    context.userModules ~= TupType(dirName(a), baseName(a), SysTime(0).stdTime());
                 else
                     message.append("Error: module ", a, " could not be found");
             }
@@ -547,8 +509,8 @@ bool handleMetaCommand(ref ReplContext repl,
             break;
         }
 
-        case "debug on": foreach(arg; args) setDebugLevelFromString!"on"(repl, arg); break;
-        case "debug off": foreach(arg; args) setDebugLevelFromString!"off"(repl, arg); break;
+        case "debug on": foreach(arg; args) setDebugLevelFromString!"on"(arg); break;
+        case "debug off": foreach(arg; args) setDebugLevelFromString!"off"(arg); break;
         default: return false;
     }
 
@@ -586,15 +548,15 @@ void clearScreen()
 /**
 * Turn a debug level on or off, using a string to identify the debug level.
 */
-void setDebugLevelFromString(string s)(ref ReplContext repl, string level)
+void setDebugLevelFromString(string s)(string level)
     if (s == "on" || s == "off")
 {
     import std.string;
 
     static if (s == "on")
-        enum string op = "repl.debugLevel |= ";
+        enum string op = "context.debugLevel |= ";
     else static if (s == "off")
-        enum string op = "repl.debugLevel &= ~";
+        enum string op = "context.debugLevel &= ~";
 
     switch(toLower(level))
     {
@@ -611,8 +573,7 @@ void setDebugLevelFromString(string s)(ref ReplContext repl, string level)
 /**
 * Evaluate code in the context of the supplied ReplContext.
 */
-EvalResult evaluate(string code,
-                    ref ReplContext repl,
+EvalResult evaluate(string code,                    
                     out string message)
 {
     import std.datetime : StopWatch;
@@ -624,10 +585,10 @@ EvalResult evaluate(string code,
 
     scope(success)
     {
-        if (repl.debugLevel & Debug.times)
+        if (context.debugLevel & Debug.times)
         {
             message ~= text("TIMINGS: parse: ", times.parse);
-            if (!(repl.debugLevel & Debug.parseOnly))
+            if (!(context.debugLevel & Debug.parseOnly))
                 message.append(", build: ", times.build, ", call: ", times.call, ", TOTAL: ",
                         times.parse + times.build + times.call);
             else
@@ -643,10 +604,10 @@ EvalResult evaluate(string code,
         return res;
     }
 
-    if (repl.debugLevel & Debug.stages) message.append("PARSE...");
+    if (context.debugLevel & Debug.stages) message.append("PARSE...");
 
-    bool showParse = cast(bool)(repl.debugLevel & Debug.parseOnly);
-    auto text = parser.parse(code, repl);    
+    bool showParse = cast(bool)(context.debugLevel & Debug.parseOnly);
+    auto text = parser.parse(code, context);    
     
     /**
     writeln("Parse -----------------------------------------------------------------------------");
@@ -658,12 +619,12 @@ EvalResult evaluate(string code,
     if (parser.errors.length != 0)
     {
         message.append("Parse errors:\n", parser.errors);
-        repl.rawCode.fail();
-        pruneSymbols(repl);
+        context.rawCode.fail();
+        pruneSymbols(context);
         return EvalResult.parseError;
     }        
 
-    if (repl.debugLevel & Debug.parseOnly)
+    if (context.debugLevel & Debug.parseOnly)
     {
         message.append(text[0]~text[1]);
         return EvalResult.noError;
@@ -672,31 +633,31 @@ EvalResult evaluate(string code,
     if (text[0].length == 0 && text[1].length == 0)
         return EvalResult.noError;
 
-    if (repl.debugLevel & Debug.stages) message.append("BUILD...");
+    if (context.debugLevel & Debug.stages) message.append("BUILD...");
 
-    auto build = timeIt!build(text, repl, message, sw, times.build);
+    auto build = timeIt!build(text, message, sw, times.build);
 
     if (!build)
     {
-        pruneSymbols(repl);
+        pruneSymbols(context);
         return EvalResult.buildError;
     }
 
-    if (repl.debugLevel & Debug.stages) message.append("CALL...");
+    if (context.debugLevel & Debug.stages) message.append("CALL...");
 
-    auto call = timeIt!call(repl, message, sw, times.call);
+    auto call = timeIt!call(message, sw, times.call);
 
     // Prune any symbols not marked as valid
-    pruneSymbols(repl);
+    pruneSymbols(context);
 
     final switch(call) with(CallResult)
     {
         case success:
-            hookNewClass(typeid(Object) /** dummy **/, null /** dummy **/, &repl, false);
+            hookNewClass(typeid(Object) /** dummy **/, null /** dummy **/, &context, false);
             return EvalResult.noError;
         case loadError:
         case runtimeError:
-            hookNewClass(typeid(Object) /** dummy **/, null /** dummy **/, &repl, true);
+            hookNewClass(typeid(Object) /** dummy **/, null /** dummy **/, &context, true);
             return EvalResult.callError;
     }
 
@@ -708,8 +669,7 @@ EvalResult evaluate(string code,
 /**
 * Attempt a build command, redirect errout to a text file.
 */
-bool attempt(ReplContext repl,
-             string cmd,
+bool attempt(string cmd,
              ref string message,
              string codeFilename)
 {
@@ -720,7 +680,7 @@ bool attempt(ReplContext repl,
 
     if (res != 0)
     {
-        auto errFile = repl.paths.tempPath ~ "errout.txt";
+        auto errFile = context.paths.tempPath ~ "errout.txt";
         if (exists(errFile))
             message = parseDmdErrorFile(codeFilename, errFile, true);
         return false;
@@ -733,8 +693,7 @@ bool attempt(ReplContext repl,
 * Build a shared lib from supplied code.
 */
 import std.typecons;
-bool build(Tuple!(string,string) code,
-           ref ReplContext repl,
+bool build(Tuple!(string,string) code,           
            ref string message)
 {
     import std.file : exists, readText;
@@ -763,13 +722,13 @@ bool build(Tuple!(string,string) code,
         code[1] ~
         "}\n";
 
-    auto file = File(repl.fullName ~ ".d", "w");
+    auto file = File(context.fullName ~ ".d", "w");
     file.write(text ~ genHeader());
     file.close();
 
-    if (!exists(repl.fullName ~ ".def"))
+    if (!exists(context.fullName ~ ".def"))
     {
-        file = File(repl.fullName ~ ".def", "w");
+        file = File(context.fullName ~ ".def", "w");
 
         enum def = "LIBRARY repl\n"
                    "DESCRIPTION 'repl'\n"
@@ -781,7 +740,7 @@ bool build(Tuple!(string,string) code,
         file.close();
     }
 
-    auto dirChange = "cd " ~ escapeShellFileName(repl.paths.tempPath);
+    auto dirChange = "cd " ~ escapeShellFileName(context.paths.tempPath);
     auto linkFlags = ["-L/NORELOCATIONCHECK", "-L/NOMAP"];   
     auto dmdFlags = ["-shared"];
     
@@ -791,20 +750,20 @@ bool build(Tuple!(string,string) code,
     } 
     
     string cmd = std.conv.text(dirChange, " & dmd ", dmdFlags.join(" "), " ", 
-                               linkFlags.join(" "), " ", repl.filename, ".d ", 
-                               repl.filename, ".def extra.lib");
+                               linkFlags.join(" "), " ", context.filename, ".d ", 
+                               context.filename, ".def extra.lib");
 
-    if (!buildUserModules(repl, message))
+    if (!buildUserModules(message))
         return false;
 
-    if (repl.userModules.length > 0)
+    if (context.userModules.length > 0)
     {
-        auto includePaths = repl.userModules.map!(a => "-I" ~ a.path)().join(" ");
+        auto includePaths = context.userModules.map!(a => "-I" ~ a.path)().join(" ");
         cmd ~= includePaths;
     }
 
     string tempMessage;
-    bool buildAttempt = attempt(repl, cmd, tempMessage, repl.fullName ~ ".d");
+    bool buildAttempt = attempt(cmd, tempMessage, context.fullName ~ ".d");
 
     if (!buildAttempt)
     {
@@ -812,23 +771,23 @@ bool build(Tuple!(string,string) code,
         // raw code. (Originally this was done in a background thread along with the
         // full build, but it adds latency for all code, not just that which is wrong).
 
-        auto test = testCompile(repl);
+        auto test = testCompile();
 
         if (test.length > 0)
         {
             message ~= test;
-            repl.rawCode.fail();
+            context.rawCode.fail();
             return false;
         }
         else
         {
             message ~= "Internal error: test compile passed, full build failed. Error follows:\n" ~ tempMessage;
-            repl.rawCode.fail();
+            context.rawCode.fail();
             return false;
         }
     }
 
-    repl.rawCode.pass();
+    context.rawCode.pass();
     return true;
 }
 
@@ -840,23 +799,23 @@ bool build(Tuple!(string,string) code,
 *   error message string if compilation failed
 *   else an empty string
 */
-string testCompile(/* const */ ReplContext repl)
+string testCompile()
 {
     import std.file : exists, remove;
     import std.process : system, escapeShellFileName;
 
-    auto srcFile = repl.paths.tempPath ~ "testCompile.d";
-    auto errFile = repl.paths.tempPath ~ "testCompileErrout.txt";
+    auto srcFile = context.paths.tempPath ~ "testCompile.d";
+    auto errFile = context.paths.tempPath ~ "testCompileErrout.txt";
 
     auto rawFile = File(srcFile, "w");
-    rawFile.write(repl.rawCode.toString());
+    rawFile.write(context.rawCode.toString());
     rawFile.close();
 
     if (errFile.exists()) {
         try { errFile.remove(); } catch(Exception e) {}
     }
 
-    auto dirChange = "cd " ~ escapeShellFileName(repl.paths.tempPath);
+    auto dirChange = "cd " ~ escapeShellFileName(context.paths.tempPath);
     auto cmd = dirChange ~ " & dmd -o- -c testCompile.d";
 
     string result;
@@ -870,8 +829,7 @@ string testCompile(/* const */ ReplContext repl)
 /**
 * Rebuild user modules into a lib to link with. Only rebuild files that have changed.
 */
-bool buildUserModules(ReplContext repl,
-                      ref string message,
+bool buildUserModules(ref string message,
                       bool init = false)
 {
     import std.datetime;
@@ -886,20 +844,20 @@ bool buildUserModules(ReplContext repl,
         auto text = "module defs;\n"
                   ~ readText(replPath() ~ "/dabble/defs.d").findSplitAfter("module dabble.defs;")[1];
 
-        auto f = File(repl.paths.tempPath ~ "defs.d", "w");
+        auto f = File(context.paths.tempPath ~ "defs.d", "w");
         f.write(text);
         f.close();
-        if (!attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -c -release -noboundscheck -O defs.d", message, repl.paths.tempPath ~ "defs.d"))
+        if (!attempt("cd " ~ context.paths.tempPath ~ " & dmd -c -release -noboundscheck -O defs.d", message, context.paths.tempPath ~ "defs.d"))
             return false;
     }
 
-    if (repl.userModules.length == 0 && !rebuildLib)
+    if (context.userModules.length == 0 && !rebuildLib)
         return true;
 
-    auto allIncludes = repl.userModules.map!(a => "-I" ~ a.path)().join(" ");
+    auto allIncludes = context.userModules.map!(a => "-I" ~ a.path)().join(" ");
 
     SysTime access, modified;
-    foreach(ref m; repl.userModules)
+    foreach(ref m; context.userModules)
     {
         auto fullPath = m.path~dirSeparator~m.name;
         getTimes(fullPath, access, modified);
@@ -908,9 +866,9 @@ bool buildUserModules(ReplContext repl,
             continue;
 
         rebuildLib = true;
-        auto cmd = "cd " ~ repl.paths.tempPath ~ " & dmd -c " ~ allIncludes ~ " " ~ fullPath;
+        auto cmd = "cd " ~ context.paths.tempPath ~ " & dmd -c " ~ allIncludes ~ " " ~ fullPath;
 
-        if (!attempt(repl, cmd, message, fullPath))
+        if (!attempt(cmd, message, fullPath))
             return false;
 
         getTimes(fullPath, access, modified);
@@ -919,8 +877,8 @@ bool buildUserModules(ReplContext repl,
 
     if (rebuildLib)
     {        
-        auto objs = repl.userModules.map!(a => stripExtension(a.name)~".obj")().join(" ");
-        if (!attempt(repl, "cd " ~ repl.paths.tempPath ~ " & dmd -lib -ofextra.lib defs.obj " ~ objs, message, ""))
+        auto objs = context.userModules.map!(a => stripExtension(a.name)~".obj")().join(" ");
+        if (!attempt("cd " ~ context.paths.tempPath ~ " & dmd -lib -ofextra.lib defs.obj " ~ objs, message, ""))
             return false;
     }
 
@@ -931,14 +889,14 @@ bool buildUserModules(ReplContext repl,
 /**
 * Cleanup some dmd outputs in a another thread.
 */
-void cleanup(ReplContext repl)
+void cleanup()
 {
     import std.file : exists, remove;
 
     auto clean = [
-        repl.fullName ~ ".obj",
-        repl.fullName ~ ".map",
-        repl.paths.tempPath ~ "errout.txt"
+        context.fullName ~ ".obj",
+        context.fullName ~ ".map",
+        context.paths.tempPath ~ "errout.txt"
     ];
 
     foreach(f; clean)
@@ -950,7 +908,7 @@ void cleanup(ReplContext repl)
 /**
 * Load the shared lib, and call the _main function. Free the lib on exit.
 */
-CallResult call(ref ReplContext repl, ref string message)
+CallResult call(ref string message)
 {
     import core.memory : GC;
     import std.exception;
@@ -959,7 +917,7 @@ CallResult call(ref ReplContext repl, ref string message)
     alias extern(C) int function(ref ReplShare) FuncType;
     alias extern(C) void* function() GCFunc;
     
-    repl.share.keepAlive = false;
+    context.share.keepAlive = false;
     
     version(Windows)
     {        
@@ -974,12 +932,12 @@ CallResult call(ref ReplContext repl, ref string message)
         static assert(false, "Platform not supported");
     }
         
-    auto lib = SharedLib(repl.fullName ~ ext);
+    auto lib = SharedLib(context.fullName ~ ext);
     
     /** Experimental over-estimate image memory bounds */
     
-    repl.share.imageBounds[0] = lib.handle; 
-    repl.share.imageBounds[1] = lib.handle + DirEntry(repl.fullName ~ ext).size();
+    context.share.imageBounds[0] = lib.handle; 
+    context.share.imageBounds[1] = lib.handle + DirEntry(context.fullName ~ ext).size();
     
     /** ------------ */
     
@@ -999,7 +957,7 @@ CallResult call(ref ReplContext repl, ref string message)
             return CallResult.loadError;
         }
 
-        auto res = funcPtr(repl.share);       
+        auto res = funcPtr(context.share);       
         GC.removeRange(rangeBottom); 
     }
     else
@@ -1008,19 +966,19 @@ CallResult call(ref ReplContext repl, ref string message)
     }
                
                
-    if (exists(repl.share.logFile))
+    if (exists(context.share.logFile))
     {
         try
         {
-            message.append(readText(repl.share.logFile));
-            remove(repl.share.logFile);
+            message.append(readText(context.share.logFile));
+            remove(context.share.logFile);
         }
         catch(Exception e) {}
     }
         
-    if (repl.share.keepAlive)
+    if (context.share.keepAlive)
     {
-        repl.count ++;
+        context.count ++;
         keepAlive ~= lib;        
     } 
     else 
@@ -1083,21 +1041,20 @@ string parseDmdErrorFile(string srcFile, string errFile, bool dederef)
     import std.path: baseName;
     import std.file : readText, exists;
     import std.string : splitLines, strip;
-
-    string result;
-
+    
     if (!exists(srcFile))
         throw new Exception("parseDmdErrorFile: srcFile does not exist");
     if (!exists(errFile))
         throw new Exception("parseDmdErrorFile: errFile does not exist");
 
+    string result;
+    auto previousLineNumber = -1;    
     auto src = readText(srcFile).splitLines();
     auto err = readText(errFile).splitLines();
-
-    int previousLineNumber = -1;
+        
     foreach(count, l; err)
     {
-        if (l.length == 0)
+        if (l.length == 0) 
             continue;
 
         auto split = stripDmdErrorLine(replace(l, regex(srcFile.baseName("d"), "g"), ""));
@@ -1128,7 +1085,7 @@ string parseDmdErrorFile(string srcFile, string errFile, bool dederef)
 /**
 * Try to find the absolute path of the repl executable
 */
-string replPath()
+private string replPath()
 {
     version(Windows)
     {
@@ -1175,199 +1132,3 @@ private string getTempDir()
 
     return tmpRoot;
 }
-
-
-unittest
-{
-    writeln("/** Testing ", __FILE__, " **/");
-    stress();
-}
-
-
-ReplContext stress()
-{
-    return run([
-    "auto err0 = `1.2`.to!int;",
-    "struct S {int x, y = 5; }",
-    "auto structS = S();",
-    "auto arr0 = [1,2,3,4];",
-    "auto arr1 = arr0.sort();",
-    "auto arr2 = arr1;",    
-    "foreach(ref i; arr2) i++;",
-    "writeln(arr2);",
-    "writeln(structS);",
-    "class C { int a; string b; }",
-    "auto classC = new C;",
-    "auto str0 = `hello there`;",
-    "foreach(i; iota(150)) { str0 ~= `x`;}",
-    "writeln(str0);",
-    "writeln(classC);",
-    "str0 = str0[0..$-20];"
-    "writeln(str0);",
-    "auto aa0 = [`one`:1, `two`:2, `three`:3, `four`:4];",
-    "writeln(aa0[`two`]);",
-    "writeln(aa0);",
-    "writeln(arr0);",
-    "enum Enum { one, two = 5, three = 7 }",
-    "auto ee = Enum.two;",
-    "write(ee, \"\n\");",
-    "auto int0 = 0;",
-    "for(auto i=0; i<50; i++) int0++;",
-    "import std.array;",
-    "auto app0 = appender!string;",
-    "for(auto i=0; i<50; i++) app0.put(`blah`);",
-    "writeln(app0.data);",
-    "import std.container;",
-    "auto arr3 = Array!int(4, 6, 2, 3, 8, 0, 2);",
-    "foreach(val; arr3[]){ writeln(val); }",
-    "int foo(int i) { return 5*i + 1; }",
-    "foo(100);",
-    "immutable int int1 = 45;", 
-    "const(int) int2 = foo(3);",
-    "Array!int arr4;",
-    "arr4 ~= [1,2,3,4];",
-    "writeln(arr4[]);",
-    "T boo(T)(T t) { return T.init; }",
-    "auto short0 = boo(cast(short)5);",
-    "if (true) { auto b = [1,2,3]; writeln(b); } else { auto b = `hello`; writeln(b); }",
-    "auto counter0 = 10;",
-    "while(counter0-- > 1) { if (false) { auto _temp = 8; } else { writeln(counter0);} }",
-    "auto func0 = (int i) { return i + 5; };",
-    "func0(10);",
-    "auto func1 = func0;",
-    "func1(10);",
-    "auto func2 = (int i) => i + 5;",
-    "auto func3 = (int i) => (i + 5);",
-    "func1(func2(func3(5)));",
-    "import std.algorithm, std.range;",
-    "auto arr5 = [1,2,3,4,5];",
-    "arr5 = arr5.map!( a => a + 4).array();",
-    "writeln(arr5);"
-    ], Debug.times);
-}
-
-
-void libTest()
-{
-    auto repl = ReplContext();
-    string err;
-
-    void test(string i) { writeln(i); assert(evaluate(i, repl, err) == EvalResult.noError, err); }
-    
-    test("import std.typecons;");
-    test("Nullable!int a;");
-    test("a = 5;");
-    test("a;");
-    test("int b;");
-    test("auto bref = NullableRef!int(&b);");
-    test("bref = 5;");
-    test("bref;");
-    test("auto c = tuple(1, `hello`);");    
-    //test("class C { int x; }; Unique!C f = new C;");
-    //test("f.x = 7;");
-
-    repl.reset();
-
-    test("import std.algorithm, std.range;");
-    test("auto r0 = iota(0, 50, 10);");
-    test("r0.find(20);");
-    test("balancedParens(`((()))`, '(', ')');");
-    test("`hello`.countUntil('l');");
-    test("`hello`.findSplitAfter(`el`);");
-    test("[1,2,3,4,5].bringToFront([3,4,5]);");
-    test("[1,2,3,4,5].filter!(a => a > 3).array();");
-    test("[1,2,3,4,5].isSorted();");
-
-    repl.reset();
-
-    test("import std.range;");
-    test("auto r0 = iota(0, 50, 10);");
-    test("while(!r0.empty) { r0.popFront(); }");
-    test("auto r1 = stride(iota(0, 50, 1), 5);");
-    test("writeln(r1);");
-    test("drop(iota(20), 12);");
-    test("auto r2 = iota(20);");
-    test("popFrontN(r2, 7);");
-    test("takeOne(retro(iota(20)));");
-    test("takeExactly(iota(20), 5);");
-    test("radial(iota(20).array(), 10);");
-
-    repl.reset();
-
-    test("import std.container;");
-    test("SList!int slist0;");
-    test("slist0.insertFront([1,2,3]);");
-    test("auto slist1 = SList!int(1,2,3);");
-    test("slist1.insertFront([1,2,3]);");
-    test("DList!int dlist0;");
-    test("dlist0.insertFront([1,2,3]);");
-    test("auto dlist1 = DList!int(1,2,3);");
-    test("dlist1.insertFront([1,2,3]);");
-    test("Array!int array0;");
-    test("array0 ~= [1,2,3];");
-    test("auto array1 = Array!int(1,2,3);");
-    test("array1 ~= [1,2,3];");
-    test("auto tree0 = redBlackTree!true(1,2,3,4,5);");
-    test("tree0.insert(5);");
-    test("RedBlackTree!int tree1 = new RedBlackTree!int();");
-    test("tree1.insert(5);");
-    test("BinaryHeap!(Array!int) heap0 = BinaryHeap!(Array!int)(Array!int(1,2,3,4));");
-    //test("heap0.insert(1);");
-
-    repl.reset();
-
-    test("import std.regex;");
-    test("auto r0 = regex(`[a-z]*`,`g`);");
-    test("auto m0 = match(`abdjsadfjg`,r0);");
-    test("auto r1 = regex(`[0-9]+`,`g`);");
-    test("auto m1 = match(`12345`,r1);");
-
-}
-
-
-auto test0()
-{
-    return run(["class C { int x; }","c = new C;"]);
-}
-
-auto test1()
-{
-    return run([
-    "interface I { bool foo(); } ", 
-    "class C : I { int x; bool foo() { return true; } }", 
-    "c = new C;",
-    "writeln(c);",
-    "writeln(c.foo());"
-    ]);
-}
-
-auto test2()
-{
-    return run([
-    "import std.typecons; int i = 7; ", "Unique!int ui = &i;", "writeln(ui);"
-    ]);
-}
-
-
-
-/**
-* Eval an array of strings. Mainly for testing.
-*/
-ReplContext run(string[] code, uint debugLevel = 0)
-{
-    auto repl = ReplContext("repl", debugLevel);
-
-    string err;
-    evaluate("import std.stdio, std.conv, std.traits, std.typecons, std.algorithm, std.range;", repl, err);
-
-    foreach(i, c; code)
-    {
-        writeln("Line: ", i, " -> ", c);
-        auto result = evaluate(c, repl, err);
-        assert(result != EvalResult.parseError && result != EvalResult.buildError, err);
-        writeln(err);
-    }
-    return repl;
-}
-
-
