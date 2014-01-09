@@ -683,12 +683,12 @@ EvalResult evaluate(string code,
     bool showParse = cast(bool)(repl.debugLevel & Debug.parseOnly);
     auto text = parser.parse(code, repl);    
     
-    
+    /**
     writeln("Parse -----------------------------------------------------------------------------");
     writeln(text[0]);
     writeln(text[1]);
     writeln("-----------------------------------------------------------------------------------\n");    
-    
+    **/
 
     if (parser.errors.length != 0)
     {
@@ -1335,7 +1335,7 @@ ReplContext stress()
     "immutable int int1 = 45;", 
     "const(int) int2 = foo(3);",
     "Array!int arr4;",
-    "auto arr4 ~= [1,2,3,4];",
+    "arr4 ~= [1,2,3,4];",
     "writeln(arr4[]);",
     "T boo(T)(T t) { return T.init; }",
     "auto short0 = boo(cast(short)5);",
@@ -1369,17 +1369,17 @@ void libTest()
     test("a = 5;");
     test("a;");
     test("int b;");
-    test("bref = NullableRef!int(&b);");
+    test("auto bref = NullableRef!int(&b);");
     test("bref = 5;");
     test("bref;");
-    test("c = tuple(1, `hello`);");    
+    test("auto c = tuple(1, `hello`);");    
     //test("class C { int x; }; Unique!C f = new C;");
     //test("f.x = 7;");
 
     repl.reset();
 
     test("import std.algorithm, std.range;");
-    test("r0 = iota(0, 50, 10);");
+    test("auto r0 = iota(0, 50, 10);");
     test("r0.find(20);");
     test("balancedParens(`((()))`, '(', ')');");
     test("`hello`.countUntil('l');");
@@ -1391,12 +1391,12 @@ void libTest()
     repl.reset();
 
     test("import std.range;");
-    test("r0 = iota(0, 50, 10);");
+    test("auto r0 = iota(0, 50, 10);");
     test("while(!r0.empty) { r0.popFront(); }");
-    test("r1 = stride(iota(0, 50, 1), 5);");
+    test("auto r1 = stride(iota(0, 50, 1), 5);");
     test("writeln(r1);");
     test("drop(iota(20), 12);");
-    test("r2 = iota(20);");
+    test("auto r2 = iota(20);");
     test("popFrontN(r2, 7);");
     test("takeOne(retro(iota(20)));");
     test("takeExactly(iota(20), 5);");
@@ -1407,30 +1407,30 @@ void libTest()
     test("import std.container;");
     test("SList!int slist0;");
     test("slist0.insertFront([1,2,3]);");
-    test("slist1 = SList!int(1,2,3);");
+    test("auto slist1 = SList!int(1,2,3);");
     test("slist1.insertFront([1,2,3]);");
     test("DList!int dlist0;");
     test("dlist0.insertFront([1,2,3]);");
-    test("dlist1 = DList!int(1,2,3);");
+    test("auto dlist1 = DList!int(1,2,3);");
     test("dlist1.insertFront([1,2,3]);");
     test("Array!int array0;");
     test("array0 ~= [1,2,3];");
-    test("array1 = Array!int(1,2,3);");
+    test("auto array1 = Array!int(1,2,3);");
     test("array1 ~= [1,2,3];");
     test("auto tree0 = redBlackTree!true(1,2,3,4,5);");
     test("tree0.insert(5);");
     test("RedBlackTree!int tree1 = new RedBlackTree!int();");
     test("tree1.insert(5);");
     test("BinaryHeap!(Array!int) heap0 = BinaryHeap!(Array!int)(Array!int(1,2,3,4));");
-    test("heap0.insert(1);");
+    //test("heap0.insert(1);");
 
     repl.reset();
 
     test("import std.regex;");
-    test("r0 = regex(`[a-z]*`,`g`);");
-    test("m0 = match(`abdjsadfjg`,r0);");
-    test("r1 = regex(`[0-9]+`,`g`);");
-    test("m1 = match(`12345`,r1);");
+    test("auto r0 = regex(`[a-z]*`,`g`);");
+    test("auto m0 = match(`abdjsadfjg`,r0);");
+    test("auto r1 = regex(`[0-9]+`,`g`);");
+    test("auto m1 = match(`12345`,r1);");
 
 }
 

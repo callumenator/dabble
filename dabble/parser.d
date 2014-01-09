@@ -38,11 +38,12 @@ class DabbleParser : Parser
     string source, original;
         
     string lastInit;        
-    uint blockDepth = 0;
-    uint startDepth = 0;        
+    uint blockDepth = 0;    
     uint declStart = 0;        
     string[] stringDups;     
     string errors;
+        
+    bool declCanBeGlobal; 
     
     override void error(lazy string message, bool shouldAdvance = true)
     {
@@ -52,17 +53,14 @@ class DabbleParser : Parser
     }
               
     auto parse(string _source, ref ReplContext r)
-    {     
+    {   
+        repl = &r;    
         inserts.clear();
         stringDups.clear();        
         
-        errors = "";
-        repl = &r;
-        
+        errors = "";                
         lastInit = "";        
         blockDepth = 0;
-        startDepth = 0;    
-        
         source = _source;        
         original = source;        
         
@@ -126,8 +124,7 @@ class DabbleParser : Parser
             if (after && inserts[pos][0] > index) break;
 			add += inserts[pos][1];
 		}            
-        
-        debug { writeln("INSERT AT: ", index, " => ", index + add); }
+                
 		source.insertInPlace(index + add, text);
 	
 		if (pos >= inserts.length) 
@@ -179,6 +176,7 @@ class DabbleParser : Parser
         if (!suppressMessages && depth == 0)
         {
             declStart = startIndex();
+            declCanBeGlobal = true;
             types.clear();
         }
         
@@ -229,13 +227,20 @@ class DabbleParser : Parser
     {
         auto t = wrap(super.parseImportDeclaration());        
         
-        if (suppressMessages > 0 || blockDepth > startDepth)
+        if (suppressMessages || blockDepth)
             return t[0];
         
         auto slice = original[t[1]..t[2]];                
         repl.rawCode.append(slice, true);        
         repl.share.symbols ~= Defs.Symbol(Defs.Import(slice));                
         blank(t[1],t[2]);
+        return t[0];    
+    }
+    
+    override EnumDeclaration parseEnumDeclaration()
+    {
+        auto t = wrap(super.parseEnumDeclaration());        
+        userTypeDecl(t[1], t[2], t[0].name.value, "enum");        
         return t[0];    
     }
     
@@ -252,7 +257,7 @@ class DabbleParser : Parser
     {  
         static depth = 0, start = 0;
                                 
-        if (!suppressMessages && blockDepth == startDepth && depth == 0)        
+        if (!suppressMessages && !blockDepth && depth == 0)        
             start = startIndex();       
             
         if (!suppressMessages) depth++;
@@ -261,16 +266,31 @@ class DabbleParser : Parser
         
         if (!suppressMessages) depth--;
         
-        if (!suppressMessages && blockDepth == startDepth && depth == 0)        
+        if (!suppressMessages && !blockDepth && depth == 0)        
             types = original[start..endIndex()] ~ types;                 
                 
         return t[0];
     }                        
     
     override Initializer parseInitializer()    
-    {                       
+    {
+        static depth = 0, start = 0;
+        
+        if (!suppressMessages)
+        {    
+            if (depth == 0)
+                start = startIndex();
+            depth++;
+        }
+                
         auto t = wrap(super.parseInitializer());               
-        lastInit = grab(t[1],t[2]);
+        
+        if (!suppressMessages) 
+        {
+            depth--;
+            if (depth == 0)
+                lastInit = grab(t[1],t[2]);
+        }                        
         return t[0];
     }          
  
@@ -285,6 +305,7 @@ class DabbleParser : Parser
                 auto ident = std.string.strip(original[t[1]..t[2]]);                
                 if (isDefined(ident))
                 {                  
+                    declCanBeGlobal = false;
                     stringDups ~= ident;
                     insert(t[1], "(*");
                     insert(t[2], ")");
@@ -328,7 +349,7 @@ class DabbleParser : Parser
         
     void varDecl(size_t start, size_t end, VariableDeclaration v, bool isAuto)
     {
-        if (suppressMessages || blockDepth > startDepth)
+        if (suppressMessages || blockDepth)
             return;
             
         string type = isAuto ? "auto" : types.length ? types[0] : null;                                    
@@ -338,9 +359,7 @@ class DabbleParser : Parser
             v.autoDeclaration.identifiers.map!(x=>x.value)().joiner(".").to!string() :         
             v.declarators.map!(x=>x.name.value)().joiner(".").to!string(); 
                                  
-        string init = lastInit;        
-        
-        debug { writeln("VAR DECL: ", type, " ", name, " = ", init); }
+        string init = lastInit;                       
         
         if (name in repl.symbolSet)
         {
@@ -361,14 +380,12 @@ class DabbleParser : Parser
     
     void userTypeDecl(size_t start, size_t end, string ident, string type)
     {        
-        if (suppressMessages > 0 || blockDepth > startDepth || ident == "__") 
+        if (suppressMessages || blockDepth) 
             return;
         
         bool global = true;
-        if (type == "alias" || type == "enum")
-        {
-            // TODO: Check for global
-        }
+        if (type == "alias" || type == "enum")        
+            global = declCanBeGlobal;        
                             
         auto decl = original[start..end];
         repl.rawCode.append(decl, global);
@@ -381,11 +398,7 @@ class DabbleParser : Parser
     {
         if (suppressMessages > 0) 
             return;
-            
-        writeln("EXPR: >", grab(start, end), "<");
-                
-        
-        //auto rng = mapIndices(start, end); 
+                    
         insert(start, "_REPL.exprResult2(");
         insert(end, ", __expressionResult)", true);                
     }
