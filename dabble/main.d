@@ -11,14 +11,12 @@ Authors:   Callum Anderson
 module dabble.main;
   
 import dabble.repl; 
-  
+   
 void main(char[][] args)
 {
     scope(exit) { onExit(); }    
     auto session = initiateSession();
-    parseArgs(session, args[1..$]);                
-    //stress();
-    //libTest();     
+    parseArgs(session, args[1..$]);                    
     session.loop();           
     return;
 }
@@ -39,4 +37,6 @@ void parseArgs(string id, char[][] args)
         }
     }
 }
+
+
 

@@ -17,13 +17,11 @@ import
     std.stdio,
     std.string;
 
-import
-    dabble.actions,    
+import    
     dabble.parser,
     dabble.sharedlib,
-    dabble.util;
-    
-public import dabble.defs;
+    dabble.util,
+    dabble.defs;   
 
 bool consoleSession = true;
 
@@ -31,6 +29,14 @@ private
 {
     SharedLib[] keepAlive;
     __gshared ReplContext[string] sessionMap;
+}
+
+
+DabbleParser parser;
+
+shared static this()
+{
+    parser = new DabbleParser;    
 }
 
 
@@ -171,20 +177,22 @@ string eval(string sessionId,
     if (newInput.length > 0 && !handleMetaCommand(sessionMap[sessionId], newInput, codeBuffer, message))
     {
         codeBuffer ~= inBuffer ~ "\n";
-        Parser.braceCount = 0;
-        auto balanced = ReplParse.BalancedBraces(codeBuffer.to!string());
+        //Parser.braceCount = 0;        
+        //auto balanced = ReplParse.BalancedBraces(codeBuffer.to!string());
+        auto braceCount = 0;
+        bool balanced = true;
 
         // TODO: Need to handle things like: a = 5; print a <- note no trailing ';' but 0 braces
 
-        if (!multiLine && balanced.successful && newInput[$-1] == ';')
+        if (!multiLine && balanced /** && newInput[$-1] == ';' **/ )
         {
             evaluate(codeBuffer.to!string(), sessionMap[sessionId], message);
             codeBuffer.clear();
         }
         else
         {
-            if ((balanced.successful && Parser.braceCount > 0) ||
-                (balanced.successful && Parser.braceCount == 0 && newInput[$-1] == ';'))
+            if ((balanced && braceCount > 0) ||
+                (balanced && braceCount == 0 && newInput[$-1] == ';'))
             {
                 evaluate(codeBuffer.to!string(), sessionMap[sessionId], message);
                 codeBuffer.clear();
@@ -312,7 +320,6 @@ struct RawCode
 /**
 * Holds REPL state.
 */
-
 struct ReplContext
 {
     Tuple!(string,"filename",
@@ -404,6 +411,43 @@ void append(Args...)(ref string message, Args msg)
 /**
 * Handle meta commands
 */
+
+enum string metaParser = `
+
+MetaParser:
+
+    MetaCommand <- MetaPrint MetaArgs?
+                 / MetaType MetaArgs?
+                 / MetaDelete MetaArgs
+                 / MetaReset MetaArgs
+                 / MetaDebugOn MetaArgs
+                 / MetaDebugOff MetaArgs
+                 / MetaUse MetaArgs
+                 / MetaClear MetaArgs?
+                 / MetaVersion
+
+    MetaPrint    <- 'print'
+    MetaType     <- 'type'
+    MetaDelete   <- 'delete'
+    MetaReset    <- 'reset'
+    MetaUse      <- 'use'
+    MetaDebugOn  <~ ('debug' wx 'on')
+    MetaDebugOff <~ ('debug' wx 'off')
+    MetaClear    <- 'clear'
+    MetaVersion  <- 'version'
+
+    MetaArgs <- (wxd Seq(MetaArg, ','))
+    MetaArg  <- ~((!(endOfLine / ',') .)*)
+
+    w   <- ' ' / '\t' / endOfLine    
+    wx  <- ;(w?) :(w*)
+    wxd  <- :(w*)   
+    Seq(T, Sep) <- wxd T wxd (Sep wxd T wxd)*
+    
+`;
+
+mixin(grammar(metaParser));
+
 bool handleMetaCommand(ref ReplContext repl,
                        ref const(char[]) inBuffer,
                        ref char[] codeBuffer,
@@ -411,7 +455,7 @@ bool handleMetaCommand(ref ReplContext repl,
 {
     import std.process : system;
 
-    auto parse = ReplParse.decimateTree(ReplParse.MetaCommand(inBuffer.to!string()));
+    auto parse = MetaParser.decimateTree(MetaParser(inBuffer.to!string()));
 
     if (!parse.successful) return false;
 
@@ -451,13 +495,10 @@ bool handleMetaCommand(ref ReplContext repl,
                 }
             }
             else if (args.length == 1 && args[0] == "__keepAlive")
-            {
-                version(none) 
-                {
-                    message.append("SharedLibs still alive:");
-                    foreach(s; keepAlive)
-                        message.append("  ", s);
-                }
+            {               
+                message.append("SharedLibs still alive:");
+                foreach(s; keepAlive)
+                    message.append("  ", s);             
             }
             else // print selected symbols
             {
@@ -500,17 +541,17 @@ bool handleMetaCommand(ref ReplContext repl,
             if (canFind(args, "session"))
             {
                 repl.reset();
-                version(none) { keepAlive.clear(); }
+                keepAlive.clear();
                 message.append("Session reset");
             }
             break;
         }
 
         case "delete":
-        {
-            foreach(a; args)
+        {                
+            foreach(a; args)            
                 deleteVar(repl, a);
-            break;
+            break;            
         }
 
         case "use":
@@ -640,13 +681,22 @@ EvalResult evaluate(string code,
     if (repl.debugLevel & Debug.stages) message.append("PARSE...");
 
     bool showParse = cast(bool)(repl.debugLevel & Debug.parseOnly);
-    auto text = timeIt!(Parser.go)(code, repl, showParse, sw, times.parse);
+    auto text = parser.parse(code, repl);    
+    
+    /**
+    writeln("Parse -----------------------------------------------------------------------------");
+    writeln(text[0]);
+    writeln(text[1]);
+    writeln("-----------------------------------------------------------------------------------\n");    
+    **/
 
-    if (Parser.error.length != 0)
+    if (parser.errors.length != 0)
     {
-        message.append(Parser.error);
+        message.append("Parse errors:\n", parser.errors);
+        repl.rawCode.fail();
+        pruneSymbols(repl);
         return EvalResult.parseError;
-    }
+    }        
 
     if (repl.debugLevel & Debug.parseOnly)
     {
@@ -686,6 +736,7 @@ EvalResult evaluate(string code,
     }
 
     assert(false);
+    
 }
 
 
@@ -729,6 +780,7 @@ bool build(Tuple!(string,string) code,
        
     auto text =
         code[0] ~
+        "string __expressionResult = ``; \n"
         "\n\nexport extern(C) int _main(ref _REPL.ReplShare _repl_)\n"
         "{\n"
         "    import std.exception, std.stdio;\n"        
@@ -942,8 +994,10 @@ CallResult call(ref ReplContext repl, ref string message)
     alias extern(C) int function(ref ReplShare) FuncType;
     alias extern(C) void* function() GCFunc;
     
+    repl.share.keepAlive = false;
+    
     version(Windows)
-    {
+    {        
         string ext = ".dll";
     }
     else version(Posix)
@@ -1002,7 +1056,7 @@ CallResult call(ref ReplContext repl, ref string message)
     if (repl.share.keepAlive)
     {
         repl.count ++;
-        keepAlive ~= lib;
+        keepAlive ~= lib;        
     } 
     else 
     {
@@ -1243,39 +1297,38 @@ unittest
 ReplContext stress()
 {
     return run([
-    "err0 = `1.2`.to!int;",
+    "auto err0 = `1.2`.to!int;",
     "struct S {int x, y = 5; }",
-    "structS = S();",
-    "arr0 = [1,2,3,4];",
-    "arr1 = arr0.sort;",
-    "arr2 = arr1;",
-    "arr2.reverse;",
+    "auto structS = S();",
+    "auto arr0 = [1,2,3,4];",
+    "auto arr1 = arr0.sort();",
+    "auto arr2 = arr1;",    
     "foreach(ref i; arr2) i++;",
     "writeln(arr2);",
     "writeln(structS);",
     "class C { int a; string b; }",
-    "classC = new C;",
-    "str0 = `hello there`;",
+    "auto classC = new C;",
+    "auto str0 = `hello there`;",
     "foreach(i; iota(150)) { str0 ~= `x`;}",
     "writeln(str0);",
     "writeln(classC);",
     "str0 = str0[0..$-20];"
     "writeln(str0);",
-    "aa0 = [`one`:1, `two`:2, `three`:3, `four`:4];",
+    "auto aa0 = [`one`:1, `two`:2, `three`:3, `four`:4];",
     "writeln(aa0[`two`]);",
     "writeln(aa0);",
     "writeln(arr0);",
     "enum Enum { one, two = 5, three = 7 }",
-    "ee = Enum.two;",
+    "auto ee = Enum.two;",
     "write(ee, \"\n\");",
-    "int0 = 0;",
+    "auto int0 = 0;",
     "for(auto i=0; i<50; i++) int0++;",
     "import std.array;",
-    "app0 = appender!string;",
+    "auto app0 = appender!string;",
     "for(auto i=0; i<50; i++) app0.put(`blah`);",
     "writeln(app0.data);",
     "import std.container;",
-    "arr3 = Array!int(4, 6, 2, 3, 8, 0, 2);",
+    "auto arr3 = Array!int(4, 6, 2, 3, 8, 0, 2);",
     "foreach(val; arr3[]){ writeln(val); }",
     "int foo(int i) { return 5*i + 1; }",
     "foo(100);",
@@ -1285,19 +1338,19 @@ ReplContext stress()
     "arr4 ~= [1,2,3,4];",
     "writeln(arr4[]);",
     "T boo(T)(T t) { return T.init; }",
-    "short0 = boo(cast(short)5);",
+    "auto short0 = boo(cast(short)5);",
     "if (true) { auto b = [1,2,3]; writeln(b); } else { auto b = `hello`; writeln(b); }",
-    "counter0 = 10;",
+    "auto counter0 = 10;",
     "while(counter0-- > 1) { if (false) { auto _temp = 8; } else { writeln(counter0);} }",
-    "func0 = (int i) { return i + 5; };",
+    "auto func0 = (int i) { return i + 5; };",
     "func0(10);",
-    "func1 = func0;",
+    "auto func1 = func0;",
     "func1(10);",
-    "func2 = (int i) => i + 5;",
-    "func3 = (int i) => (i + 5);",
+    "auto func2 = (int i) => i + 5;",
+    "auto func3 = (int i) => (i + 5);",
     "func1(func2(func3(5)));",
     "import std.algorithm, std.range;",
-    "arr5 = [1,2,3,4,5];",
+    "auto arr5 = [1,2,3,4,5];",
     "arr5 = arr5.map!( a => a + 4).array();",
     "writeln(arr5);"
     ], Debug.times);
@@ -1316,17 +1369,17 @@ void libTest()
     test("a = 5;");
     test("a;");
     test("int b;");
-    test("bref = NullableRef!int(&b);");
+    test("auto bref = NullableRef!int(&b);");
     test("bref = 5;");
     test("bref;");
-    test("c = tuple(1, `hello`);");    
+    test("auto c = tuple(1, `hello`);");    
     //test("class C { int x; }; Unique!C f = new C;");
     //test("f.x = 7;");
 
     repl.reset();
 
     test("import std.algorithm, std.range;");
-    test("r0 = iota(0, 50, 10);");
+    test("auto r0 = iota(0, 50, 10);");
     test("r0.find(20);");
     test("balancedParens(`((()))`, '(', ')');");
     test("`hello`.countUntil('l');");
@@ -1338,12 +1391,12 @@ void libTest()
     repl.reset();
 
     test("import std.range;");
-    test("r0 = iota(0, 50, 10);");
+    test("auto r0 = iota(0, 50, 10);");
     test("while(!r0.empty) { r0.popFront(); }");
-    test("r1 = stride(iota(0, 50, 1), 5);");
+    test("auto r1 = stride(iota(0, 50, 1), 5);");
     test("writeln(r1);");
     test("drop(iota(20), 12);");
-    test("r2 = iota(20);");
+    test("auto r2 = iota(20);");
     test("popFrontN(r2, 7);");
     test("takeOne(retro(iota(20)));");
     test("takeExactly(iota(20), 5);");
@@ -1354,30 +1407,30 @@ void libTest()
     test("import std.container;");
     test("SList!int slist0;");
     test("slist0.insertFront([1,2,3]);");
-    test("slist1 = SList!int(1,2,3);");
+    test("auto slist1 = SList!int(1,2,3);");
     test("slist1.insertFront([1,2,3]);");
     test("DList!int dlist0;");
     test("dlist0.insertFront([1,2,3]);");
-    test("dlist1 = DList!int(1,2,3);");
+    test("auto dlist1 = DList!int(1,2,3);");
     test("dlist1.insertFront([1,2,3]);");
     test("Array!int array0;");
     test("array0 ~= [1,2,3];");
-    test("array1 = Array!int(1,2,3);");
+    test("auto array1 = Array!int(1,2,3);");
     test("array1 ~= [1,2,3];");
     test("auto tree0 = redBlackTree!true(1,2,3,4,5);");
     test("tree0.insert(5);");
     test("RedBlackTree!int tree1 = new RedBlackTree!int();");
     test("tree1.insert(5);");
     test("BinaryHeap!(Array!int) heap0 = BinaryHeap!(Array!int)(Array!int(1,2,3,4));");
-    test("heap0.insert(1);");
+    //test("heap0.insert(1);");
 
     repl.reset();
 
     test("import std.regex;");
-    test("r0 = regex(`[a-z]*`,`g`);");
-    test("m0 = match(`abdjsadfjg`,r0);");
-    test("r1 = regex(`[0-9]+`,`g`);");
-    test("m1 = match(`12345`,r1);");
+    test("auto r0 = regex(`[a-z]*`,`g`);");
+    test("auto m0 = match(`abdjsadfjg`,r0);");
+    test("auto r1 = regex(`[0-9]+`,`g`);");
+    test("auto m1 = match(`12345`,r1);");
 
 }
 
