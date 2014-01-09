@@ -37,15 +37,11 @@ class DabbleParser : Parser
     LexerConfig config;        
     string source, original;
         
-    string lastType, lastInit;
-    size_t typeStart = 0;        
+    string lastInit;        
     uint blockDepth = 0;
-    uint startDepth = 0;    
-    
-    string head, pre, post, exprResult;
-    
-    string[] stringDups; 
-    
+    uint startDepth = 0;        
+    uint declStart = 0;        
+    string[] stringDups;     
     string errors;
     
     override void error(lazy string message, bool shouldAdvance = true)
@@ -62,14 +58,8 @@ class DabbleParser : Parser
         
         errors = "";
         repl = &r;
-        head = "";
-        pre = "";
-        post = "";
-        exprResult = "";
         
-        lastType = "";
-        lastInit = "";
-        typeStart = 0;        
+        lastInit = "";        
         blockDepth = 0;
         startDepth = 0;    
         
@@ -95,8 +85,7 @@ class DabbleParser : Parser
                             "_REPL.dupSearch(*"~d~", _repl_.imageBounds[0], _repl_.imageBounds[1], _repl_.keepAlive); }\n");
         }
             
-        auto inBody =
-            //"string _expressionResult;\n" ~
+        auto inBody =            
             repl.vtblFixup ~
             code.prefix.data ~
             source ~ 
@@ -184,8 +173,20 @@ class DabbleParser : Parser
     }        
     
     override DeclarationOrStatement parseDeclarationOrStatement()
-    {           
+    {
+        static depth = 0;
+        
+        if (!suppressMessages && depth == 0)
+        {
+            declStart = startIndex();
+            types.clear();
+        }
+        
+        if (!suppressMessages) depth++;
+                
         auto t = wrap(super.parseDeclarationOrStatement());                
+        
+        if (!suppressMessages) depth--;        
         return t[0];        
     }
     
@@ -199,14 +200,25 @@ class DabbleParser : Parser
     override VariableDeclaration parseVariableDeclaration(Type type = null, bool isAuto = false)
     {
         auto t = wrap(super.parseVariableDeclaration(type, isAuto));                
-        varDecl(t[1], t[2], t[0]);        
+        
+        string _type;
+        if (isAuto) 
+            _type = "auto";
+        else 
+        {
+            assert(types.length);
+            _type = types[0];        
+        }
+        
+        varDecl(t[1], t[2], t[0], _type);        
+        
         return t[0];
     }
     
     override FunctionDeclaration parseFunctionDeclaration(Type type = null, bool isAuto = false)
     {                
         auto t = wrap(super.parseFunctionDeclaration(type, isAuto));        
-        userTypeDecl(typeStart, t[2], t[0].name.value, "function");               
+        userTypeDecl(declStart, t[2], t[0].name.value, "function");               
         return t[0];
     }
     
@@ -245,20 +257,29 @@ class DabbleParser : Parser
         return t[0];    
     }
         
+    string[] types;
+        
     override Type parseType()    
-    {        
+    {  
+        static depth = 0, start = 0;
+                                
+        if (!suppressMessages && blockDepth == startDepth && depth == 0)        
+            start = startIndex();       
+            
+        if (!suppressMessages) depth++;
+    
         auto t = wrap(super.parseType());                                
+        
+        if (!suppressMessages) depth--;
+        
+        if (!suppressMessages && blockDepth == startDepth && depth == 0)        
+            types = original[start..endIndex()] ~ types;                 
                 
-        if (t[0] !is null && suppressMessages == 0 && blockDepth == startDepth)
-        {
-            lastType = original[t[1]..t[2]];                        
-            typeStart = t[1];                                       
-        }         
         return t[0];
     }                        
     
     override Initializer parseInitializer()    
-    {        
+    {                       
         auto t = wrap(super.parseInitializer());               
         lastInit = grab(t[1],t[2]);
         return t[0];
@@ -316,7 +337,7 @@ class DabbleParser : Parser
     
     mixin(DabbleParser.makeBlocks());        
         
-    void varDecl(size_t start, size_t end, VariableDeclaration v)
+    void varDecl(size_t start, size_t end, VariableDeclaration v, string type)
     {
         if (suppressMessages > 0 || blockDepth > startDepth)
             return;
@@ -325,8 +346,9 @@ class DabbleParser : Parser
             v.autoDeclaration.identifiers.map!(x=>x.value)().joiner(".").to!string() :         
             v.declarators.map!(x=>x.name.value)().joiner(".").to!string(); 
                                  
-        string init = lastInit;
-        string type = lastType.length ? lastType : "auto";               
+        string init = lastInit;        
+        
+        debug { writeln("VAR DECL: ", type, " ", name, " = ", init); }
         
         if (name in repl.symbolSet)
         {
@@ -335,13 +357,13 @@ class DabbleParser : Parser
         }
         else
         {                                                                
-            repl.rawCode.append(original[typeStart..end], false);
+            repl.rawCode.append(original[declStart..end], false);
             repl.symbolSet[name] = 0;
-            repl.share.symbols ~= Defs.Symbol(Defs.Var(name, lastType, init));
+            repl.share.symbols ~= Defs.Symbol(Defs.Var(name, type, init));
             stringDups ~= name;
         }
                 
-        blank(typeStart, end);                        
+        blank(declStart, end);                        
         clear();
     }
     
@@ -377,8 +399,7 @@ class DabbleParser : Parser
     }
     
     void clear()
-    {
-        lastType = "";
+    {        
         lastInit = "";
     }        
     
