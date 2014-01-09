@@ -199,19 +199,8 @@ class DabbleParser : Parser
     
     override VariableDeclaration parseVariableDeclaration(Type type = null, bool isAuto = false)
     {
-        auto t = wrap(super.parseVariableDeclaration(type, isAuto));                
-        
-        string _type;
-        if (isAuto) 
-            _type = "auto";
-        else 
-        {
-            assert(types.length);
-            _type = types[0];        
-        }
-        
-        varDecl(t[1], t[2], t[0], _type);        
-        
+        auto t = wrap(super.parseVariableDeclaration(type, isAuto));                                
+        varDecl(t[1], t[2], t[0], isAuto);                        
         return t[0];
     }
     
@@ -337,11 +326,14 @@ class DabbleParser : Parser
     
     mixin(DabbleParser.makeBlocks());        
         
-    void varDecl(size_t start, size_t end, VariableDeclaration v, string type)
+    void varDecl(size_t start, size_t end, VariableDeclaration v, bool isAuto)
     {
-        if (suppressMessages > 0 || blockDepth > startDepth)
+        if (suppressMessages || blockDepth > startDepth)
             return;
-          
+            
+        string type = isAuto ? "auto" : types.length ? types[0] : null;                                    
+        assert(type !is null);
+                   
         string name = v.autoDeclaration ? 
             v.autoDeclaration.identifiers.map!(x=>x.value)().joiner(".").to!string() :         
             v.declarators.map!(x=>x.name.value)().joiner(".").to!string(); 
