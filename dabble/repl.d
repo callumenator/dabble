@@ -683,11 +683,12 @@ EvalResult evaluate(string code,
     bool showParse = cast(bool)(repl.debugLevel & Debug.parseOnly);
     auto text = parser.parse(code, repl);    
     
+    
     writeln("Parse -----------------------------------------------------------------------------");
     writeln(text[0]);
     writeln(text[1]);
     writeln("-----------------------------------------------------------------------------------\n");    
-        
+    
 
     if (parser.errors.length != 0)
     {
@@ -695,9 +696,7 @@ EvalResult evaluate(string code,
         repl.rawCode.fail();
         pruneSymbols(repl);
         return EvalResult.parseError;
-    }
-    
-    writeln(repl.share.symbols);
+    }        
 
     if (repl.debugLevel & Debug.parseOnly)
     {
@@ -781,6 +780,7 @@ bool build(Tuple!(string,string) code,
        
     auto text =
         code[0] ~
+        "string __expressionResult = ``; \n"
         "\n\nexport extern(C) int _main(ref _REPL.ReplShare _repl_)\n"
         "{\n"
         "    import std.exception, std.stdio;\n"        
@@ -1297,61 +1297,60 @@ unittest
 ReplContext stress()
 {
     return run([
-    "err0 = `1.2`.to!int;",
+    "auto err0 = `1.2`.to!int;",
     "struct S {int x, y = 5; }",
-    "structS = S();",
-    "arr0 = [1,2,3,4];",
-    "arr1 = arr0.sort;",
-    "arr2 = arr1;",
-    "arr2.reverse;",
+    "auto structS = S();",
+    "auto arr0 = [1,2,3,4];",
+    "auto arr1 = arr0.sort();",
+    "auto arr2 = arr1;",    
     "foreach(ref i; arr2) i++;",
     "writeln(arr2);",
     "writeln(structS);",
     "class C { int a; string b; }",
-    "classC = new C;",
-    "str0 = `hello there`;",
+    "auto classC = new C;",
+    "auto str0 = `hello there`;",
     "foreach(i; iota(150)) { str0 ~= `x`;}",
     "writeln(str0);",
     "writeln(classC);",
     "str0 = str0[0..$-20];"
     "writeln(str0);",
-    "aa0 = [`one`:1, `two`:2, `three`:3, `four`:4];",
+    "auto aa0 = [`one`:1, `two`:2, `three`:3, `four`:4];",
     "writeln(aa0[`two`]);",
     "writeln(aa0);",
     "writeln(arr0);",
     "enum Enum { one, two = 5, three = 7 }",
-    "ee = Enum.two;",
+    "auto ee = Enum.two;",
     "write(ee, \"\n\");",
-    "int0 = 0;",
+    "auto int0 = 0;",
     "for(auto i=0; i<50; i++) int0++;",
     "import std.array;",
-    "app0 = appender!string;",
+    "auto app0 = appender!string;",
     "for(auto i=0; i<50; i++) app0.put(`blah`);",
     "writeln(app0.data);",
     "import std.container;",
-    "arr3 = Array!int(4, 6, 2, 3, 8, 0, 2);",
+    "auto arr3 = Array!int(4, 6, 2, 3, 8, 0, 2);",
     "foreach(val; arr3[]){ writeln(val); }",
     "int foo(int i) { return 5*i + 1; }",
     "foo(100);",
     "immutable int int1 = 45;", 
     "const(int) int2 = foo(3);",
     "Array!int arr4;",
-    "arr4 ~= [1,2,3,4];",
+    "auto arr4 ~= [1,2,3,4];",
     "writeln(arr4[]);",
     "T boo(T)(T t) { return T.init; }",
-    "short0 = boo(cast(short)5);",
+    "auto short0 = boo(cast(short)5);",
     "if (true) { auto b = [1,2,3]; writeln(b); } else { auto b = `hello`; writeln(b); }",
-    "counter0 = 10;",
+    "auto counter0 = 10;",
     "while(counter0-- > 1) { if (false) { auto _temp = 8; } else { writeln(counter0);} }",
-    "func0 = (int i) { return i + 5; };",
+    "auto func0 = (int i) { return i + 5; };",
     "func0(10);",
-    "func1 = func0;",
+    "auto func1 = func0;",
     "func1(10);",
-    "func2 = (int i) => i + 5;",
-    "func3 = (int i) => (i + 5);",
+    "auto func2 = (int i) => i + 5;",
+    "auto func3 = (int i) => (i + 5);",
     "func1(func2(func3(5)));",
     "import std.algorithm, std.range;",
-    "arr5 = [1,2,3,4,5];",
+    "auto arr5 = [1,2,3,4,5];",
     "arr5 = arr5.map!( a => a + 4).array();",
     "writeln(arr5);"
     ], Debug.times);

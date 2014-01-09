@@ -96,12 +96,12 @@ class DabbleParser : Parser
         }
             
         auto inBody =
-            "string _expressionResult;\n" ~
+            //"string _expressionResult;\n" ~
             repl.vtblFixup ~
             code.prefix.data ~
             source ~ 
             code.suffix.data ~
-            "if (_expressionResult.length == 0) _expressionResult = `OK`; writeln(`=> `, _expressionResult);\n";
+            "if (__expressionResult.length == 0) __expressionResult = `OK`; writeln(`=> `, __expressionResult);\n";
 
         return tuple(code.header.data, inBody);  
     }           
@@ -129,17 +129,20 @@ class DabbleParser : Parser
     /**     
     * Insert text into modified text starting at mapped index
     */
-    void insert(uint index, string text) 
+    void insert(uint index, string text, bool after = false) 
 	{	
         uint add = 0, pos = 0;		
 		for(; pos < inserts.length; pos++) {
-			if (inserts[pos][0] >= index) break;
+			if (!after && inserts[pos][0] >= index) break;
+            if (after && inserts[pos][0] > index) break;
 			add += inserts[pos][1];
 		}            
+        
+        debug { writeln("INSERT AT: ", index, " => ", index + add); }
 		source.insertInPlace(index + add, text);
 	
 		if (pos >= inserts.length) 
-			inserts ~= Insert(index,text.length);
+			inserts ~= Insert(index, text.length);
 		else 
 			inserts[pos][1] += text.length;		
 	}     
@@ -167,19 +170,16 @@ class DabbleParser : Parser
         return tokens[index].startIndex;
     }
 
-    int endIndex(bool expr)
-    {
-        auto _index = expr ? index : (index > 0) ? index - 1 : 0;            
-        return _index < tokens.length ? 
-            tokens[_index].startIndex + tokens[_index].value.length : 
-                source.length;
+    int endIndex()
+    {        
+        return index < tokens.length ? tokens[index].startIndex : original.length;
     }
     
-    auto wrap(E)(lazy E func, bool expr = false)
+    auto wrap(E)(lazy E func)
     {
         auto s = startIndex();
         auto r = func;
-        auto e = endIndex(expr);
+        auto e = endIndex();       
         return tuple(r,s,e);
     }        
     
@@ -191,16 +191,15 @@ class DabbleParser : Parser
     
     override Expression parseExpression()
     {        
-        auto t = wrap(super.parseExpression(), true);       
-        expr(t[1],t[2]);
+        auto t = wrap(super.parseExpression());       
+        expr(t[1], t[2]);
         return t[0];
     }      
     
     override VariableDeclaration parseVariableDeclaration(Type type = null, bool isAuto = false)
     {
-        auto t = wrap(super.parseVariableDeclaration(type, isAuto));        
-        debug { writeln("VAR DECL: ", original[t[1]..t[2]]); }
-        varDecl(t[1],t[2],t[0]);        
+        auto t = wrap(super.parseVariableDeclaration(type, isAuto));                
+        varDecl(t[1], t[2], t[0]);        
         return t[0];
     }
     
@@ -260,7 +259,7 @@ class DabbleParser : Parser
     
     override Initializer parseInitializer()    
     {        
-        auto t = wrap(super.parseInitializer(), true);               
+        auto t = wrap(super.parseInitializer());               
         lastInit = grab(t[1],t[2]);
         return t[0];
     }          
@@ -273,7 +272,7 @@ class DabbleParser : Parser
         {                        
             if (i == 0 || (i > 0 && tokens[i - 1].type != TokenType.dot))
             {                
-                auto ident = original[t[1]..t[2]];
+                auto ident = std.string.strip(original[t[1]..t[2]]);                
                 if (isDefined(ident))
                 {                  
                     stringDups ~= ident;
@@ -287,14 +286,14 @@ class DabbleParser : Parser
     
     override PrimaryExpression parsePrimaryExpression()
     {
-        auto t = wrap(super.parsePrimaryExpression(), true);                           
+        auto t = wrap(super.parsePrimaryExpression());                           
                 
         if (t[0].primary.type == TokenType.stringLiteral ||
             t[0].primary.type == TokenType.dstringLiteral ||
             t[0].primary.type == TokenType.wstringLiteral )                
         {
             /// string dup
-            insert(t[2]-1, ".idup");
+            insert(t[2], ".idup");
         }               
         return t[0];
     }
@@ -326,7 +325,7 @@ class DabbleParser : Parser
             v.autoDeclaration.identifiers.map!(x=>x.value)().joiner(".").to!string() :         
             v.declarators.map!(x=>x.name.value)().joiner(".").to!string(); 
                                  
-        string init = lastInit.stripRight(';');
+        string init = lastInit;
         string type = lastType.length ? lastType : "auto";               
         
         if (name in repl.symbolSet)
@@ -336,7 +335,7 @@ class DabbleParser : Parser
         }
         else
         {                                                                
-            repl.rawCode.append(text(type," ",name,(init.length ? " = " ~ init : ""),";"), false);
+            repl.rawCode.append(original[typeStart..end], false);
             repl.symbolSet[name] = 0;
             repl.share.symbols ~= Defs.Symbol(Defs.Var(name, lastType, init));
             stringDups ~= name;
@@ -368,16 +367,13 @@ class DabbleParser : Parser
     {
         if (suppressMessages > 0) 
             return;
+            
+        writeln("EXPR: >", grab(start, end), "<");
+                
         
-        auto e = grab(start, end).stripRight(';');                    
-        blank(start, end);
-        
-        insert(start, 
-            "static if (__traits(compiles, mixin(q{is(typeof(" ~ e ~ "))}))) {\n"
-            "  mixin(q{ static if (is(typeof(" ~ e ~ ") == void)) {\n    " ~ e ~ ";\n"
-            "  } else {\n  _expressionResult = _REPL.exprResult(\n    " ~ e ~ "\n  );}});\n"
-            "} else {\n"
-            "  " ~ e ~ ";\n}\n\n");               
+        //auto rng = mapIndices(start, end); 
+        insert(start, "_REPL.exprResult2(");
+        insert(end, ", __expressionResult)", true);                
     }
     
     void clear()

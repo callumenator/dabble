@@ -17,6 +17,7 @@ void main(char[][] args)
     scope(exit) { onExit(); }    
     auto session = initiateSession();
     parseArgs(session, args[1..$]);                
+    //stress();
     session.loop();           
     return;
 }

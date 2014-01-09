@@ -33,7 +33,7 @@ struct ReplShare
     void*[2] imageBounds;   
     bool keepAlive;
     void* gc;               /// host gc instance    
-    string logFile;         /// result of the eval
+    string logFile;         /// result of the eval    
 
     void init()
     {
@@ -108,6 +108,23 @@ string NewTypeof(string S, T...)(T t) // for tuples
 T* getVar(T)(const(Symbol[]) symbols, size_t index)
 {
     return cast(T*)symbols[index].v.addr;
+}
+
+
+auto exprResult2(E)(lazy E expr, ref string result)
+{
+    import std.exception;        
+    
+    static if (__traits(compiles, is(typeof(expr()))) && !is(typeof(expr()) == void))    
+    {
+        auto temp = expr();
+        collectException!Throwable(result = temp.to!string());                
+        return temp;
+    }
+    else
+    {
+        expr();
+    }        
 }
 
 
@@ -367,9 +384,9 @@ struct Var
             
             put(c.prefix,
                 "  ", sym(index), ".v.displayType = typeof(*", name, ").stringof.idup;\n",
-                "  static if (__traits(compiles, _REPL.exprResult(*", name, ")))\n",
+                //"  static if (__traits(compiles, _REPL.exprResult(*", name, ")))\n",
                 "    if (!", sym(index), ".v.func)\n",
-                "      _expressionResult = _REPL.exprResult(\n*", name, "\n);\n");
+                "      _REPL.exprResult2(*", name, ", __expressionResult);\n");
 
             put(c.suffix,
                 "  if (" ~ sym(index) ~ ".v.func) {\n"
