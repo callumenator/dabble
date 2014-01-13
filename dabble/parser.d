@@ -26,6 +26,24 @@ import
 import dabble.repl;
 
 import dabble.defs : Var, Decl;
+
+
+struct ParserDecl
+{
+    bool global;
+    string source;
+    string type;
+}
+
+struct ParserVariable
+{
+    string source;
+    string name;
+    string type;
+    string init;    
+}
+
+
  
 class DabbleParser : Parser
 {
@@ -36,14 +54,17 @@ class DabbleParser : Parser
     LexerConfig config;        
     string source, original;
         
+    string errors;    
+    bool declCanBeGlobal;                     
     string lastInit;        
-    uint blockDepth = 0;    
-    uint declStart = 0;        
-    string[] stringDups;     
-    string errors;
-        
-    bool declCanBeGlobal; 
+    string[] types;
+    string[] dupSearchList;
     
+    uint blockDepth = 0, declStart = 0;     
+
+    ParserDecl[] newDecls;
+    ParserVariable[] newVars; 
+                 
     override void error(lazy string message, bool shouldAdvance = true)
     {
         if (suppressMessages <= 0)        
@@ -55,7 +76,7 @@ class DabbleParser : Parser
     {   
         repl = &r;    
         inserts.clear();
-        stringDups.clear();        
+        dupSearchList.clear();        
         
         errors = "";                
         lastInit = "";        
@@ -72,7 +93,7 @@ class DabbleParser : Parser
                
         auto code = repl.share.generate();
             
-        foreach(d; stringDups)
+        foreach(d; dupSearchList)
         {                   
             auto index = repl.share.vars.countUntil!( (a,b) => a.name == b )(d);                    
             assert(index >= 0, "Parser: undefined var in string dups");
@@ -80,7 +101,7 @@ class DabbleParser : Parser
                             "_REPL.dupSearch(*" ~ d ~ ", _repl_.imageBounds[0], _repl_.imageBounds[1], _repl_.keepAlive); }\n");
         }
             
-        /** need to append remaining source code to RawCode **/    
+        repl.rawCode.append(source, false);
             
         auto inBody =            
             repl.vtblFixup ~
@@ -199,54 +220,45 @@ class DabbleParser : Parser
     override FunctionDeclaration parseFunctionDeclaration(Type type = null, bool isAuto = false)
     {                
         auto t = wrap(super.parseFunctionDeclaration(type, isAuto));        
-        userTypeDecl(declStart, t[2], t[0].name.value, "function");               
+        userTypeDecl(declStart, t[2], "function");               
         return t[0];
     }
     
     override StructDeclaration parseStructDeclaration()
     {
         auto t = wrap(super.parseStructDeclaration());        
-        userTypeDecl(t[1], t[2], t[0].name.value, "struct");        
+        userTypeDecl(t[1], t[2], "struct");        
         return t[0];
     }
     
     override ClassDeclaration parseClassDeclaration()
     {
         auto t = wrap(super.parseClassDeclaration());        
-        userTypeDecl(t[1], t[2], t[0].name.value, "class");        
+        userTypeDecl(t[1], t[2], "class");        
         return t[0];
     }
     
     override ImportDeclaration parseImportDeclaration()
     {
-        auto t = wrap(super.parseImportDeclaration());        
-        
-        if (suppressMessages || blockDepth)
-            return t[0];
-        
-        auto slice = original[t[1]..t[2]];                
-        repl.rawCode.append(slice, true);        
-        repl.share.decls ~= Decl(slice, true);                
-        blank(t[1],t[2]);
+        auto t = wrap(super.parseImportDeclaration());                        
+        userTypeDecl(t[1], t[2], "import");                        
         return t[0];    
     }
     
     override EnumDeclaration parseEnumDeclaration()
     {
         auto t = wrap(super.parseEnumDeclaration());        
-        userTypeDecl(t[1], t[2], t[0].name.value, "enum");        
+        userTypeDecl(t[1], t[2], "enum");        
         return t[0];    
     }
     
     override AliasDeclaration parseAliasDeclaration()
     {
         auto t = wrap(super.parseAliasDeclaration());        
-        userTypeDecl(t[1], t[2], t[0].name.value, "alias");        
+        userTypeDecl(t[1], t[2], "alias");        
         return t[0];    
     }
-        
-    string[] types;
-        
+                    
     override Type parseType()    
     {  
         static depth = 0, start = 0;
@@ -300,7 +312,7 @@ class DabbleParser : Parser
                 if (repl.share.vars.canFind!((a,b) => (a.name == b))(ident))
                 {                  
                     declCanBeGlobal = false;
-                    stringDups ~= ident;
+                    dupSearchList ~= ident;
                     insert(t[1], "(*");
                     insert(t[2], ")");
                 }                                
@@ -356,30 +368,24 @@ class DabbleParser : Parser
         string init = lastInit;                       
         
         if (repl.share.vars.canFind!((a,b) => (a.name == b))(name))
-        {
-            // redifinition, user defined variable more than once
+        {            
             parseError("Error: redifinition of " ~ name ~ " not allowed");                                
-        }
-        else
-        {                                                                
-            repl.rawCode.append(original[declStart..end], false);            
-            repl.share.vars ~= Var(name, type, init);
-            stringDups ~= name;
+            return;
         }
                 
+        repl.rawCode.append(original[declStart..end], false);            
+        repl.share.vars ~= Var(name, type, init);
+        dupSearchList ~= name;               
         blank(declStart, end);                        
         clear();
     }
     
-    void userTypeDecl(size_t start, size_t end, string ident, string type)
+    void userTypeDecl(size_t start, size_t end, string type)
     {        
         if (suppressMessages || blockDepth) 
             return;
-        
-        bool global = true;
-        if (type == "alias" || type == "enum")        
-            global = declCanBeGlobal;        
-                            
+                
+        auto global = (type == "alias" || type == "enum") ? declCanBeGlobal : true;        
         auto decl = original[start..end];
         repl.rawCode.append(decl, global);
         repl.share.decls ~= Decl(decl, global);        
@@ -392,7 +398,7 @@ class DabbleParser : Parser
         if (suppressMessages > 0) 
             return;
                     
-        insert(start, "_REPL.exprResult2(");
+        insert(start, "_REPL.exprResult(");
         insert(end, ", __expressionResult)", true);                
     }
     
