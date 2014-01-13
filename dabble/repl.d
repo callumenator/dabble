@@ -32,6 +32,7 @@ private
     SharedLib[] keepAlive;    
     ReplContext context;
     DabbleParser parser;
+    
 }
 
 shared static this()
@@ -41,14 +42,17 @@ shared static this()
 }
 
 
+
+Tuple!(string,"stage",long,"msecs")[] timings;
+
+
 /**
 * Available levels of debug info.
 */
 enum Debug
 {
     none        = 0x00, /// no debug output
-    times       = 0x01, /// display time to parse, build and call
-    stages      = 0x02, /// display parse, build, call messages
+    times       = 0x01, /// display time to parse, build and call    
     parseOnly   = 0x04, /// show parse tree and return
 }
 
@@ -286,11 +290,7 @@ struct RawCode
     */
     string toString()
     {
-        auto autoImports =
-            "import std.traits, std.stdio, std.range, std.algorithm;\n"
-            "import core.sys.windows.dll, core.thread, core.runtime, core.memory;\n"
-            "import std.c.string, std.c.stdlib, std.c.windows.windows;\n";
-
+        auto autoImports = "import std.traits, std.stdio, std.range, std.algorithm, std.conv;\n";  
         return autoImports ~ _header.join("\n") ~ "\nvoid main() {\n" ~ _body.join("\n") ~ "\n}";
     }
 }
@@ -304,8 +304,7 @@ struct ReplContext
     uint count = 0;
     RawCode rawCode;
     ReplShare share;
-    string vtblFixup;
-    long[string] symbolSet;
+    string vtblFixup;    
     uint debugLevel = Debug.none;
     
     Tuple!(string,"filename",string,"tempPath") paths;
@@ -338,7 +337,7 @@ struct ReplContext
         paths.tempPath = getTempDir() ~ dirSeparator;        
         debugLevel = debugLevel;
         share.gc = gc_getProxy();
-        share.logFile = paths.tempPath ~ "__dabbleTemp";
+        share.resultFile = paths.tempPath ~ "__dabbleTemp";
 
         share.init();
 
@@ -352,8 +351,7 @@ struct ReplContext
     void reset()
     {        
         rawCode.reset();
-        share.reset();
-        symbolSet.clear();
+        share.reset();        
         userModules.clear();
         vtblFixup.clear();
     }
@@ -420,14 +418,13 @@ bool handleMetaCommand(ref const(char[]) inBuffer,
         case "print":
         {
             if (args.length == 0 || canFind(args, "all")) // print all vars
-            {
-                auto vars = context.share.symbols.filter!(s => s.type == Symbol.Type.Var)();
-                foreach(s; vars)
+            {                
+                foreach(v; context.share.vars)
                 {
-                    if (s.v.ty !is null)
-                        message.append(s.v.name, " (", s.v.displayType, ") = ", s.v.ty.valueOf([], s.v.addr, context.share.map));
-                    else if (s.v.func == true)
-                        message.append(s.v.name, " (", s.v.displayType, ") = ", s.v.init);
+                    if (v.ty !is null)
+                        message.append(v.name, " (", v.displayType, ") = ", v.ty.valueOf([], v.addr, context.share.map));
+                    else if (v.func == true)
+                        message.append(v.name, " (", v.displayType, ") = ", v.init);
                 }
             }
             else if (args.length == 1 && args[0] == "__keepAlive")
@@ -440,14 +437,13 @@ bool handleMetaCommand(ref const(char[]) inBuffer,
             {
                 foreach(a; args)
                 {
-                    auto p = parseExpr(a);
-                    auto vars = context.share.symbols.filter!(s => s.isVar() && s.v.name == p[0])();
-                    foreach(s; vars)
+                    auto p = parseExpr(a);                    
+                    foreach(v; context.share.vars)
                     {
-                        if (s.v.ty !is null)
-                            message.append(s.v.ty.valueOf(p[1], s.v.addr, context.share.map));
-                        else if (s.v.func == true)
-                            message.append(s.v.name, " (", s.v.displayType, ") = ", s.v.init);
+                        if (v.ty !is null)
+                            message.append(v.ty.valueOf(p[1], v.addr, context.share.map));
+                        else if (v.func == true)
+                            message.append(v.name, " (", v.displayType, ") = ", v.init);
                     }
                 }
             }
@@ -458,11 +454,10 @@ bool handleMetaCommand(ref const(char[]) inBuffer,
         {
             foreach(a; args)
             {
-                auto p = parseExpr(a);
-                auto vars = context.share.symbols.filter!(s => s.isVar() && s.v.name == p[0] && s.v.ty.type !is null)();
-                foreach(s; vars)
+                auto p = parseExpr(a);                
+                foreach(v; context.share.vars)
                 {
-                    auto typeOf = s.v.ty.typeOf(p[1], context.share.map);
+                    auto typeOf = v.ty.typeOf(p[1], context.share.map);
                     if (typeOf[1].length > 0)
                         message.append(typeOf[1]);
                     else
@@ -486,7 +481,7 @@ bool handleMetaCommand(ref const(char[]) inBuffer,
         case "delete":
         {                
             foreach(a; args)            
-                deleteVar(context, a);
+                context.share.deleteVar(a);
             break;            
         }
 
@@ -570,13 +565,30 @@ void setDebugLevelFromString(string s)(string level)
     switch(toLower(level))
     {
         case "times": goto case "showtimes";
-        case "showtimes": mixin(op ~ "Debug.times;"); break;
-        case "stages": goto case "showstages";
-        case "showstages": mixin(op ~ "Debug.stages;"); break;
+        case "showtimes": mixin(op ~ "Debug.times;"); break;                
         case "parseonly": mixin(op ~ "Debug.parseOnly;"); break;
         default: break;
     }
 }
+
+
+
+auto timeIt(E)(string stage, lazy E expr)
+{
+    import std.datetime : StopWatch;
+    StopWatch sw;
+    sw.start();
+    static if (is(typeof(expr) == void))
+        expr;
+    else 
+        auto result = expr;
+    sw.stop();
+    timings ~= Tuple!(string,"stage",long,"msecs")(stage, sw.peek().msecs());
+    
+    static if (!is(typeof(expr) == void))
+        return result;
+}
+
 
 
 /**
@@ -584,52 +596,24 @@ void setDebugLevelFromString(string s)(string level)
 */
 EvalResult evaluate(string code,                    
                     out string message)
-{
-    import std.datetime : StopWatch;
+{    
     import std.typecons, std.conv;
-
-    Tuple!(long,"parse",long,"build",long,"call") times;
-    StopWatch sw;
-    sw.start();
-
+    
+    timings.clear();
+    
     scope(success)
     {
-        if (context.debugLevel & Debug.times)
-        {
-            message ~= text("TIMINGS: parse: ", times.parse);
-            if (!(context.debugLevel & Debug.parseOnly))
-                message.append(", build: ", times.build, ", call: ", times.call, ", TOTAL: ",
-                        times.parse + times.build + times.call);
-            else
-                message.append();
-        }
+        if (context.debugLevel & Debug.times)        
+            message ~= "Timings:\n" ~ timings.map!( x => text("  ",x.stage," - ",x.msecs) )().join("\n") ~ "\n";                                
     }
-
-    auto timeIt(alias fn, Args...)(ref Args args, ref StopWatch sw, ref long time)
-    {
-        sw.reset();
-        auto res = fn(args);
-        time = sw.peek().msecs();
-        return res;
-    }
-
-    if (context.debugLevel & Debug.stages) message.append("PARSE...");
-
-    bool showParse = cast(bool)(context.debugLevel & Debug.parseOnly);
-    auto text = parser.parse(code, context);    
-    
-    /**
-    writeln("Parse -----------------------------------------------------------------------------");
-    writeln(text[0]);
-    writeln(text[1]);
-    writeln("-----------------------------------------------------------------------------------\n");    
-    **/
+          
+    auto text = timeIt("parse (total)", parser.parse(code, context));       
 
     if (parser.errors.length != 0)
     {
         message.append("Parse errors:\n", parser.errors);
         context.rawCode.fail();
-        pruneSymbols(context);
+        context.share.prune();
         return EvalResult.parseError;
     }        
 
@@ -642,22 +626,20 @@ EvalResult evaluate(string code,
     if (text[0].length == 0 && text[1].length == 0)
         return EvalResult.noError;
 
-    if (context.debugLevel & Debug.stages) message.append("BUILD...");
 
-    auto build = timeIt!build(text, message, sw, times.build);
+    auto build = timeIt("build (total)", build(text, message));
 
     if (!build)
     {
-        pruneSymbols(context);
+        context.share.prune();
         return EvalResult.buildError;
     }
 
-    if (context.debugLevel & Debug.stages) message.append("CALL...");
 
-    auto call = timeIt!call(message, sw, times.call);
+    auto call = timeIt("call (total)", call(message));
 
     // Prune any symbols not marked as valid
-    pruneSymbols(context);
+    context.share.prune();
 
     final switch(call) with(CallResult)
     {
@@ -720,7 +702,7 @@ bool build(Tuple!(string,string) code,
         "    gc_setProxy(_repl_.gc);\n"
         "    auto saveOut = stdout;\n"
         "    scope(exit) { stdout = saveOut; } \n"
-        "    stdout.open(_repl_.logFile, `wt`);\n"
+        "    stdout.open(_repl_.resultFile, `wt`);\n"
         "    auto e = collectException!Throwable(_main2(_repl_));\n"
         "    if (e) { writeln(e); return -1; }\n"
         "    return 0;\n"
@@ -731,9 +713,12 @@ bool build(Tuple!(string,string) code,
         code[1] ~
         "}\n";
 
-    auto file = File(context.fullName ~ ".d", "w");
-    file.write(text ~ genHeader());
+    
+    auto file = File(context.fullName ~ ".d", "w");    
+    timeIt("build - write", file.write(text ~ genHeader()));
     file.close();
+        
+    
 
     if (!exists(context.fullName ~ ".def"))
     {
@@ -760,9 +745,9 @@ bool build(Tuple!(string,string) code,
     
     string cmd = std.conv.text(dirChange, " & dmd ", dmdFlags.join(" "), " ", 
                                linkFlags.join(" "), " ", context.filename, ".d ", 
-                               context.filename, ".def extra.lib");
-
-    if (!buildUserModules(message))
+                               context.filename, ".def extra.lib");                               
+                                  
+    if (!timeIt("build - userMod", buildUserModules(message)))
         return false;
 
     if (context.userModules.length > 0)
@@ -772,7 +757,7 @@ bool build(Tuple!(string,string) code,
     }
 
     string tempMessage;
-    bool buildAttempt = attempt(cmd, tempMessage, context.fullName ~ ".d");
+    bool buildAttempt = timeIt("build - build", attempt(cmd, tempMessage, context.fullName ~ ".d"));
 
     if (!buildAttempt)
     {
@@ -780,7 +765,7 @@ bool build(Tuple!(string,string) code,
         // raw code. (Originally this was done in a background thread along with the
         // full build, but it adds latency for all code, not just that which is wrong).
 
-        auto test = testCompile();
+        auto test = timeIt("build - testCompile", testCompile());
 
         if (test.length > 0)
         {
@@ -855,7 +840,8 @@ bool buildUserModules(ref string message,
 
         auto f = File(context.paths.tempPath ~ "defs.d", "w");
         f.write(text);
-        f.close();
+        f.close();                        
+        
         if (!attempt("cd " ~ context.paths.tempPath ~ " & dmd -c -release -noboundscheck -O defs.d", message, context.paths.tempPath ~ "defs.d"))
             return false;
     }
@@ -975,12 +961,12 @@ CallResult call(ref string message)
     }
                
                
-    if (exists(context.share.logFile))
+    if (exists(context.share.resultFile))
     {
         try
         {
-            message.append(readText(context.share.logFile));
-            remove(context.share.logFile);
+            message.append(readText(context.share.resultFile));
+            remove(context.share.resultFile);
         }
         catch(Exception e) {}
     }

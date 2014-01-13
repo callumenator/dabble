@@ -11,6 +11,9 @@ void run(string[] code, uint debugLevel = Debug.times)
 {    
     import std.stdio;
     string err;
+    
+    setDebugLevel(debugLevel);
+    
     evaluate("import std.stdio, std.conv, std.traits, std.typecons, std.algorithm, std.range;", err);
 
     foreach(i, c; code)
@@ -41,7 +44,7 @@ void stress()
     "foreach(i; iota(150)) { str0 ~= `x`;}",
     "writeln(str0);",
     "writeln(classC);",
-    "str0 = str0[0..$-20];"
+    "str0 = str0[0..$-20];",
     "writeln(str0);",
     "auto aa0 = [`one`:1, `two`:2, `three`:3, `four`:4];",
     "writeln(aa0[`two`]);",

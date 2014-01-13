@@ -20,7 +20,7 @@ void main(char[][] args)
     import dabble.testing;
     stress();    
     
-    loop();               
+    //loop();               
 }
 
 void parseArgs(char[][] args)
@@ -33,8 +33,7 @@ void parseArgs(char[][] args)
         switch(arg.toLower())
         {
             case "--noconsole":  dabble.repl.consoleSession = false; break;
-            case "--showtimes":  addDebugLevel(Debug.times);      break;
-            case "--showstages": addDebugLevel(Debug.stages);     break;
+            case "--showtimes":  addDebugLevel(Debug.times);      break;            
             case "--parseonly":  addDebugLevel(Debug.parseOnly);  break;
             default: writeln("Unrecognized argument: ", arg);        break;
         }

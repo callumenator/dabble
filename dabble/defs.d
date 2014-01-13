@@ -10,30 +10,30 @@ Authors:   Callum Anderson
 
 module dabble.defs;
 
-import
-    std.conv,
-    std.stdio,
-    std.typecons,
-    std.typetuple,
-    std.algorithm,
-    std.traits,
-    std.range,
-    std.regex,
-    std.string,
-    std.uuid;
-    
+package bool trace = false;
+private enum replSharePrefix = "_repl_";
+
+struct Code 
+{ 
+    import std.array;
+    Appender!string header, prefix, suffix; 
+}
+
+ 
 /**
 * Info shared between DLL and REPL executable.
 */
 struct ReplShare
 {
-    Symbol[] symbols;
+    Var[] vars;        
+    Decl[] decls;        
     Vtbl[] vtbls;        
     Type*[string] map;      /// map used by typeBuilder and friends    
-    void*[2] imageBounds;   
+    
+    void* gc;               /// host gc instance            
     bool keepAlive;
-    void* gc;               /// host gc instance    
-    string logFile;         /// result of the eval    
+    string resultFile;      /// result of the eval    
+    void*[2] imageBounds;       
 
     void init()
     {
@@ -42,78 +42,208 @@ struct ReplShare
 
     void reset()
     {
-        symbols.clear();
-        vtbls.clear();
         map.clear();
+        vars.clear();
+        decls.clear();        
+        vtbls.clear();                
         init();
     }
-}
 
-
-/**
-* Return the file name of this module.
-*/
-string moduleFileName() { return __FILE__; }
-
-
-void* newType(T)()
-{
-    import std.c.string;
-
-    T t = T.init;
-    auto ptr = newExpr(t);
-    memcpy(ptr, &t, T.sizeof);
-    return ptr;
-}
-
-
-void* newExpr(E)(lazy E expr)
-{
-    static if (__traits(compiles, typeof(expr())))
+    Code generate()
     {
-        alias typeof(expr()) T;
-
-        static if (is(T == class))
-            auto mem = new void[](__traits(classInstanceSize, T));
-        else
-            auto mem = new void[](T.sizeof);
-
-        return mem.ptr;
+        Code c;
+        foreach(i, ref v; vars)         
+            v.generate(c, i);                    
+        foreach(i, ref d; decls)                
+            d.generate(c, i);                            
+        return c;
+    }        
+    
+    void prune()
+    { 
+        import std.algorithm : filter; 
+        import std.array : array; 
+        
+        vars = vars.filter!( x => x.valid )().array();
+        decls = decls.filter!( x => x.valid )().array();    
     }
-    else
-        static assert(0);
-}
-
-
-string NewTypeof(string S, E)(lazy E expr)
-{
-    import std.traits;
-    static if (__traits(compiles, {alias ReturnType!expr RT;}))
+ 
+    void deleteVar(string name)
     {
-        alias ReturnType!expr RT;
-        static if (__traits(compiles, mixin( "{" ~ RT.stringof ~ " _v;}")))
-            return RT.stringof;
+        import std.algorithm : filter; 
+        import std.array : array; 
+        
+        vars = vars.filter!( x => x.name == name )().array();
+    }      
+}
+
+
+struct Vtbl
+{
+    string name;
+    void*[] vtbl;
+}
+
+
+struct Var
+{    
+    import std.array : Appender; 
+
+    string name, type, init, current, displayType;    
+    bool first = true, valid = false, func = false;        
+    QualifiedType ty;        
+    void* addr;
+    
+    void put(T...)(ref Appender!string app, T items)
+    {
+        foreach(i; items)
+        app.put(i);
+    }     
+
+    void generate(ref Code c, size_t index)
+    {
+        import std.string : strip;
+        import std.regex : match; 
+        import std.conv : text, to;        
+            
+        if (first)        
+        {
+            auto accessor = replSharePrefix ~ ".vars[" ~ index.to!string() ~ "]";        
+            put(c.suffix, accessor, ".valid = true;\n");
+            first = false;                
+            
+            assert(init == strip(init), "Problem with parsing init"); 
+        
+            if (strip(type).length == 0 || !type.match(`\bauto\b`).empty)            
+                type = text("typeof( (() => (", init,"))() )");                            
+                                                                    
+            string _funcLit()
+            {                
+                string code =
+                "  static if ((__traits(compiles, isFunctionPointer!(" ~ type ~ ")) && isFunctionPointer!(" ~ type ~ ")) || is(" ~ type ~ " == delegate))\n  {\n"
+                "    " ~ accessor ~ ".func = true;\n"                
+                "    " ~ type ~ "* " ~ name ~ ";\n"
+                "    " ~ accessor ~ ".type = q{" ~ type ~ "}.idup;\n";
+                code ~= init .length ? "    {\n      auto _temp = " ~ init ~ ";\n      " ~ name ~ " = cast(" ~ type ~ "*)&_temp;\n    }\n  }\n" : "  }\n";                                    
+                return code;
+            }                        
+
+            string _maker()
+            {                               
+                string s = "{\n";
+                            
+                string utype = text("Unqual!(",type,")");
+                        
+                s ~= text("  static if (is(",type," == class)) {\n");
+                s ~= text("    ",accessor,".addr = cast(void*)emplace!(",utype,")(new void[](__traits(classInstanceSize,",utype,")));\n");
+                s ~= text("  } else {\n");
+                s ~= text("    ",accessor,".addr = cast(void*)emplace!(",utype,")(new void[]((",utype,").sizeof));\n");
+                s ~= text("  }\n");  
+
+                if (strip(init).length == 0)
+                    return s ~ "}\n";
+                
+                string assign;
+                
+                assign = text("*cast(",utype,"*)",accessor,".addr = ",utype,"(",init,");");    
+                s ~= text("  static if (__traits(compiles,",utype,"(",init,")))\n  {\n");                
+                s ~= text("    ",assign,"\n  }\n");
+                
+                assign = text("*cast(",utype,"*)",accessor,".addr = ",init,";");    
+                s ~= text("  else static if (__traits(compiles, { ",assign," }))\n  {\n");                
+                s ~= text("    ",assign,"\n  }\n");
+                
+                assign = text("*cast(",utype,"*)",accessor,".addr = cast(",utype,")(",init,");");    
+                s ~= text("  else\n  {\n");                
+                s ~= text("    ",assign,"\n  }\n}\n");
+                        
+                return s;
+            }
+            
+            put(c.prefix,
+                _funcLit(), "  else\n  {\n",
+                    "    ", _maker(), "\n",
+                    "    auto ", name, " = cast(", type, "*)", accessor, ".addr;\n  }\n\n");                               
+            
+            put(c.prefix,
+                "  ", accessor, ".displayType = typeof(*", name, ").stringof.idup;\n",                
+                "  if (!", accessor, ".func) _REPL.exprResult(*", name, ", __expressionResult);\n\n");
+
+            put(c.suffix,
+                "  if (", accessor, ".func)\n  {\n"
+                "    ", accessor, ".current = q{", init, "}.idup;\n"
+                "  }\n  else\n  {\n"
+                "    ", accessor, ".ty = _REPL.buildType!(typeof(*",name, "))(_repl_.map);\n"
+                "  }\n\n");
+        }
+        else // var has already been created, just grab it
+        {
+            if (func)
+            {
+                put(c.prefix, type, "* ", name, ";\n{\n");
+                if (init == "")
+                    put(c.prefix, "  auto _temp = cast(", type, ") null;\n");
+                else
+                    put(c.prefix, "  auto _temp = ", init, ";\n");
+
+                put(c.prefix, "  ", name, " = cast(", type, "*)&_temp;\n}\n\n");
+            }
+            else
+            {
+                put(c.prefix, "auto ", name, " = _REPL.get!(", type, ")(_repl_.vars,", index.to!string(), ");\n");
+            }
+        }              
     }
 
-    return "typeof(" ~ S ~ ")";
+    void toString(scope void delegate(const(char)[]) sink)
+    {
+        sink(name);
+        sink(" (");
+        sink(displayType);
+        sink(") = ");
+        sink(current);
+    }
 }
 
 
-string NewTypeof(string S, T...)(T t) // for tuples
+struct Decl
 {
-    return "Tuple!" ~ T.stringof;
+    string decl;
+    bool global = false, first = true, valid = false;
+       
+    void generate(ref Code c, size_t index)
+    {           
+        import std.conv : to; 
+    
+        if (global) 
+            c.header.put(decl ~ "\n");
+        else 
+            c.prefix.put(decl ~ "\n");
+            
+        if (first) 
+        {
+            c.suffix.put(replSharePrefix ~ ".decls[" ~ index.to!string() ~ "].valid = true;\n");
+            first = false;  
+        }
+    }
+
+    void toString(scope void delegate(const(char)[]) sink)
+    {
+        sink(decl);
+    }
 }
-     
 
-T* getVar(T)(const(Symbol[]) symbols, size_t index)
+
+T* get(T)(const(Var[]) symbols, size_t index)
 {
-    return cast(T*)symbols[index].v.addr;
+    return cast(T*)symbols[index].addr;
 }
 
 
-auto exprResult2(E)(lazy E expr, ref string result)
+auto exprResult(E)(lazy E expr, ref string result)
 {
-    import std.exception;        
+    import std.exception : collectException;
+    import std.conv : to;     
     
     static if (__traits(compiles, is(typeof(expr()))) && !is(typeof(expr()) == void))    
     {
@@ -128,22 +258,11 @@ auto exprResult2(E)(lazy E expr, ref string result)
 }
 
 
-string exprResult(E)(lazy E expr)
-{
-    import std.exception;
-    
-    auto temp = expr();
-    string result;
-    if (collectException!Throwable(result = temp.to!string()))
-        return "";    
-    
-    return result;
-}
-
-
 template needsDup(T)
 {
-    import std.regex;
+    import std.regex : RegexMatch;
+    import std.traits : isArray, isPointer, isAggregateType;
+    
     static if (is(T _ == RegexMatch!(U), U...))
         enum needsDup = false;
     else static if (isArray!T)
@@ -163,8 +282,10 @@ template needsDup(T)
 */
 void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
 {
-    import std.c.string;
-
+    import std.traits : isFunctionPointer, isSomeString, Unqual, isPointer, PointerTarget, isAggregateType, isArray;
+    import std.c.string : memcpy; 
+    import std.stdio : writeln; 
+    
     static if (!needsDup!T)
         return;
 
@@ -252,331 +373,10 @@ void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
 }
 
 
-/**
-* Used mainly for corner case like appender!string, without the '()'.
-*/
-template TypeOf(T)
-{
-    static if (__traits(compiles, {ReturnType!T _;}))
-        alias ReturnType!T TypeOf;
-    else
-        alias T TypeOf;
-}
-
-
-/**
-* Return the mixin string to access a symbol by index.
-*/
-string sym(size_t index)
-{
-    return "_repl_.symbols["~index.to!string()~"]";
-}
-
-
-struct Code { Appender!string header, prefix, suffix; }
-
-struct Var
-{
-    string name, type, init, current, displayType;
-    bool first = true;
-    bool func = false;
-    void* addr;
-    QualifiedType ty;
-
-    void put(T...)(ref Appender!string app, T items)
-    {
-        foreach(i; items)
-        app.put(i);
-    }
-
-    void generate(ref Code c, size_t index)
-    {
-        if (first)
-        {
-            first = false;
-            string test;                        
-            
-            if (std.string.strip(type).length == 0 || !type.match(`\bauto\b`).empty)            
-                type = text("typeof( (() => (", init,"))() )");                            
-                          
-            string generateFuncLitSection(string useType)
-            {                
-                string code =
-                "  static if ((__traits(compiles, isFunctionPointer!(" ~ useType ~ ")) && isFunctionPointer!(" ~ useType ~ "))"
-                "  || is(" ~ useType ~ " == delegate)) {\n"
-                "    " ~ sym(index) ~ ".v.func = true;\n"                
-                "    " ~ useType ~ "* " ~ name ~ ";\n"
-                "    " ~ sym(index) ~ ".v.type = q{" ~ useType ~ "}.idup;\n";
-
-                if (init != "")
-                    code ~=
-                    "    {\n"
-                    "      auto _temp = " ~ init ~ ";\n"
-                    "      " ~ name ~ " = cast(" ~ useType ~ "*)&_temp;\n"
-                    "    }\n";
-
-                code ~= "}";
-                return code;
-            }                        
-
-            string _maker()
-            {                               
-                string s = "{\n";
-                            
-                string utype = text("Unqual!(",type,")");
-                        
-                s ~= text("  static if (is(",type," == class)) {\n");
-                s ~= text("    ",sym(index),".v.addr = cast(void*)emplace!(",utype,")(new void[](__traits(classInstanceSize,",utype,")));\n");
-                s ~= text("  } else {\n");
-                s ~= text("    ",sym(index),".v.addr = cast(void*)emplace!(",utype,")(new void[]((",utype,").sizeof));\n");
-                s ~= text("  }\n");  
-
-                if (std.string.strip(init).length == 0)
-                    return s ~ "}\n";
-                
-                string assign;
-                
-                assign = text("*cast(",utype,"*)",sym(index),".v.addr = ",utype,"(",init,");");    
-                s ~= text("  static if (__traits(compiles,",utype,"(",init,")))\n  {\n");                
-                s ~= text("    ",assign,"\n  }\n");
-                
-                assign = text("*cast(",utype,"*)",sym(index),".v.addr = ",init,";");    
-                s ~= text("  else static if (__traits(compiles, { ",assign," }))\n  {\n");                
-                s ~= text("    ",assign,"\n  }\n");
-                
-                assign = text("*cast(",utype,"*)",sym(index),".v.addr = cast(",utype,")(",init,");");    
-                s ~= text("  else\n  {\n");                
-                s ~= text("    ",assign,"\n  }\n}\n");
-                        
-                return s;
-            }
-            
-            put(c.prefix,
-                    generateFuncLitSection(type), " else {\n",
-                    "  ", _maker(), "\n",
-                    "  auto ", name, " = cast(", type, "*)", sym(index), ".v.addr;\n}\n");                               
-
-            /**
-            if (!type.match(`\bauto\b`).empty) // has initializer but no type
-            {
-                assert(init.length > 0, "Auto var without initializer");
-                              
-                put(c.prefix,
-                    generateFuncLitSection(type), " else {\n",
-                    "  ", _maker(), "\n",
-                    "  auto ", name, " = cast(", type, "*)", sym(index), ".v.addr;\n}\n");                               
-            }
-            else if (init.length > 0) // has type and initializer
-            {
-                put(c.prefix,
-                    generateFuncLitSection(type), " else {\n",
-                    "  ", _maker(), "\n",
-                    "  auto ", name, " = cast(", type, "*)", sym(index), ".v.addr;\n}\n");                               
-            }
-            else // just has type
-            {
-                put(c.prefix,
-                    generateFuncLitSection(type), " else {\n",
-                    "  ", _maker(), "\n",
-                    "  auto ", name, " = cast(", type, "*)", sym(index), ".v.addr;\n}\n");                               
-            }
-            **/
-            
-            put(c.prefix,
-                "  ", sym(index), ".v.displayType = typeof(*", name, ").stringof.idup;\n",
-                //"  static if (__traits(compiles, _REPL.exprResult(*", name, ")))\n",
-                "    if (!", sym(index), ".v.func)\n",
-                "      _REPL.exprResult2(*", name, ", __expressionResult);\n");
-
-            put(c.suffix,
-                "  if (" ~ sym(index) ~ ".v.func) {\n"
-                "    " ~ sym(index) ~ ".v.current = q{", init, "}.idup;\n"
-                "  } else {\n"
-                "    " ~ sym(index) ~ ".v.ty = _REPL.buildType!(typeof(*",name, "))(_repl_.map);\n"
-                "}\n");
-        }
-        else // var has already been created, just grab it
-        {
-            if (func)
-            {
-                put(c.prefix, type, "* ", name, ";\n{\n");
-                if (init == "")
-                    put(c.prefix, "  auto _temp = cast(", type, ") null;\n");
-                else
-                    put(c.prefix, "  auto _temp = ", init, ";\n");
-
-                put(c.prefix, "  ", name, " = cast(", type, "*)&_temp;\n}\n");
-            }
-            else
-            {
-                put(c.prefix, "auto ", name, " = _REPL.getVar!(", type, ")(_repl_.symbols,", index.to!string(), ");\n");
-            }
-        }
-    }
-
-    void toString(scope void delegate(const(char)[]) sink)
-    {
-        sink(name);
-        sink(" (");
-        sink(displayType);
-        sink(") = ");
-        sink(current);
-    }
-}
-
-struct Alias
-{
-    string decl;
-    bool global = false;
-
-    void generate(ref Code c, size_t index)
-    {
-        if (global)
-            c.header.put(decl ~ "\n");
-        else
-            c.prefix.put(decl ~ "\n");
-    }
-
-    void toString(scope void delegate(const(char)[]) sink)
-    {
-        sink(decl);
-    }
-}
-
-struct Import
-{
-    string decl;
-
-    void generate(ref Code c, size_t index)
-    {
-        c.header.put(decl~"\n");
-    }
-}
-
-struct Enum
-{
-    string decl;
-    bool global = false;
-
-    void generate(ref Code c, size_t index)
-    {
-        if (global)
-            c.header.put(decl ~ "\n");
-        else
-            c.prefix.put(decl ~ "\n");
-    }
-
-    void toString(scope void delegate(const(char)[]) sink)
-    {
-        sink(decl);
-    }
-}
-
-struct UserType
-{
-    string decl;
-
-    void generate(ref Code c, size_t index)
-    {
-        c.header.put(decl ~ "\n");
-    }
-
-    void toString(scope void delegate(const(char)[]) sink)
-    {
-        sink(decl);
-    }
-}
-
-struct Symbol
-{
-    enum Type { Var, Alias, Import, Enum, UserType }
-
-    union
-    {
-        Var v;
-        Alias a;
-        Import i;
-        Enum e;
-        UserType u;
-    }
-
-    Type type;
-    bool valid = false;
-    bool first = true;
-
-    this(T)(T _x)
-    {
-        static if (is(T == Var))
-        {
-            v = _x;
-            type = Type.Var;
-        }
-        else static if (is(T == Alias))
-        {
-            a = _x;
-            type = Type.Alias;
-        }
-        else static if (is(T == Import))
-        {
-            i = _x;
-            type = Type.Import;
-        }
-        else static if (is(T == Enum))
-        {
-            e = _x;
-            type = Type.Enum;
-        }
-        else static if (is(T == UserType))
-        {
-            u = _x;
-            type = Type.UserType;
-        }
-    }
-
-    // Commonly used predicate
-    bool isVar() { return type == Type.Var; }
-
-    void generate(ref Code c, size_t index)
-    {
-        final switch(type)
-        {
-            case Type.Var:      v.generate(c, index); break;
-            case Type.Alias:    a.generate(c, index); break;
-            case Type.Import:   i.generate(c, index); break;
-            case Type.Enum:     e.generate(c, index); break;
-            case Type.UserType: u.generate(c, index); break;
-        }
-
-        if (first)
-        {
-            c.suffix.put(sym(index) ~ ".valid = true;\n");
-            first = false;
-        }
-    }
-
-    void toString(scope void delegate(const(char)[]) sink)
-    {
-        switch(type) with(Type)
-        {
-            case Var: v.toString(sink); break;
-            case Alias: a.toString(sink); break;
-            case Enum: e.toString(sink); break;
-            case UserType: u.toString(sink); break;
-            default: break;
-        }
-    }
-}
-
-struct Vtbl
-{
-    string name;
-    void*[] vtbl;
-}
-
-package bool trace = false;
-
 struct QualifiedType
 {
+    import std.typecons : Tuple;
+    
     enum Qualifier { None, Const, Immutable }
 
     Type* type;
@@ -585,6 +385,9 @@ struct QualifiedType
 
     Tuple!(QualifiedType,string) typeOf(Operation[] stack, ref Type*[string] map)
     {
+        import std.algorithm : find;
+        import std.array : front, empty;       
+        
         QualifiedType currType = this;
         foreach(i; stack)
         {
@@ -623,6 +426,9 @@ struct QualifiedType
 
     string valueOf(Operation[] stack, void* ptr, ref Type*[string] map)
     {
+        import std.conv : to; 
+        import std.stdio : writeln; 
+        
         void* addr = ptr;
         QualifiedType currType = this;
         foreach(i; stack)
@@ -678,6 +484,8 @@ struct QualifiedType
 
 struct Type
 {
+    import std.typecons;
+
     enum { Basic, Pointer, Class, Struct, DynamicArr, StaticArr, AssocArr }
 
     union
@@ -732,6 +540,8 @@ struct Type
 
     QualifiedType index(ref void* absAddr, size_t i)
     {
+        import std.stdio : writeln; 
+        
         assert(isArray || isPointer);
 
         if (isArray && i >= len(absAddr))
@@ -752,6 +562,9 @@ struct Type
 
     QualifiedType member(ref void* absAddr, string name)
     {
+        import std.algorithm : find; 
+        import std.array : empty, front; 
+    
         assert(isAggregate);
 
         auto m = _object.find!((a,b) => a.name==b)(name);
@@ -767,6 +580,9 @@ struct Type
 
     string getMe(void* absAddr)
     {
+        import std.stdio : write, writeln; 
+        import std.conv : to;
+    
         if (trace) write("GetMe: ", this.typeName);
 
         enum types = ["byte", "ubyte", "char", "dchar", "wchar",
@@ -836,6 +652,8 @@ struct Type
 
     string getMeArray(void* baseAddr, size_t start, size_t stop, bool staticArr = false)
     {
+        import std.range : iota; 
+    
         void* arrBase = baseAddr;
         string s = "[";
         foreach(i; iota(start, stop))
@@ -849,6 +667,8 @@ struct Type
 
     string toString(bool expand = true)
     {
+        import std.conv : to; 
+    
         string s;
         if (isPointer)
         {
@@ -906,22 +726,30 @@ struct Operation
     string val, val2;
 }
 
+
 /**
 * Run buildType for the built-in types.
 */
 void buildBasicTypes(ref Type*[string] map)
 {
+    import std.typetuple : TypeTuple;
+
     foreach(T; TypeTuple!(byte, ubyte, char, dchar, wchar, int, uint,
                           short, ushort, long, ulong, float, double, real,
                           void*, void[]))
     buildType!T(map);
 }
 
+
 /**
 * Dynamic (but simple) type building.
 */
 QualifiedType buildType()(string typeString, ref Type*[string] map)
 {
+    import std.array: front, empty, popFront; 
+    import std.conv : to; 
+    import std.stdio : writeln; 
+
     bool isIdentChar(dchar c)
     {
         return (c >= 'A' && c <= 'Z') ||
@@ -1025,6 +853,7 @@ QualifiedType buildType()(string typeString, ref Type*[string] map)
     return QualifiedType();
 }
 
+
 template typeQualifier(T)
 {
     static if (is(T _ == const U, U))
@@ -1035,11 +864,29 @@ template typeQualifier(T)
         enum typeQualifier = QualifiedType.Qualifier.None;
 }
 
+
 /**
 * Static type building.
 */
 QualifiedType buildType(T)(ref Type*[string] map, QualifiedType* ptr = null)
 {
+    import std.stdio: writeln; 
+    import std.algorithm : splitter;
+    import std.typecons : Tuple;
+    import std.array : array; 
+    import std.traits : 
+        Unqual,         
+        PointerTarget, 
+        isBasicType, 
+        isPointer, 
+        isFunctionPointer,
+        isAggregateType, 
+        isArray,
+        isStaticArray,         
+        isDynamicArray, 
+        isAssociativeArray;     
+                        
+
     static if (!__traits(compiles, T.sizeof))
         return QualifiedType();
     else {
@@ -1114,12 +961,13 @@ QualifiedType buildType(T)(ref Type*[string] map, QualifiedType* ptr = null)
         }
         else static if (isAssociativeArray!T)
         {
+            import std.traits: KeyType, ValueType;
+            
             qt.type = buildType!(object.AssociativeArray!(KeyType!T, ValueType!T))(map);
         }
         else
         {
             static assert(isBasicType!T);
-
             if (trace) writeln("buildType: type is basic");
             qt.type.flag = Type.Basic;
         }
@@ -1129,11 +977,20 @@ QualifiedType buildType(T)(ref Type*[string] map, QualifiedType* ptr = null)
     }
 }
 
+
 /**
 * String name for a type.
 */
 template typeName(T)
 {
+    import std.traits : 
+        Unqual, 
+        isStaticArray, 
+        PointerTarget, 
+        isDynamicArray, 
+        isPointer, 
+        isAggregateType;     
+
     alias Unqual!(T) Type;
     static if (isAggregateType!T)
         enum typeName = Type.stringof;
@@ -1147,11 +1004,12 @@ template typeName(T)
         enum typeName = Type.stringof;
 }
 
+
 /**
 * Alias to the element type of an array.
 */
 template ArrayElement(T)
-{
+{   
     static if (is(T _ : U[], U))
         alias U ArrayElement;
     else static if (is(T _ : U[V], U, V))
@@ -1160,55 +1018,17 @@ template ArrayElement(T)
         static assert(false);
 }
 
+
 /**
 * For static foreach.
 */
 template Iota(size_t i, size_t n)
 {
-    static if (n == 0) { alias TypeTuple!() Iota; }
-    else { alias TypeTuple!(i, Iota!(i + 1, n - 1)) Iota; }
+    import std.typetuple : TypeTuple; 
+    
+    static if (n == 0) 
+        alias TypeTuple!() Iota;        
+    else    
+        alias TypeTuple!(i, Iota!(i + 1, n - 1)) Iota;
 }
-
-
-version(Windows)
-{
-    // look away!
-    void fixUp()
-    {
-        import core.sys.windows.dll, core.sys.windows.windows;
-        import core.sys.windows.threadaux : getTEB;
-
-        alias extern(Windows)
-        void* fnRtlAllocateHeap(void* HeapHandle, uint Flags, size_t Size) nothrow;
-
-        HANDLE hnd = GetModuleHandleA( "NTDLL" );
-        assert( hnd, "cannot get module handle for ntdll" );
-
-        fnRtlAllocateHeap* fnAlloc = cast(fnRtlAllocateHeap*) GetProcAddress( hnd, "RtlAllocateHeap" );
-
-        auto teb = getTEB();
-        void** peb = cast(void**) teb[12];
-        void* heap = peb[6];
-
-        auto sz = _tlsend - _tlsstart;
-        void* _tlsdata = cast(void*) (*fnAlloc)( heap, 0xc0000, sz );
-
-        core.stdc.string.memcpy( _tlsdata, _tlsstart, sz );
-
-        auto tlsindex = 1; // clearly a bad thing
-
-        // create copy of tls pointer array
-        void** array = cast(void**) (*fnAlloc)( heap, 0xc0000, (tlsindex + 1) * (void*).sizeof );
-
-        if( tlsindex > 0 && teb[11] )
-            core.stdc.string.memcpy( array, teb[11], tlsindex * (void*).sizeof);
-
-        array[tlsindex] = _tlsdata;
-        teb[11] = cast(void*) array;
-
-        _tls_index ++;
-    }
-}
-else
-    static assert("Only Windows is suported");
 

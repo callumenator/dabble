@@ -25,7 +25,7 @@ import
     
 import dabble.repl;
 
-import Defs = dabble.defs;
+import dabble.defs : Var, Decl;
  
 class DabbleParser : Parser
 {
@@ -70,17 +70,17 @@ class DabbleParser : Parser
         		
         parseDeclarationsAndStatements();                
                
-        Defs.Code code;
-        foreach(idx, ref sym; repl.share.symbols)
-            sym.generate(code, idx);
+        auto code = repl.share.generate();
             
         foreach(d; stringDups)
-        {
-            size_t index;
-            findVar(d, index);
-            code.suffix.put("if (!_repl_.symbols["~index.to!(string)()~"].v.func) { "
-                            "_REPL.dupSearch(*"~d~", _repl_.imageBounds[0], _repl_.imageBounds[1], _repl_.keepAlive); }\n");
+        {                   
+            auto index = repl.share.vars.countUntil!( (a,b) => a.name == b )(d);                    
+            assert(index >= 0, "Parser: undefined var in string dups");
+            code.suffix.put("if (!_repl_.vars[" ~ index.to!string() ~ "].func) { "
+                            "_REPL.dupSearch(*" ~ d ~ ", _repl_.imageBounds[0], _repl_.imageBounds[1], _repl_.keepAlive); }\n");
         }
+            
+        /** need to append remaining source code to RawCode **/    
             
         auto inBody =            
             repl.vtblFixup ~
@@ -226,7 +226,7 @@ class DabbleParser : Parser
         
         auto slice = original[t[1]..t[2]];                
         repl.rawCode.append(slice, true);        
-        repl.share.symbols ~= Defs.Symbol(Defs.Import(slice));                
+        repl.share.decls ~= Decl(slice, true);                
         blank(t[1],t[2]);
         return t[0];    
     }
@@ -289,7 +289,7 @@ class DabbleParser : Parser
     }          
  
     override IdentifierOrTemplateInstance parseIdentifierOrTemplateInstance()    
-    {   
+    {               
         auto i = index;
         auto t = wrap(super.parseIdentifierOrTemplateInstance());        
         if (suppressMessages == 0)
@@ -297,7 +297,7 @@ class DabbleParser : Parser
             if (i == 0 || (i > 0 && tokens[i - 1].type != TokenType.dot))
             {                
                 auto ident = std.string.strip(original[t[1]..t[2]]);                
-                if (isDefined(ident))
+                if (repl.share.vars.canFind!((a,b) => (a.name == b))(ident))
                 {                  
                     declCanBeGlobal = false;
                     stringDups ~= ident;
@@ -355,16 +355,15 @@ class DabbleParser : Parser
                                  
         string init = lastInit;                       
         
-        if (name in repl.symbolSet)
+        if (repl.share.vars.canFind!((a,b) => (a.name == b))(name))
         {
             // redifinition, user defined variable more than once
             parseError("Error: redifinition of " ~ name ~ " not allowed");                                
         }
         else
         {                                                                
-            repl.rawCode.append(original[declStart..end], false);
-            repl.symbolSet[name] = 0;
-            repl.share.symbols ~= Defs.Symbol(Defs.Var(name, type, init));
+            repl.rawCode.append(original[declStart..end], false);            
+            repl.share.vars ~= Var(name, type, init);
             stringDups ~= name;
         }
                 
@@ -383,7 +382,7 @@ class DabbleParser : Parser
                             
         auto decl = original[start..end];
         repl.rawCode.append(decl, global);
-        repl.share.symbols ~= Defs.Symbol(Defs.UserType(decl));        
+        repl.share.decls ~= Decl(decl, global);        
         blank(start, end);
         clear();                        
     }
@@ -401,97 +400,9 @@ class DabbleParser : Parser
     {        
         lastInit = "";
     }        
-    
-    /**
-    * Check if name is already defined.
-    */
-    bool isDefined(string name)
-    {
-        auto ptr = name in repl.symbolSet;
-        return ptr !is null;
-    }
-    
-    /**
-    * Find a Var by name.
-    */
-    Defs.Var findVar(string name, out size_t index)
-    {
-        foreach(s; repl.share.symbols)
-        {
-            if (s.type == Defs.Symbol.Type.Var && s.v.name == name)
-                return s.v;
-            ++index;
-        }
-        assert(false, "Tried to find un-defined variable " ~ name);
-    }
-    
-    /**
-    * Return true if input does not reference any local vars (i.e. can be
-    * put in code header.
-    */
-    bool isGlobal(string input, bool pointer = true)
-    {
-        import std.regex;
-
-        if (pointer)
-        {
-            auto r = regex(`(\(\*)([_a-zA-Z][_0-9a-zA-Z]*)(\))`, "g");
-            foreach(m; match(input, r))
-            if (isDefined(m.captures[2]))
-               return false;
-            return true;
-        }
-        else
-        {
-            auto r = regex(`(([_a-zA-Z][_0-9a-zA-Z]*))`, "g");
-            foreach(m; match(input, r))
-                if (isDefined(m.captures[1]))
-                    return false;
-            return true;
-        }
-
-        assert(false);
-    }
-
-    
+       
     void parseError(string msg)
     {
         errors ~= msg ~ "\n";
     }
-}
-
-
-/**
-* Remove any symbols that do not have a current value string associated with
-* them. These are assumed to be dead, probably because compilation failed.
-*/
-void pruneSymbols(ref ReplContext repl)
-{
-    Defs.Symbol[] keep;
-    keep.reserve(repl.share.symbols.length);
-    foreach(s; repl.share.symbols)
-    {
-        if (s.valid)        
-            keep ~= s;                    
-        else        
-            if (s.type == Defs.Symbol.Type.Var)          
-                repl.symbolSet.remove(s.v.name);                                
-    }
-    repl.share.symbols = keep;
-}
-
-
-/**
-* Remove a variable with the given name.
-*/
-void deleteVar(ref ReplContext repl, string name)
-{
-    Defs.Symbol[] keep;
-    keep.reserve(repl.share.symbols.length);
-    foreach(s; repl.share.symbols)
-        if (s.type == Defs.Symbol.Type.Var && s.v.name == name)
-            repl.symbolSet.remove(s.v.name);
-        else
-            keep ~= s;
-    repl.share.symbols = keep;
 }
