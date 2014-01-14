@@ -8,25 +8,41 @@ import
 import dabble.repl;
 
 
+void testAll()
+{
+    setDebugLevel(Debug.times);
+    stress();
+    funcLiteral();
+}
+
+void expect(string code, string expected)
+{
+    import std.string : strip; 
+    
+    auto res = eval(code);
+    assert(res.parse.success && res.build.success && res.call.success);            
+    assert(strip(res.result) == strip(expected), res.result);
+}
+
+
+
 /**
 * Seperately eval an array of strings.
 */
-void run(string[] code, uint debugLevel = Debug.times)
+void run(string[] code)
 {    
-    import std.stdio;
-    string err;
-    
-    setDebugLevel(debugLevel);
-    
-    evaluate("import std.stdio, std.conv, std.traits, std.typecons, std.algorithm, std.range;", err);
+    string err;        
+    evaluate("import std.stdio, std.conv, std.traits, std.typecons, std.algorithm, std.range;");
 
     foreach(i, c; code)
     {
         writeln("Line: ", i, " -> ", c);
-        auto result = evaluate(c, err);
-        assert(result != EvalResult.parseError && result != EvalResult.buildError, err);
-        writeln(err);
+        auto res = evaluate(c);
+        assert(res.parse.success && res.build.success && (res.call.success || (!res.call.success && res.call.message == "runtimeError")));            
+        writeln(res.result);
     }    
+    
+    resetSession();
 }
 
 
@@ -89,7 +105,7 @@ void stress()
     "auto arr5 = [1,2,3,4,5];",
     "arr5 = arr5.map!( a => a + 4).array();",
     "writeln(arr5);"
-    ], Debug.times);
+    ]);
 }
 
 
@@ -98,7 +114,12 @@ void libTest()
     import std.stdio;
     string err;
 
-    void test(string i) { writeln(i); assert(evaluate(i, err) == EvalResult.noError, err); }
+    void test(string i) 
+    { 
+        writeln(i); 
+        auto res = eval(i);
+        assert(res.parse.success && res.build.success);            
+    }
     
     test("import std.typecons;");
     test("Nullable!int a;");
@@ -171,41 +192,6 @@ void libTest()
 }
 
 
-auto test0()
-{
-    return run(["class C { int x; }","c = new C;"]);
-}
-
-
-auto test1()
-{
-    return run([
-    "interface I { bool foo(); } ", 
-    "class C : I { int x; bool foo() { return true; } }", 
-    "c = new C;",
-    "writeln(c);",
-    "writeln(c.foo());"
-    ]);
-}
-
-
-auto test2()
-{
-    return run([
-    "import std.typecons; int i = 7; ", "Unique!int ui = &i;", "writeln(ui);"
-    ]);
-}
-
-void testAll()
-{
-    funcLiteral();
-}
-
-void expect(string code, string expected)
-{
-    auto res = eval(code);
-    assert(res == expected, res);
-}
 
 auto funcLiteral()
 {

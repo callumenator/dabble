@@ -44,6 +44,34 @@ Tuple!(string,"stage",long,"msecs")[] timings;
 
 
 /**
+* Returned by eval.
+*/
+alias DResult = Tuple!(bool,"success",string,"message");
+struct EvalResult
+{   
+    DResult meta;     
+    DResult parse;
+    DResult build;
+    DResult call;      
+    string  result;
+    
+    string toString()
+    {
+        if (meta.success)
+            return meta.message;
+        if (!parse.success)
+            return parse.message;
+        if (!build.success)
+            return build.message;
+        if (!call.success)        
+            return result.length ? result ~ "\n" ~ call.message : call.message;                                     
+        return result;
+    }
+}
+
+
+
+/**
 * Available levels of debug info.
 */
 enum Debug
@@ -107,8 +135,14 @@ void loop()
     
     while (strip(inBuffer) != "exit")
     {
-        auto result = eval(inBuffer, codeBuffer).chomp().chomp();
-        writeln(result);       
+        auto result = eval(inBuffer, codeBuffer);                        
+        writeln((consoleSession ? "=>" : ""), result);
+                
+        version(none) 
+        {
+            if (context.debugLevel & Debug.times)        
+                result[1] ~= "Timings:\n" ~ timings.map!( x => text("  ",x.stage," - ",x.msecs) )().join("\n") ~ "\n";                                
+        }
         
         if (consoleSession) 
             write(prompt()); 
@@ -140,7 +174,7 @@ void onExit()
 * Evaluate code in the context of the supplied ReplContext. This version assumes
 * inBuffer does not contain multiline input.
 */
-string eval(const char[] inBuffer)
+EvalResult eval(const char[] inBuffer)
 {
     char[] dummyBuffer;
     return eval(inBuffer, dummyBuffer);
@@ -150,22 +184,22 @@ string eval(const char[] inBuffer)
 /**
 * Evaluate code in the context of the supplied ReplContext.
 */
-string eval(const char[] inBuffer,
-            ref char[] codeBuffer)
+EvalResult eval(const char[] inBuffer, ref char[] codeBuffer)
 {
-    import std.string : strip, stripRight, toLower;   
+    import std.string : strip, stripRight, toLower;             
 
     assert(context.initalized, "Context not initalized");
     
-    string message;
+    timings.clear();
+    EvalResult result;
+            
     bool multiLine = codeBuffer.length > 0;
     char[] newInput = strip(inBuffer.dup);
 
     if (newInput.toLower() == "exit")
-        return "";
-
-    /// Try to handle meta command, else assume input is code
-    if (newInput.length > 0 && !handleMetaCommand(newInput, codeBuffer, message))
+        return result;
+    
+    if (newInput.length > 0 && !handleMetaCommand(newInput, codeBuffer, result.meta))
     {
         codeBuffer ~= inBuffer ~ "\n";         
         auto balanced = Balanced.test(codeBuffer.to!string());
@@ -175,7 +209,7 @@ string eval(const char[] inBuffer,
 
         if (!multiLine && balanced /** && newInput[$-1] == ';' **/ )
         {
-            evaluate(codeBuffer.to!string(), message);
+            result = evaluate(codeBuffer.to!string());
             codeBuffer.clear();
         }
         else
@@ -183,38 +217,14 @@ string eval(const char[] inBuffer,
             if ((balanced && braceCount > 0) ||
                 (balanced && braceCount == 0 && newInput[$-1] == ';'))
             {
-                evaluate(codeBuffer.to!string(), message);
+                result = evaluate(codeBuffer.to!string());
                 codeBuffer.clear();
                 multiLine = false;
             }
         }
     }
-
-    return message.stripRight();
-}
-
-
-
-/**
-* Returned by eval.
-*/
-enum EvalResult
-{
-    noError,
-    parseError,
-    buildError,
-    callError
-}
-
-
-/**
-* Result of attempting to load and call compiled code.
-*/
-enum CallResult
-{
-    success,
-    loadError,
-    runtimeError
+        
+    return result;
 }
 
 
@@ -339,10 +349,10 @@ struct ReplContext
         share.resultFile = paths.tempPath ~ "__dabbleTemp";
 
         share.init();
-
-        string error;
-        if (!buildUserModules(error, true))
-            throw new Exception("Unable to build defs.d, " ~ error);
+        
+        auto build = buildUserModules(true);
+        if (!build.success)
+            throw new Exception("Unable to build defs.d, " ~ build.message);
 
         _initalized = true;
     }
@@ -382,16 +392,16 @@ void append(Args...)(ref string message, Args msg)
 }
 
 
-bool handleMetaCommand(ref const(char[]) inBuffer,
-                       ref char[] codeBuffer,
-                       ref string message)
+bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DResult result)                       
 {
+    import std.conv : text;
     import std.process : system;
     import std.algorithm : canFind; 
 
     auto parse = MetaParser.decimateTree(MetaParser(inBuffer.to!string()));
 
-    if (!parse.successful) return false;
+    if (!parse.successful) 
+        return false;
 
     auto cmd = parse.children[0].matches[0];
 
@@ -406,12 +416,12 @@ bool handleMetaCommand(ref const(char[]) inBuffer,
                 args[i] = p.matches[0];
         }
     }
-
+   
     switch(cmd)
     {
         case "version":
         {
-            message = title();
+            result.message = title() ~ "\n";
             break;
         }
 
@@ -422,16 +432,16 @@ bool handleMetaCommand(ref const(char[]) inBuffer,
                 foreach(v; context.share.vars)
                 {
                     if (v.ty !is null)
-                        message.append(v.name, " (", v.displayType, ") = ", v.ty.valueOf([], v.addr, context.share.map));
+                        result.message ~= text(v.name, " (", v.displayType, ") = ", v.ty.valueOf([], v.addr, context.share.map), "\n");
                     else if (v.func == true)
-                        message.append(v.name, " (", v.displayType, ") = ", v.init);
+                        result.message ~= text(v.name, " (", v.displayType, ") = ", v.init, "\n");
                 }
             }
             else if (args.length == 1 && args[0] == "__keepAlive")
             {               
-                message.append("SharedLibs still alive:");
+                result.message ~= text("SharedLibs still alive:");
                 foreach(s; keepAlive)
-                    message.append("  ", s);             
+                    result.message ~= text("  ", s, "\n");             
             }
             else // print selected symbols
             {
@@ -441,9 +451,9 @@ bool handleMetaCommand(ref const(char[]) inBuffer,
                     foreach(v; context.share.vars)
                     {
                         if (v.ty !is null)
-                            message.append(v.ty.valueOf(p[1], v.addr, context.share.map));
+                            result.message ~= text(v.ty.valueOf(p[1], v.addr, context.share.map), "\n");
                         else if (v.func == true)
-                            message.append(v.name, " (", v.displayType, ") = ", v.init);
+                            result.message ~= text(v.name, " (", v.displayType, ") = ", v.init, "\n");
                     }
                 }
             }
@@ -459,9 +469,9 @@ bool handleMetaCommand(ref const(char[]) inBuffer,
                 {
                     auto typeOf = v.ty.typeOf(p[1], context.share.map);
                     if (typeOf[1].length > 0)
-                        message.append(typeOf[1]);
+                        result.message ~= text(typeOf[1], "\n");
                     else
-                        message.append(typeOf[0].toString());
+                        result.message ~= text(typeOf[0].toString(), "\n");
                 }
             }
             break;
@@ -473,7 +483,7 @@ bool handleMetaCommand(ref const(char[]) inBuffer,
             {
                 context.reset();
                 keepAlive.clear();
-                message.append("Session reset");
+                result.message ~= text("Session reset\n");
             }
             break;
         }
@@ -496,7 +506,7 @@ bool handleMetaCommand(ref const(char[]) inBuffer,
                 if (exists(a))
                     context.userModules ~= TupType(dirName(a), baseName(a), SysTime(0).stdTime());
                 else
-                    message.append("Error: module ", a, " could not be found");
+                    result.message ~= text("Error: module ", a, " could not be found\n");
             }
             break;
         }
@@ -506,7 +516,7 @@ bool handleMetaCommand(ref const(char[]) inBuffer,
             if (args.length == 0)
             {
                 clearScreen();
-                message.append(title());
+                result.message = title() ~ "\n";
             }
             else if (args.length == 1 && args[0] == "buffer")
                 codeBuffer.clear();
@@ -518,7 +528,7 @@ bool handleMetaCommand(ref const(char[]) inBuffer,
         default: return false;
     }
 
-    // If we got to here, we successfully parsed a meta command, so clear the code buffer
+    // If we got to here, we successfully parsed a meta command, so clear the code buffer    
     codeBuffer.clear();
     return true;
 }
@@ -594,74 +604,63 @@ auto timeIt(E)(string stage, lazy E expr)
 /**
 * Evaluate code in the context of the supplied ReplContext.
 */
-EvalResult evaluate(string code,                    
-                    out string message)
+EvalResult evaluate(string code)
 {    
     import std.typecons : Tuple;
     import std.conv : to, text;
     import std.string : join; 
     import std.algorithm : map; 
     
-    timings.clear();
-    
-    scope(success)
-    {
-        if (context.debugLevel & Debug.times)        
-            message ~= "Timings:\n" ~ timings.map!( x => text("  ",x.stage," - ",x.msecs) )().join("\n") ~ "\n";                                
-    }
-          
-    auto parseResult = timeIt("parse (total)", parse(code, message));       
-
-    if (parser.errors.length != 0)
-    {
-        message.append("Parse errors:\n", parser.errors.join("\n"));
-        context.share.prune();
-        context.rawCode.fail();        
-        return EvalResult.parseError;
-    }  
-    
-    if (context.debugLevel & Debug.parseOnly)
-    {
-        message.append(parseResult[0] ~ "\n\n" ~ parseResult[1]);
-        return EvalResult.noError;
-    }
-
-    if (parseResult[0].length == 0 && parseResult[1].length == 0)
-        return EvalResult.noError;
+    EvalResult result;
                 
-    if (!timeIt("build (total)", build(parseResult, message)))
+    auto parsedCode = timeIt("parse (total)", parse(code, result.parse));       
+        
+    if (!result.parse.success)
     {
         context.share.prune();
-        context.rawCode.fail();        
-        return EvalResult.buildError;
+        context.rawCode.fail();    
+        return result;
     }
         
-    auto call = timeIt("call (total)", call(message));   
+    if (context.debugLevel & Debug.parseOnly)
+    {
+        result.parse.message = parsedCode;
+        return result;
+    }
+
+    if (!parsedCode.length)
+        return result;
+    
+    timeIt("build (total)", build(parsedCode, result.build));
+    
+    if (!result.build.success)
+    {
+        context.share.prune();
+        context.rawCode.fail();        
+        return result;
+    }
+        
+    result.result = timeIt("call (total)", call(result.call));   
     context.share.prune();
     context.rawCode.pass();
 
-    final switch(call) with(CallResult)
-    {
-        case success:
-            hookNewClass(typeid(Object) /** dummy **/, null /** dummy **/, &context, false);
-            return EvalResult.noError;
-        case loadError:
-        case runtimeError:
-            hookNewClass(typeid(Object) /** dummy **/, null /** dummy **/, &context, true);
-            return EvalResult.callError;
-    }
-
-    assert(false);    
+    if (result.call.success)    
+        hookNewClass(typeid(Object) /** dummy **/, null /** dummy **/, &context, false);    
+    else    
+        hookNewClass(typeid(Object) /** dummy **/, null /** dummy **/, &context, true);    
+       
+    return result;
 }
 
 
-Tuple!(string,string) parse(string code, ref string message)
+string parse(string code, ref DResult result)
 { 
     import std.algorithm : canFind, countUntil; 
     import std.conv : text;
-    
+    import std.string : join; 
+             
     string[] dupSearchList;
-
+   
     /** Handlers for the parser **/    
         void newVariable(string name, string type, string init, string source) 
         {
@@ -687,8 +686,15 @@ Tuple!(string,string) parse(string code, ref string message)
             return context.share.vars.canFind!((a,b) => (a.name == b))(name);
         }
      /** ----------------------- **/
-
+    
     auto source = parser.parse(code, &redirectVar, &newDeclaration, &newVariable);
+    
+    if (parser.errors.length != 0)
+    {        
+        result = DResult(false, parser.errors.join("\n"));                
+        return null;
+    }
+            
     auto c = context.share.generate();
             
     foreach(d; dupSearchList)
@@ -698,57 +704,9 @@ Tuple!(string,string) parse(string code, ref string message)
         c.suffix.put("if (!_repl_.vars[" ~ index.to!string() ~ "].func) { "
                         "_REPL.dupSearch(*" ~ d ~ ", _repl_.imageBounds[0], _repl_.imageBounds[1], _repl_.keepAlive); }\n");
     }
-            
-    context.rawCode.append(parser.original, false);
-            
-    auto inBody = text(context.vtblFixup, c.prefix.data, source, c.suffix.data, 
-                       "if (__expressionResult.length == 0) __expressionResult = `OK`; writeln(__expressionResult);\n");
-
-    return tuple(c.header.data, inBody);
-}
-
-
-/**
-* Attempt a build command, redirect errout to a text file.
-*/
-bool attempt(string cmd,
-             ref string message,
-             string codeFilename)
-{
-    import std.process : system;
-    import std.file : exists, readText;
-
-    auto res = system(cmd ~ " 2> errout.txt");
-
-    if (res != 0)
-    {
-        auto errFile = context.paths.tempPath ~ "errout.txt";
-        if (exists(errFile))
-            message = parseDmdErrorFile(codeFilename, errFile, true);
-        return false;
-    }
-    return true;
-}
-
-
-/**
-* Build a shared lib from supplied code.
-*/
-bool build(Tuple!(string, string) code,           
-           ref string message)
-{
-    import std.stdio : File; 
-    import std.string : join; 
-    import std.algorithm : map; 
-    import std.file : exists, readText;
-    import std.path : dirSeparator;
-    import std.process : system, escapeShellFileName;
-    import std.parallelism;
-    import core.thread;
-    import std.conv : text;
-        
+                                                     
     auto codeOut =
-        code[0] ~
+        c.header.data ~
         "string __expressionResult = ``; \n"
         "\n\nexport extern(C) int _main(ref _REPL.ReplShare _repl_)\n"
         "{\n"
@@ -764,11 +722,57 @@ bool build(Tuple!(string, string) code,
 
         "void _main2(ref _REPL.ReplShare _repl_)\n"
         "{\n" ~
-        code[1] ~
-        "}\n";
+        text(context.vtblFixup, c.prefix.data, source, c.suffix.data, 
+             "if (__expressionResult.length == 0) __expressionResult = `OK`; writeln(__expressionResult);\n") ~
+        "}\n" ~ genHeader();
+
+    context.rawCode.append(parser.original, false);
+        
+    result = DResult(true, null);
+    return codeOut;
+}
+
+
+/**
+* Attempt a build command, redirect errout to a text file.
+*/
+DResult attempt(string cmd, string codeFilename)
+{
+    import std.process : system;
+    import std.file : exists, readText;
     
+    auto res = system(cmd ~ " 2> errout.txt");
+
+    if (res != 0)
+    {    
+        auto result = DResult(false, "");        
+        auto errFile = context.paths.tempPath ~ "errout.txt";
+        if (exists(errFile))
+            result.message = parseDmdErrorFile(codeFilename, errFile, true);
+        return result;
+    }       
+    
+    return DResult(true, null);
+}
+
+
+/**
+* Build a shared lib from supplied code.
+*/
+void build(string code, ref DResult result)
+{
+    import std.stdio : File; 
+    import std.string : join; 
+    import std.algorithm : map; 
+    import std.file : exists, readText;
+    import std.path : dirSeparator;
+    import std.process : system, escapeShellFileName;
+    import std.parallelism;
+    import core.thread;
+    import std.conv : text;
+                
     auto file = File(context.fullName ~ ".d", "w");    
-    timeIt("build - write", file.write(codeOut ~ genHeader()));
+    timeIt("build - write", file.write(code));
     file.close();           
 
     if (!exists(context.fullName ~ ".def"))
@@ -785,9 +789,10 @@ bool build(Tuple!(string, string) code,
         file.close();
     }
     
-    if (!timeIt("build - userMod", buildUserModules(message)))
-        return false;
-
+    result = timeIt("build - userMod", buildUserModules());    
+    if (!result.success)
+        return;
+        
     auto dirChange = "cd " ~ escapeShellFileName(context.paths.tempPath);
     auto linkFlags = ["-L/NORELOCATIONCHECK", "-L/NOMAP"];   
     auto dmdFlags = ["-shared"];
@@ -802,18 +807,21 @@ bool build(Tuple!(string, string) code,
     if (context.userModules.length)    
         cmd ~= context.userModules.map!(a => "-I" ~ a.path)().join(" ");
             
-    string tempMessage;    
-    if (!timeIt("build - build", attempt(cmd, tempMessage, context.fullName ~ ".d")))
+    
+    auto buildAttempt = timeIt("build - build", attempt(cmd, context.fullName ~ ".d"));
+        
+    if (!buildAttempt.success)
     {
         // If the full build fails, try to get a better error message by compiling the
         // raw code. (Originally this was done in a background thread along with the
         // full build, but it adds latency for all code, not just that which is wrong).
         auto test = timeIt("build - testCompile", testCompile());
-        message ~= test.length ? test : "Internal error: test compile passed, full build failed. Error follows:\n" ~ tempMessage;                                                   
-        return false;
-    }    
-    
-    return true;
+        result.success = false;        
+        result.message = test.length ? test : "Internal error: test compile passed, full build failed. Error follows:\n" ~ buildAttempt.message;                                                           
+        return;
+    }           
+
+    result.success = true;
 }
 
 
@@ -855,8 +863,7 @@ string testCompile()
 /**
 * Rebuild user modules into a lib to link with. Only rebuild files that have changed.
 */
-bool buildUserModules(ref string message,
-                      bool init = false)
+DResult buildUserModules(bool init = false)
 {
     import std.stdio : File;
     import std.string : join;
@@ -877,12 +884,13 @@ bool buildUserModules(ref string message,
         f.write(text);
         f.close();                        
         
-        if (!attempt("cd " ~ context.paths.tempPath ~ " & dmd -c -release -noboundscheck -O defs.d", message, context.paths.tempPath ~ "defs.d"))
-            return false;
+        auto initAttempt = attempt("cd " ~ context.paths.tempPath ~ " & dmd -c -release -noboundscheck -O defs.d", context.paths.tempPath ~ "defs.d");
+        if (!initAttempt.success)
+            return initAttempt;
     }
 
     if (context.userModules.length == 0 && !rebuildLib)
-        return true;
+        return DResult(true, null);
 
     auto allIncludes = context.userModules.map!(a => "-I" ~ a.path)().join(" ");
 
@@ -898,8 +906,9 @@ bool buildUserModules(ref string message,
         rebuildLib = true;
         auto cmd = "cd " ~ context.paths.tempPath ~ " & dmd -c " ~ allIncludes ~ " " ~ fullPath;
 
-        if (!attempt(cmd, message, fullPath))
-            return false;
+        auto buildAttempt = attempt(cmd, fullPath);
+        if (!buildAttempt.success)
+            return buildAttempt;
 
         getTimes(fullPath, access, modified);
         m.modified = modified.stdTime();
@@ -908,11 +917,12 @@ bool buildUserModules(ref string message,
     if (rebuildLib)
     {        
         auto objs = context.userModules.map!(a => stripExtension(a.name)~".obj")().join(" ");
-        if (!attempt("cd " ~ context.paths.tempPath ~ " & dmd -lib -ofextra.lib defs.obj " ~ objs, message, ""))
-            return false;
+        auto buildAttempt = attempt("cd " ~ context.paths.tempPath ~ " & dmd -lib -ofextra.lib defs.obj " ~ objs, "");
+        if (!buildAttempt.success)
+            return buildAttempt;
     }
 
-    return true;
+    return DResult(true, null);
 }
 
 
@@ -938,7 +948,7 @@ void cleanup()
 /**
 * Load the shared lib, and call the _main function. Free the lib on exit.
 */
-CallResult call(ref string message)
+string call(ref DResult result)
 {
     import std.exception;
     import core.memory : GC;   
@@ -949,6 +959,7 @@ CallResult call(ref string message)
     alias extern(C) void* function() GCFunc;
     
     context.share.keepAlive = false;
+    string evalResult;   
     
     version(Windows)
     {        
@@ -973,7 +984,10 @@ CallResult call(ref string message)
     /** ------------ */
     
     if (!lib.loaded)
-        return CallResult.loadError;
+    {
+        result = DResult(false, "loadError");
+        return evalResult;
+    }
        
     version(Windows)
     {
@@ -984,8 +998,8 @@ CallResult call(ref string message)
 
         if (funcPtr is null)
         {
-            message.append("Unable to obtain function pointer");
-            return CallResult.loadError;
+            result = DResult(false, "Unable to obtain function pointer");
+            return evalResult;
         }
 
         auto res = funcPtr(context.share);       
@@ -995,13 +1009,12 @@ CallResult call(ref string message)
     {
         static assert(false, "Need to implement dabble.repl.call for this platform");
     }
-               
-               
+                    
     if (exists(context.share.resultFile))
     {
         try
         {
-            message.append(readText(context.share.resultFile).stripRight());
+            evalResult = readText(context.share.resultFile).stripRight();
             remove(context.share.resultFile);
         }
         catch(Exception e) {}
@@ -1020,10 +1033,12 @@ CallResult call(ref string message)
     if (res == -1)
     {
         auto e = collectException!Throwable(GC.collect());
-        return CallResult.runtimeError;
+        result = DResult(false, "runtimeError");
+        return evalResult;
     }
 
-    return CallResult.success;
+    result.success = true;
+    return evalResult;
 }
 
 
