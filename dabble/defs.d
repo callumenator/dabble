@@ -112,7 +112,7 @@ struct Var
             put(c.suffix, accessor, ".valid = true;\n");
             first = false;                
             
-            assert(init == strip(init), "Problem with parsing init"); 
+            init = strip(init);
         
             if (strip(type).length == 0 || !type.match(`\bauto\b`).empty)            
                 type = text("typeof( (() => (", init,"))() )");                            
