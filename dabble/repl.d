@@ -460,16 +460,29 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
 
         case "type":
         {
-            foreach(a; args)
-            {
-                auto p = parseExpr(a);                
+            if (args.length == 0 || canFind(args, "all")) // print types of all vars
+            {                
                 foreach(v; context.share.vars)
                 {
-                    auto typeOf = v.ty.typeOf(p[1], context.share.map);
-                    if (typeOf[1].length > 0)
-                        result.message ~= text(typeOf[1], "\n");
-                    else
-                        result.message ~= text(typeOf[0].toString(), "\n");                    
+                    if (v.ty !is null)
+                        result.message ~= text(v.name, " ", v.ty.toString(), "\n");
+                    else if (v.func == true)
+                        result.message ~= text(v.name, " ", v.init, "\n");
+                }
+            }
+            else
+            {
+                foreach(a; args)
+                {
+                    auto p = parseExpr(a);                
+                    foreach(v; context.share.vars)
+                    {
+                        auto typeOf = v.ty.typeOf(p[1], context.share.map);
+                        if (typeOf[1].length > 0)
+                            result.message ~= text(typeOf[1], "\n");
+                        else
+                            result.message ~= text(typeOf[0].toString(), "\n");                    
+                    }
                 }
             }
             break;
