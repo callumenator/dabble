@@ -379,14 +379,9 @@ string title()
 
 
 
-void append(Args...)(ref string message, Args msg)
-{    
-    import std.conv : text;    
-    message ~= text(msg, "\n");
-}
-
-
-
+/**
+* 
+*/
 bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DResult result)                       
 {
     import std.conv : text;
