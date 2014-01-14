@@ -1,6 +1,10 @@
 
 module dabble.testing;
 
+import
+    std.conv, 
+    std.stdio;
+
 import dabble.repl;
 
 
@@ -190,6 +194,26 @@ auto test2()
     return run([
     "import std.typecons; int i = 7; ", "Unique!int ui = &i;", "writeln(ui);"
     ]);
+}
+
+void testAll()
+{
+    funcLiteral();
+}
+
+void expect(string code, string expected)
+{
+    auto res = eval(code);
+    assert(res == expected, res);
+}
+
+auto funcLiteral()
+{
+    /** Test re-writes of vars with same name as param inside func literals **/
+    expect(`int a = 7;`,  `7`);    
+    expect(`[1,2].map!(a => a + 1);`, `[2, 3]`);    
+    eval(`auto foo = (int a) => (a + 1);`);
+    expect(`foo(1);`, `2`);    
 }
 
 

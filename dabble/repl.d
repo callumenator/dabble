@@ -153,7 +153,7 @@ string eval(const char[] inBuffer)
 string eval(const char[] inBuffer,
             ref char[] codeBuffer)
 {
-    import std.string : strip, toLower;   
+    import std.string : strip, stripRight, toLower;   
 
     assert(context.initalized, "Context not initalized");
     
@@ -190,7 +190,7 @@ string eval(const char[] inBuffer,
         }
     }
 
-    return message;
+    return message.stripRight();
 }
 
 
@@ -702,7 +702,7 @@ Tuple!(string,string) parse(string code, ref string message)
     context.rawCode.append(parser.original, false);
             
     auto inBody = text(context.vtblFixup, c.prefix.data, source, c.suffix.data, 
-                       "if (__expressionResult.length == 0) __expressionResult = `OK`; writeln(`=> `, __expressionResult);\n");
+                       "if (__expressionResult.length == 0) __expressionResult = `OK`; writeln(__expressionResult);\n");
 
     return tuple(c.header.data, inBody);
 }
@@ -941,7 +941,8 @@ void cleanup()
 CallResult call(ref string message)
 {
     import std.exception;
-    import core.memory : GC;    
+    import core.memory : GC;   
+    import std.string : stripRight;
     import std.file : DirEntry, readText, exists, remove;
 
     alias extern(C) int function(ref ReplShare) FuncType;
@@ -1000,7 +1001,7 @@ CallResult call(ref string message)
     {
         try
         {
-            message.append(readText(context.share.resultFile));
+            message.append(readText(context.share.resultFile).stripRight());
             remove(context.share.resultFile);
         }
         catch(Exception e) {}
