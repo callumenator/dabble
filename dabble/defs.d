@@ -202,7 +202,7 @@ struct Var
         sink(displayType);
         sink(") = ");
         sink(current);
-    }
+    }          
 }
 
 
@@ -429,6 +429,8 @@ struct QualifiedType
         import std.conv : to; 
         import std.stdio : writeln; 
         
+        if (trace) writeln("valueOf: stack: ", stack);
+        
         void* addr = ptr;
         QualifiedType currType = this;
         foreach(i; stack)
@@ -436,9 +438,13 @@ struct QualifiedType
             final switch(i.op) with(Operation.Op)
             {
                 case Deref:
+                    if (!currType.type.isPointer)
+                        return "Error: "~currType.toString()~" is not a pointer";
                     currType = currType.deref(addr);
                     break;
                 case Index:
+                    if (!currType.type.isArray)
+                        return "Error: "~currType.toString()~" is not an array";
                     currType = currType.index(addr, i.val.to!size_t());
                     break;
                 case Slice:
@@ -464,7 +470,7 @@ struct QualifiedType
         if (addr is null)
             return "Error: null address";
 
-        if (trace) writeln("view: type is ", currType.typeName);
+        if (trace) writeln("valueOf: type is: ", currType.typeName);
         return currType.getMe(addr);
     }
 
@@ -533,7 +539,8 @@ struct Type
 
     QualifiedType deref(ref void* absAddr)
     {
-        assert(isPointer);
+        import std.conv : to;
+        assert(isPointer, flag.to!string());
         absAddr = *cast(void**)absAddr;
         return _ref;
     }

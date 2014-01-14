@@ -391,7 +391,9 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
 {
     import std.conv : text;
     import std.process : system;
-    import std.algorithm : canFind; 
+    import std.string : join; 
+    import std.algorithm : canFind, map, find;     
+    import std.range : array, front, empty; 
 
     auto parse = MetaParser.decimateTree(MetaParser(inBuffer.to!string()));
     
@@ -412,9 +414,30 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
                 args[i] = p.matches[0];
         }
     }
+        
+    alias T = Tuple!(string, Operation[]);
     
-    result.success = true;    
-   
+    /** Value print helper **/
+    string printValue(T p)
+    {        
+        auto v = context.share.vars.find!((a,b) => a.name == b)(p[0]);
+        if (v.empty) return "";          
+        return  v.front.ty !is null ? 
+            text(v.front.name, " (", v.front.displayType, ") = ", v.front.ty.valueOf(p[1], v.front.addr, context.share.map)) :
+                v.front.func ? text(v.front.name, " (", v.front.displayType, ") = ", v.front.init) : "";                
+    }
+    
+    /** Type print helper **/
+    string printType(T p)
+    {
+        auto v = context.share.vars.find!((a,b) => a.name == b)(p[0]);
+        if (v.empty) return "";          
+        if (v.front.ty is null) return text(v.front.name, " ", v.front.displayType);          
+        auto t = v.front.ty.typeOf(p[1], context.share.map);
+        return t[1].length ? t[1] : text(v.front.name, " ", t[0].toString());        
+    }
+    
+    result.success = true;        
     switch(cmd)
     {
         case "version":
@@ -422,72 +445,46 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
             result.message = title() ~ "\n";
             break;
         }
-
         case "print":
         {
             if (args.length == 0 || canFind(args, "all")) // print all vars
-            {                
-                foreach(v; context.share.vars)
-                {
-                    if (v.ty !is null)
-                        result.message ~= text(v.name, " (", v.displayType, ") = ", v.ty.valueOf([], v.addr, context.share.map), "\n");
-                    else if (v.func == true)
-                        result.message ~= text(v.name, " (", v.displayType, ") = ", v.init, "\n");
-                }
+            {
+                result.message ~= context.share.vars
+                    .map!(v => printValue(T(v.name,[])))()
+                    .array()
+                    .join("\n");                            
             }
             else if (args.length == 1 && args[0] == "__keepAlive")
             {               
-                result.message ~= text("SharedLibs still alive:");
-                foreach(s; keepAlive)
-                    result.message ~= text("  ", s, "\n");             
+                result.message ~= "SharedLibs still alive:" ~ keepAlive.map!(a=>a.to!string())().array().join("\n");                               
             }
             else // print selected symbols
-            {
-                foreach(a; args)
-                {
-                    auto p = parseExpr(a);                    
-                    foreach(v; context.share.vars)
-                    {
-                        if (v.ty !is null)
-                            result.message ~= text(v.ty.valueOf(p[1], v.addr, context.share.map), "\n");
-                        else if (v.func == true)
-                            result.message ~= text(v.name, " (", v.displayType, ") = ", v.init, "\n");
-                    }
-                }
+            {   
+                result.message ~= args
+                    .map!(a => printValue(parseExpr(a)))()
+                    .array()
+                    .join("\n");                    
             }
             break;
         }
-
         case "type":
         {
             if (args.length == 0 || canFind(args, "all")) // print types of all vars
-            {                
-                foreach(v; context.share.vars)
-                {
-                    if (v.ty !is null)
-                        result.message ~= text(v.name, " ", v.ty.toString(), "\n");
-                    else if (v.func == true)
-                        result.message ~= text(v.name, " ", v.init, "\n");
-                }
+            {
+                result.message ~= context.share.vars
+                    .map!(v => printType(T(v.name,[])))()
+                    .array()
+                    .join("\n");                
             }
             else
             {
-                foreach(a; args)
-                {
-                    auto p = parseExpr(a);                
-                    foreach(v; context.share.vars)
-                    {
-                        auto typeOf = v.ty.typeOf(p[1], context.share.map);
-                        if (typeOf[1].length > 0)
-                            result.message ~= text(typeOf[1], "\n");
-                        else
-                            result.message ~= text(typeOf[0].toString(), "\n");                    
-                    }
-                }
+                result.message ~= args
+                    .map!(a => printType(parseExpr(a)))()
+                    .array()
+                    .join("\n");                                              
             }
             break;
         }
-
         case "reset":
         {
             if (canFind(args, "session"))
@@ -498,14 +495,12 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
             }
             break;
         }
-
         case "delete":
         {                
             foreach(a; args)            
                 context.share.deleteVar(a);
             break;            
         }
-
         case "use":
         {
             import std.path, std.datetime, std.range;
@@ -521,7 +516,6 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
             }
             break;
         }
-
         case "clear":
         {
             if (args.length == 0)
@@ -533,7 +527,6 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
                 codeBuffer.clear();
             break;
         }
-
         case "debug on": foreach(arg; args) setDebugLevelFromString!"on"(arg); break;
         case "debug off": foreach(arg; args) setDebugLevelFromString!"off"(arg); break;
         default: return false;
