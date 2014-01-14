@@ -18,7 +18,7 @@ void main(char[][] args)
     parseArgs(args[1..$]);
     
     import dabble.testing;
-    //stress();    
+    stress();    
     
     loop();               
 }
