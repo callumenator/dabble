@@ -31,8 +31,9 @@ class DabbleParser : Parser
     LexerConfig config;        
     string source, original, lastInit;          
     string[] errors, types;        
+    Parameters[] params;        
     bool declCanBeGlobal;                         
-    uint blockDepth = 0, declStart = 0;   
+    int blockDepth = 0, declStart = 0, funcLiteralDepth = 0;   
 
     bool delegate(string) redirectVar;
     void delegate(bool,string,string) newDecl;
@@ -155,8 +156,9 @@ class DabbleParser : Parser
         if (!suppressMessages && depth == 0)
         {
             declStart = charIndex();
-            declCanBeGlobal = true;
+            declCanBeGlobal = true;            
             types.clear();
+            params.clear();
         }
         
         if (!suppressMessages) depth++;
@@ -173,7 +175,31 @@ class DabbleParser : Parser
         expr(t[1], t[2]);
         return t[0];
     }      
+           
     
+    override FunctionLiteralExpression parseFunctionLiteralExpression()
+    {        
+        funcLiteralDepth++;
+        auto t = wrap(super.parseFunctionLiteralExpression());
+        funcLiteralDepth--;
+        return t[0];
+    }
+    
+    override LambdaExpression parseLambdaExpression()
+    {        
+        funcLiteralDepth++;
+        auto t = wrap(super.parseLambdaExpression());
+        funcLiteralDepth--;
+        return t[0];
+    }
+    
+    override Parameters parseParameters()
+    {
+        auto t = wrap(super.parseParameters());
+        params = t[0] ~ params;
+        return t[0];
+    }
+            
     override VariableDeclaration parseVariableDeclaration(Type type = null, bool isAuto = false)
     {
         auto t = wrap(super.parseVariableDeclaration(type, isAuto));                                
@@ -273,11 +299,16 @@ class DabbleParser : Parser
         
         if (suppressMessages) 
             return t[0];
-        
-                                
+                                       
         if (i == 0 || (i > 0 && tokens[i - 1].type != TokenType.dot))            
-        {                                
-            if (redirectVar(strip(original[t[1]..t[2]])))
+        {
+            auto ident = strip(original[t[1]..t[2]]);
+            bool redirect = redirectVar(ident);
+            
+            if (funcLiteralDepth && params[0].parameters.canFind!( (a,b) => a.name.value == b )(ident))
+                redirect = false;                
+                               
+            if (redirect)
             {
                 declCanBeGlobal = false;                    
                 insert(t[1], "(*");
@@ -321,6 +352,8 @@ class DabbleParser : Parser
         
     void varDecl(size_t start, size_t end, VariableDeclaration v, bool isAuto)
     {
+        import std.string : strip; 
+        
         if (suppressMessages || blockDepth)
             return;
                      
@@ -328,6 +361,7 @@ class DabbleParser : Parser
             v.autoDeclaration.identifiers.map!(x => x.value)().joiner(".").to!string() :         
             v.declarators.map!(x => x.name.value)().joiner(".").to!string(); 
         
+        name = strip(name);
         auto type = isAuto ? "auto" : types.length ? types[0] : null;                                              
         assert(type !is null);       
         newVar(name, type, lastInit, original[declStart..end]);        
