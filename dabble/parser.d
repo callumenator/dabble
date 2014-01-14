@@ -236,7 +236,7 @@ class DabbleParser : Parser
     {
         auto t = wrap(super.parseParameters());        
         if (t[0].parameters.length)
-            params = [t[0].parameters.map!( x => x.name.value ).array()] ~ params;
+            params = [t[0].parameters.map!( x => x.name.value )().array()] ~ params;
         return t[0];
     }
             
