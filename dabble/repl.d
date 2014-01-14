@@ -447,42 +447,20 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
         }
         case "print":
         {
-            if (args.length == 0 || canFind(args, "all")) // print all vars
-            {
-                result.message ~= context.share.vars
-                    .map!(v => printValue(T(v.name,[])))()
-                    .array()
-                    .join("\n");                            
-            }
-            else if (args.length == 1 && args[0] == "__keepAlive")
-            {               
-                result.message ~= "SharedLibs still alive:" ~ keepAlive.map!(a=>a.to!string())().array().join("\n");                               
-            }
-            else // print selected symbols
-            {   
-                result.message ~= args
-                    .map!(a => printValue(parseExpr(a)))()
-                    .array()
-                    .join("\n");                    
-            }
+            if (args.length == 0 || canFind(args, "all")) // print all vars            
+                result.message ~= context.share.vars.map!(v => printValue(T(v.name,[])))().join("\n");                                        
+            else if (args.length == 1 && args[0] == "__keepAlive")                         
+                result.message ~= "SharedLibs still alive:" ~ keepAlive.map!(a=>a.to!string())().join("\n");                                           
+            else // print selected symbols            
+                result.message ~= args.map!(a => printValue(parseExpr(a)))().join("\n");                                
             break;
         }
         case "type":
         {
-            if (args.length == 0 || canFind(args, "all")) // print types of all vars
-            {
-                result.message ~= context.share.vars
-                    .map!(v => printType(T(v.name,[])))()
-                    .array()
-                    .join("\n");                
-            }
-            else
-            {
-                result.message ~= args
-                    .map!(a => printType(parseExpr(a)))()
-                    .array()
-                    .join("\n");                                              
-            }
+            if (args.length == 0 || canFind(args, "all")) // print types of all vars            
+                result.message ~= context.share.vars.map!(v => printType(T(v.name,[])))().join("\n");                            
+            else            
+                result.message ~= args.map!(a => printType(parseExpr(a)))().join("\n");                                                          
             break;
         }
         case "reset":
@@ -491,7 +469,7 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
             {
                 context.reset();
                 keepAlive.clear();
-                result.message ~= text("Session reset\n");
+                result.message ~= "Session reset";
             }
             break;
         }
@@ -503,8 +481,10 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
         }
         case "use":
         {
-            import std.path, std.datetime, std.range;
             import std.file : exists;
+            import std.range : ElementType; 
+            import std.path : dirName, baseName; 
+            import std.datetime : SysTime;            
             alias ElementType!(typeof(context.userModules)) TupType;
 
             foreach(a; args)
