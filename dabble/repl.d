@@ -263,8 +263,8 @@ struct RawCode
     
     void fail()
     {        
-        _header = _header.filter!( x => x.valid )().array();
-        _body = _body.filter!( x => x.valid )().array();               
+        _header = _header.filter!(x => x.valid)().array();
+        _body = _body.filter!(x => x.valid)().array();               
     }
     
     void pass()
@@ -289,8 +289,8 @@ struct RawCode
         import std.string : join; 
         auto autoImports = "import std.traits, std.stdio, std.range, std.algorithm, std.conv;\n";  
         return autoImports ~ 
-               _header.map!( x => x.code )().array().join("\n") ~ "\nvoid main() {\n" ~ 
-               _body.map!( x => x.code )().array().join("\n") ~ "\n}";
+               _header.map!( x => x.code )().join("\n") ~ "\nvoid main() {\n" ~ 
+               _body.map!( x => x.code )().join("\n") ~ "\n}";
     }
 }
 
@@ -362,12 +362,15 @@ struct ReplContext
 /**
 * Return a command-input prompt.
 */
-string prompt() { return ": "; }
+string prompt() 
+{ 
+    return ": "; 
+}
 
 
 
 /**
-* Return a title.
+* Return a title for the session.
 */
 string title()
 {
@@ -380,7 +383,8 @@ string title()
 
 
 /**
-* 
+* See if the given buffer contains meta commands, commands which are interpreted directly
+* and do not trigger recompilation.
 */
 bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DResult result)                       
 {
