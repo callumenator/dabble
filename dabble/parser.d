@@ -31,7 +31,7 @@ class DabbleParser : Parser
     LexerConfig config;        
     string source, original, lastInit;          
     string[] errors, types;        
-    Parameters[] params;        
+    string[][] params;        
     bool declCanBeGlobal;                         
     int blockDepth = 0, declStart = 0, funcLiteralDepth = 0;   
 
@@ -185,18 +185,58 @@ class DabbleParser : Parser
         return t[0];
     }
     
+    /**
+    * Need to override whole function as node.identifier is a parameter but is found too late
+    */ 
     override LambdaExpression parseLambdaExpression()
     {        
         funcLiteralDepth++;
-        auto t = wrap(super.parseLambdaExpression());
+        
+        mixin(traceEnterAndExit!(__FUNCTION__));
+        auto node = new LambdaExpression;
+        if (currentIsOneOf(TokenType.function_, TokenType.delegate_))
+        {
+            node.functionType = advance().type;
+            goto lParen;
+        }
+        else if (currentIs(TokenType.identifier))
+        {
+            node.identifier = advance();
+            params = [node.identifier.value] ~ params;
+        }
+        else if (currentIs(TokenType.lParen))
+        {
+        lParen:
+            node.parameters = parseParameters();
+            do
+            {
+                auto attribute = parseFunctionAttribute(false);
+                if (attribute is null)
+                    break;
+                node.functionAttributes ~= attribute;
+            }
+            while (moreTokens());
+        }
+        else
+        {
+            error(`Identifier or argument list expected`);
+            return null;
+        }
+
+        if (expect(TokenType.goesTo) is null) return null;
+
+        if ((node.assignExpression = parseAssignExpression()) is null)
+            return null;
+                    
         funcLiteralDepth--;
-        return t[0];
+        return node;
     }
     
     override Parameters parseParameters()
     {
-        auto t = wrap(super.parseParameters());
-        params = t[0] ~ params;
+        auto t = wrap(super.parseParameters());        
+        if (t[0].parameters.length)
+            params = [t[0].parameters.map!( x => x.name.value ).array()] ~ params;
         return t[0];
     }
             
@@ -305,7 +345,7 @@ class DabbleParser : Parser
             auto ident = strip(original[t[1]..t[2]]);
             bool redirect = redirectVar(ident);
             
-            if (funcLiteralDepth && params[0].parameters.canFind!( (a,b) => a.name.value == b )(ident))
+            if (funcLiteralDepth && params.length && params[0].canFind(ident))
                 redirect = false;                
                                
             if (redirect)
