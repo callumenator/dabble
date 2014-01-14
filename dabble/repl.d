@@ -24,7 +24,10 @@ debug
     import std.stdio : writeln;
 }
     
+    
 bool consoleSession = true;
+Tuple!(string,"stage",long,"msecs")[] timings;
+
 
 private 
 {
@@ -33,14 +36,13 @@ private
     DabbleParser parser;    
 }
 
+
 shared static this()
 {
     context.init();
     parser = new DabbleParser;      
 }
 
-
-Tuple!(string,"stage",long,"msecs")[] timings;
 
 
 /**
@@ -82,6 +84,7 @@ enum Debug
 }
 
 
+
 /**
 * Add a debug level to the session.
 */
@@ -89,6 +92,7 @@ void addDebugLevel(Debug level) in { assert(context.initalized, "Context not ini
 {    
     context.debugLevel |= level;    
 }
+
 
 
 /**
@@ -100,6 +104,7 @@ void setDebugLevel(uint level) in { assert(context.initalized, "Context not init
 }
 
 
+
 /**
 * Reset the repl session
 */
@@ -107,6 +112,7 @@ void resetSession()
 {    
     context.reset();
 }
+
 
 
 /**
@@ -154,6 +160,7 @@ void loop()
 }
 
 
+
 /**
 * Free any shared libs that were kept alive.
 */
@@ -170,6 +177,7 @@ void onExit()
 }
 
 
+
 /**
 * Evaluate code in the context of the supplied ReplContext. This version assumes
 * inBuffer does not contain multiline input.
@@ -179,6 +187,7 @@ EvalResult eval(const char[] inBuffer)
     char[] dummyBuffer;
     return eval(inBuffer, dummyBuffer);
 }
+
 
 
 /**
@@ -228,69 +237,48 @@ EvalResult eval(const char[] inBuffer, ref char[] codeBuffer)
 }
 
 
+
 /**
 * Raw code, for better error messages.
 */
 struct RawCode
-{
-    string[] _header;
-    string[] _body;
-    int _newHeaderStart = -1;
-    int _newBodyStart = -1;
-
+{   
+    import std.algorithm, std.range;        
+    
+    struct Entry 
+    { 
+        bool valid; 
+        string code; 
+    }    
+    
+    Entry[] _header, _body;
+        
     void append(string s, bool global)
     {
-        if (global)
-        {
-            _header ~= s;
-            if (_newHeaderStart == -1)
-                _newHeaderStart = _header.length - 1;
-        }
-        else
-        {
-            _body ~= s;
-            if (_newBodyStart == -1)
-                _newBodyStart = _body.length - 1;
-        }
+        if (global)        
+            _header ~= Raw(false, s);                    
+        else        
+            _body ~= Raw(false, s);                    
     }
-
-    /**
-    * Remove all code from _newHeaderStart onwards,
-    * same for _newBodyStart. This code did not compile.
-    */
+    
     void fail()
-    {
-        void _prune(int i, ref string[] a)
-        {
-            if (i != -1)
-            {
-                if (i == 0)
-                    a.clear();
-                else if (i > 0)
-                    a = a[0..i];
-                else
-                    assert(false);
-            }
-        }
-        _prune(_newHeaderStart, _header);
-        _prune(_newBodyStart, _body);
+    {        
+        _header = _header.filter!( x => x.valid )().array();
+        _body = _body.filter!( x => x.valid )().array();               
     }
-
-    /**
-    * New code compiled, so clear markers.
-    */
+    
     void pass()
     {
-        _newHeaderStart = -1;
-        _newBodyStart = -1;
+        foreach(ref i; _header)
+            i.valid = true;
+        foreach(ref i; _body)
+            i.valid = true;
     }
 
     void reset()
     {
         _header.clear();
-        _body.clear();
-        _newHeaderStart = -1;
-        _newBodyStart = -1;
+        _body.clear();        
     }
 
     /**
@@ -300,9 +288,12 @@ struct RawCode
     {
         import std.string : join; 
         auto autoImports = "import std.traits, std.stdio, std.range, std.algorithm, std.conv;\n";  
-        return autoImports ~ _header.join("\n") ~ "\nvoid main() {\n" ~ _body.join("\n") ~ "\n}";
+        return autoImports ~ 
+               _header.map!( x => x.code )().array().join("\n") ~ "\nvoid main() {\n" ~ 
+               _body.map!( x => x.code )().array().join("\n") ~ "\n}";
     }
 }
+
 
 
 /**
@@ -367,10 +358,12 @@ struct ReplContext
 }
 
 
+
 /**
 * Return a command-input prompt.
 */
 string prompt() { return ": "; }
+
 
 
 /**
@@ -385,11 +378,13 @@ string title()
 }
 
 
+
 void append(Args...)(ref string message, Args msg)
 {    
     import std.conv : text;    
     message ~= text(msg, "\n");
 }
+
 
 
 bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DResult result)                       
@@ -534,6 +529,7 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
 }
 
 
+
 /**
 * Clear the command window.
 */
@@ -557,6 +553,7 @@ void clearScreen()
         pragma(msg, "Need to implement clearScreen for this platform");
     }
 }
+
 
 
 /**
@@ -653,6 +650,7 @@ EvalResult evaluate(string code)
 }
 
 
+
 string parse(string code, ref DResult result)
 { 
     import std.algorithm : canFind, countUntil; 
@@ -733,6 +731,7 @@ string parse(string code, ref DResult result)
 }
 
 
+
 /**
 * Attempt a build command, redirect errout to a text file.
 */
@@ -754,6 +753,7 @@ DResult attempt(string cmd, string codeFilename)
     
     return DResult(true, null);
 }
+
 
 
 /**
@@ -825,6 +825,7 @@ void build(string code, ref DResult result)
 }
 
 
+
 /**
 * Test to see if raw code compiles, this allows us to generate error messages
 * which do not expose too many internals.
@@ -858,6 +859,7 @@ string testCompile()
 
     return result;
 }
+
 
 
 /**
@@ -926,6 +928,7 @@ DResult buildUserModules(bool init = false)
 }
 
 
+
 /**
 * Cleanup some dmd outputs in a another thread.
 */
@@ -943,6 +946,7 @@ void cleanup()
         if (exists(f))
             try { remove(f); } catch(Exception e) {}
 }
+
 
 
 /**
@@ -1042,6 +1046,7 @@ string call(ref DResult result)
 }
 
 
+
 /**
 * Return error message and line number from a DMD error string.
 */
@@ -1065,6 +1070,7 @@ Tuple!(string, int) stripDmdErrorLine(string line)
 }
 
 
+
 /**
 * Remove * from user defined vars.
 */
@@ -1078,6 +1084,7 @@ string deDereference(string line, bool parens)
     else
         return replace(line, regex(`(\*)([_a-zA-Z][_0-9a-zA-Z]*)`, "g"), "$2");
 }
+
 
 
 /**
@@ -1130,6 +1137,8 @@ string parseDmdErrorFile(string srcFile, string errFile, bool dederef)
     return result;
 }
 
+
+
 /**
 * Try to find the absolute path of the repl executable
 */
@@ -1155,6 +1164,7 @@ private string replPath()
         static assert(false, "Need to implement replPath!");
     }
 }
+
 
 
 /**
