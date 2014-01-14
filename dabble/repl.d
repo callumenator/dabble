@@ -256,9 +256,9 @@ struct RawCode
     void append(string s, bool global)
     {
         if (global)        
-            _header ~= Raw(false, s);                    
+            _header ~= Entry(false, s);                    
         else        
-            _body ~= Raw(false, s);                    
+            _body ~= Entry(false, s);                    
     }
     
     void fail()
@@ -394,16 +394,17 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
     import std.algorithm : canFind; 
 
     auto parse = MetaParser.decimateTree(MetaParser(inBuffer.to!string()));
-
+    
     if (!parse.successful) 
         return false;
 
+    parse = parse.children[0];
     auto cmd = parse.children[0].matches[0];
-
+    
     string[] args;
     if (parse.children.length == 2)
     {
-        if (parse.children[1].name == "ReplParse.MetaArgs")
+        if (parse.children[1].name == "MetaParser.MetaArgs")
         {
             auto seq = parse.children[1].children[0].children;
             args.length = seq.length;
@@ -411,6 +412,8 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
                 args[i] = p.matches[0];
         }
     }
+    
+    result.success = true;    
    
     switch(cmd)
     {
@@ -466,7 +469,7 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
                     if (typeOf[1].length > 0)
                         result.message ~= text(typeOf[1], "\n");
                     else
-                        result.message ~= text(typeOf[0].toString(), "\n");
+                        result.message ~= text(typeOf[0].toString(), "\n");                    
                 }
             }
             break;
