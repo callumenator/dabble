@@ -18,14 +18,13 @@ void main(char[][] args)
     parseArgs(args[1..$]);
     
     import dabble.testing;
-    stress();    
+    //stress();    
     
-    //loop();               
+    loop();               
 }
 
 void parseArgs(char[][] args)
-{
-    import std.stdio;
+{ 
     import std.string : toLower;
     
     foreach(arg; args)

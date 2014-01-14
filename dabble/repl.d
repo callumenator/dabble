@@ -10,13 +10,7 @@ Authors:   Callum Anderson
 
 module dabble.repl;
 
-import
-    std.algorithm,
-    std.conv,
-    std.range,
-    std.stdio,
-    std.string;
-
+import std.typecons : Tuple, tuple;
     
 import    
     dabble.parser,
@@ -25,14 +19,18 @@ import
     dabble.defs,
     dabble.grammars;   
 
+debug 
+{
+    import std.stdio : writeln;
+}
+    
 bool consoleSession = true;
 
 private 
 {
     SharedLib[] keepAlive;    
     ReplContext context;
-    DabbleParser parser;
-    
+    DabbleParser parser;    
 }
 
 shared static this()
@@ -40,7 +38,6 @@ shared static this()
     context.init();
     parser = new DabbleParser;      
 }
-
 
 
 Tuple!(string,"stage",long,"msecs")[] timings;
@@ -90,6 +87,9 @@ void resetSession()
 */
 void loop()
 {
+    import std.stdio : writeln, write, stdout, stdin;
+    import std.string : chomp, strip;
+
     assert(context.initalized, "Context not initalized");
 
     if (consoleSession) 
@@ -124,7 +124,9 @@ void loop()
 * Free any shared libs that were kept alive.
 */
 void onExit()
-{
+{   
+    import std.array : empty, front, popFront; 
+    
     while(!keepAlive.empty)
     {
         debug { writeln("Free'ing lib: ", keepAlive.front.filename); }
@@ -151,10 +153,10 @@ string eval(const char[] inBuffer)
 string eval(const char[] inBuffer,
             ref char[] codeBuffer)
 {
-    assert(context.initalized, "Context not initalized");
+    import std.string : strip, toLower;   
 
-    import std.string;
-   
+    assert(context.initalized, "Context not initalized");
+    
     string message;
     bool multiLine = codeBuffer.length > 0;
     char[] newInput = strip(inBuffer.dup);
@@ -162,14 +164,10 @@ string eval(const char[] inBuffer,
     if (newInput.toLower() == "exit")
         return "";
 
-    // Try to handle meta command, else assume input is code
+    /// Try to handle meta command, else assume input is code
     if (newInput.length > 0 && !handleMetaCommand(newInput, codeBuffer, message))
     {
-        codeBuffer ~= inBuffer ~ "\n"; 
-        //Parser.braceCount = 0;        
-        //auto balanced = ReplParse.BalancedBraces(codeBuffer.to!string());
-        //bool balanced = true;
-        
+        codeBuffer ~= inBuffer ~ "\n";         
         auto balanced = Balanced.test(codeBuffer.to!string());
         auto braceCount = Balanced.braceCount;
         
@@ -221,7 +219,7 @@ enum CallResult
 
 
 /**
-* Holds raw code, for better error messages.
+* Raw code, for better error messages.
 */
 struct RawCode
 {
@@ -290,6 +288,7 @@ struct RawCode
     */
     string toString()
     {
+        import std.string : join; 
         auto autoImports = "import std.traits, std.stdio, std.range, std.algorithm, std.conv;\n";  
         return autoImports ~ _header.join("\n") ~ "\nvoid main() {\n" ~ _body.join("\n") ~ "\n}";
     }
@@ -297,14 +296,14 @@ struct RawCode
 
 
 /**
-* Holds REPL state.
+* REPL state.
 */
 struct ReplContext
-{        
+{            
     uint count = 0;
     RawCode rawCode;
     ReplShare share;
-    string vtblFixup;    
+    string vtblFixup;        
     uint debugLevel = Debug.none;
     
     Tuple!(string,"filename",string,"tempPath") paths;
@@ -377,8 +376,8 @@ string title()
 
 
 void append(Args...)(ref string message, Args msg)
-{
-    import std.conv;
+{    
+    import std.conv : text;    
     message ~= text(msg, "\n");
 }
 
@@ -388,6 +387,7 @@ bool handleMetaCommand(ref const(char[]) inBuffer,
                        ref string message)
 {
     import std.process : system;
+    import std.algorithm : canFind; 
 
     auto parse = MetaParser.decimateTree(MetaParser(inBuffer.to!string()));
 
@@ -597,7 +597,10 @@ auto timeIt(E)(string stage, lazy E expr)
 EvalResult evaluate(string code,                    
                     out string message)
 {    
-    import std.typecons, std.conv;
+    import std.typecons : Tuple;
+    import std.conv : to, text;
+    import std.string : join; 
+    import std.algorithm : map; 
     
     timings.clear();
     
@@ -607,39 +610,35 @@ EvalResult evaluate(string code,
             message ~= "Timings:\n" ~ timings.map!( x => text("  ",x.stage," - ",x.msecs) )().join("\n") ~ "\n";                                
     }
           
-    auto text = timeIt("parse (total)", parser.parse(code, context));       
+    auto parseResult = timeIt("parse (total)", parse(code, message));       
 
     if (parser.errors.length != 0)
     {
-        message.append("Parse errors:\n", parser.errors);
-        context.rawCode.fail();
+        message.append("Parse errors:\n", parser.errors.join("\n"));
         context.share.prune();
+        context.rawCode.fail();        
         return EvalResult.parseError;
-    }        
-
+    }  
+    
     if (context.debugLevel & Debug.parseOnly)
     {
-        message.append(text[0]~text[1]);
+        message.append(parseResult[0] ~ "\n\n" ~ parseResult[1]);
         return EvalResult.noError;
     }
 
-    if (text[0].length == 0 && text[1].length == 0)
+    if (parseResult[0].length == 0 && parseResult[1].length == 0)
         return EvalResult.noError;
-
-
-    auto build = timeIt("build (total)", build(text, message));
-
-    if (!build)
+                
+    if (!timeIt("build (total)", build(parseResult, message)))
     {
         context.share.prune();
+        context.rawCode.fail();        
         return EvalResult.buildError;
     }
-
-
-    auto call = timeIt("call (total)", call(message));
-
-    // Prune any symbols not marked as valid
+        
+    auto call = timeIt("call (total)", call(message));   
     context.share.prune();
+    context.rawCode.pass();
 
     final switch(call) with(CallResult)
     {
@@ -652,8 +651,60 @@ EvalResult evaluate(string code,
             return EvalResult.callError;
     }
 
-    assert(false);
+    assert(false);    
+}
+
+
+Tuple!(string,string) parse(string code, ref string message)
+{ 
+    import std.algorithm : canFind, countUntil; 
+    import std.conv : text;
     
+    string[] dupSearchList;
+
+    /** Handlers for the parser **/    
+        void newVariable(string name, string type, string init, string source) 
+        {
+            if (context.share.vars.canFind!((a,b) => (a.name == b))(name))
+            {                 
+                parser.errors ~= "Error: redifinition of " ~ name ~ " not allowed";                                            
+                return;
+            }
+                    
+            context.rawCode.append(source, false);            
+            context.share.vars ~= Var(name, type, init);
+            dupSearchList ~= name;       
+        }
+            
+        void newDeclaration(bool global, string type, string source)
+        {
+            context.rawCode.append(source, global);
+            context.share.decls ~= Decl(source, global);   
+        }
+        
+        bool redirectVar(string name)
+        {
+            return context.share.vars.canFind!((a,b) => (a.name == b))(name);
+        }
+     /** ----------------------- **/
+
+    auto source = parser.parse(code, &redirectVar, &newDeclaration, &newVariable);
+    auto c = context.share.generate();
+            
+    foreach(d; dupSearchList)
+    {                   
+        auto index = context.share.vars.countUntil!( (a,b) => a.name == b )(d);                    
+        assert(index >= 0, "Parser: undefined var in string dups");
+        c.suffix.put("if (!_repl_.vars[" ~ index.to!string() ~ "].func) { "
+                        "_REPL.dupSearch(*" ~ d ~ ", _repl_.imageBounds[0], _repl_.imageBounds[1], _repl_.keepAlive); }\n");
+    }
+            
+    context.rawCode.append(parser.original, false);
+            
+    auto inBody = text(context.vtblFixup, c.prefix.data, source, c.suffix.data, 
+                       "if (__expressionResult.length == 0) __expressionResult = `OK`; writeln(`=> `, __expressionResult);\n");
+
+    return tuple(c.header.data, inBody);
 }
 
 
@@ -683,17 +734,20 @@ bool attempt(string cmd,
 /**
 * Build a shared lib from supplied code.
 */
-import std.typecons;
-bool build(Tuple!(string,string) code,           
+bool build(Tuple!(string, string) code,           
            ref string message)
 {
+    import std.stdio : File; 
+    import std.string : join; 
+    import std.algorithm : map; 
     import std.file : exists, readText;
     import std.path : dirSeparator;
     import std.process : system, escapeShellFileName;
     import std.parallelism;
     import core.thread;
-       
-    auto text =
+    import std.conv : text;
+        
+    auto codeOut =
         code[0] ~
         "string __expressionResult = ``; \n"
         "\n\nexport extern(C) int _main(ref _REPL.ReplShare _repl_)\n"
@@ -712,13 +766,10 @@ bool build(Tuple!(string,string) code,
         "{\n" ~
         code[1] ~
         "}\n";
-
     
     auto file = File(context.fullName ~ ".d", "w");    
-    timeIt("build - write", file.write(text ~ genHeader()));
-    file.close();
-        
-    
+    timeIt("build - write", file.write(codeOut ~ genHeader()));
+    file.close();           
 
     if (!exists(context.fullName ~ ".def"))
     {
@@ -733,6 +784,9 @@ bool build(Tuple!(string,string) code,
         file.write(def);
         file.close();
     }
+    
+    if (!timeIt("build - userMod", buildUserModules(message)))
+        return false;
 
     auto dirChange = "cd " ~ escapeShellFileName(context.paths.tempPath);
     auto linkFlags = ["-L/NORELOCATIONCHECK", "-L/NOMAP"];   
@@ -742,46 +796,23 @@ bool build(Tuple!(string,string) code,
     {
         dmdFlags ~= ["-debug"];
     } 
+                                             
+    string cmd = text(dirChange," & dmd ",dmdFlags.join(" ")," ",linkFlags.join(" ")," ",context.filename,".d ",context.filename,".def extra.lib");                               
     
-    string cmd = std.conv.text(dirChange, " & dmd ", dmdFlags.join(" "), " ", 
-                               linkFlags.join(" "), " ", context.filename, ".d ", 
-                               context.filename, ".def extra.lib");                               
-                                  
-    if (!timeIt("build - userMod", buildUserModules(message)))
-        return false;
-
-    if (context.userModules.length > 0)
-    {
-        auto includePaths = context.userModules.map!(a => "-I" ~ a.path)().join(" ");
-        cmd ~= includePaths;
-    }
-
-    string tempMessage;
-    bool buildAttempt = timeIt("build - build", attempt(cmd, tempMessage, context.fullName ~ ".d"));
-
-    if (!buildAttempt)
+    if (context.userModules.length)    
+        cmd ~= context.userModules.map!(a => "-I" ~ a.path)().join(" ");
+            
+    string tempMessage;    
+    if (!timeIt("build - build", attempt(cmd, tempMessage, context.fullName ~ ".d")))
     {
         // If the full build fails, try to get a better error message by compiling the
         // raw code. (Originally this was done in a background thread along with the
         // full build, but it adds latency for all code, not just that which is wrong).
-
         auto test = timeIt("build - testCompile", testCompile());
-
-        if (test.length > 0)
-        {
-            message ~= test;
-            context.rawCode.fail();
-            return false;
-        }
-        else
-        {
-            message ~= "Internal error: test compile passed, full build failed. Error follows:\n" ~ tempMessage;
-            context.rawCode.fail();
-            return false;
-        }
-    }
-
-    context.rawCode.pass();
+        message ~= test.length ? test : "Internal error: test compile passed, full build failed. Error follows:\n" ~ tempMessage;                                                   
+        return false;
+    }    
+    
     return true;
 }
 
@@ -795,6 +826,7 @@ bool build(Tuple!(string,string) code,
 */
 string testCompile()
 {
+    import std.stdio : File; 
     import std.file : exists, remove;
     import std.process : system, escapeShellFileName;
 
@@ -826,7 +858,10 @@ string testCompile()
 bool buildUserModules(ref string message,
                       bool init = false)
 {
-    import std.datetime;
+    import std.stdio : File;
+    import std.string : join;
+    import std.algorithm : findSplitAfter, map; 
+    import std.datetime : SysTime, getTimes;
     import std.path : dirSeparator, stripExtension;
     import std.file : getTimes, readText, getcwd, copy;
 
@@ -854,7 +889,7 @@ bool buildUserModules(ref string message,
     SysTime access, modified;
     foreach(ref m; context.userModules)
     {
-        auto fullPath = m.path~dirSeparator~m.name;
+        auto fullPath = m.path ~ dirSeparator ~ m.name;
         getTimes(fullPath, access, modified);
 
         if (modified.stdTime() == m.modified) // file has not changed
@@ -905,8 +940,8 @@ void cleanup()
 */
 CallResult call(ref string message)
 {
-    import core.memory : GC;
     import std.exception;
+    import core.memory : GC;    
     import std.file : DirEntry, readText, exists, remove;
 
     alias extern(C) int function(ref ReplShare) FuncType;
@@ -996,8 +1031,10 @@ CallResult call(ref string message)
 */
 Tuple!(string, int) stripDmdErrorLine(string line)
 {
-    import std.regex;
-
+    import std.regex : splitter, match, regex;
+    import std.string : join; 
+    import std.array : array; 
+    
     Tuple!(string, int) err;
     auto split = splitter(line, regex(`:`, `g`)).array();
     if (split.length >= 3)
@@ -1017,7 +1054,7 @@ Tuple!(string, int) stripDmdErrorLine(string line)
 */
 string deDereference(string line, bool parens)
 {
-    import std.regex;
+    import std.regex : replace, regex;
 
     // TODO: this should make sure the matches are user defined vars
     if (parens)
@@ -1031,7 +1068,7 @@ string deDereference(string line, bool parens)
 * Given source code filename and error filename, generate formatted errors
 */
 string parseDmdErrorFile(string srcFile, string errFile, bool dederef)
-{
+{    
     import std.regex;
     import std.path: baseName;
     import std.file : readText, exists;
@@ -1084,8 +1121,12 @@ private string replPath()
 {
     version(Windows)
     {
+        import std.string : join; 
+        import std.array : array; 
+        import std.algorithm : splitter;
+    
         import core.sys.windows.windows;        
-        import std.path : dirName, pathSplitter, dirSeparator;
+        import std.path : dirName, dirSeparator;
                 
         char[100] filename;
         GetModuleFileNameA(null, filename.ptr, filename.length);

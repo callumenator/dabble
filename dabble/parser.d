@@ -16,103 +16,63 @@ import
     std.conv,
     std.typecons,
     std.range, 
-    std.algorithm;    
+    std.algorithm;
 
 import 
     stdx.d.lexer, 
     stdx.d.parser, 
-    stdx.d.ast;
-    
-import dabble.repl;
+    stdx.d.ast;    
 
-import dabble.defs : Var, Decl;
-
-
-struct ParserDecl
-{
-    bool global;
-    string source;
-    string type;
-}
-
-struct ParserVariable
-{
-    string source;
-    string name;
-    string type;
-    string init;    
-}
-
-
- 
 class DabbleParser : Parser
 {
     alias Insert = Tuple!(uint,uint); // index, length
 	Insert[] inserts; // sorted list of inserts
-    
-    ReplContext* repl;
+        
     LexerConfig config;        
-    string source, original;
-        
-    string errors;    
-    bool declCanBeGlobal;                     
-    string lastInit;        
-    string[] types;
-    string[] dupSearchList;
-    
-    uint blockDepth = 0, declStart = 0;     
+    string source, original, lastInit;          
+    string[] errors, types;        
+    bool declCanBeGlobal;                         
+    uint blockDepth = 0, declStart = 0;   
 
-    ParserDecl[] newDecls;
-    ParserVariable[] newVars; 
-                 
-    override void error(lazy string message, bool shouldAdvance = true)
-    {
-        if (suppressMessages <= 0)        
-            errors ~= message ~ "\n";         
-        super.error(message, shouldAdvance);
-    }
-              
-    auto parse(string _source, ref ReplContext r)
+    bool delegate(string) redirectVar;
+    void delegate(bool,string,string) newDecl;
+    void delegate(string,string,string,string) newVar;    
+                               
+    string parse(string _source, 
+                 bool delegate(string) _redirectVar,
+                 void delegate(bool,string,string) _newDecl,
+                 void delegate(string,string,string,string) _newVar)
     {   
-        repl = &r;    
-        inserts.clear();
-        dupSearchList.clear();        
-        
-        errors = "";                
+        redirectVar = _redirectVar;        
+        newDecl = _newDecl;
+        newVar = _newVar;
+            
+        source = _source;                
+        original = _source;         
+                               
         lastInit = "";        
-        blockDepth = 0;
-        source = _source;        
-        original = source;        
+        blockDepth = 0;        
+        errors.clear();
+        inserts.clear();
         
-        // Reset parent state
+        /// Reset parent state
         tokens = byToken(cast(ubyte[]) source, config).array();		
         suppressMessages = 0;
         index = 0;
-        		
-        parseDeclarationsAndStatements();                
-               
-        auto code = repl.share.generate();
-            
-        foreach(d; dupSearchList)
-        {                   
-            auto index = repl.share.vars.countUntil!( (a,b) => a.name == b )(d);                    
-            assert(index >= 0, "Parser: undefined var in string dups");
-            code.suffix.put("if (!_repl_.vars[" ~ index.to!string() ~ "].func) { "
-                            "_REPL.dupSearch(*" ~ d ~ ", _repl_.imageBounds[0], _repl_.imageBounds[1], _repl_.keepAlive); }\n");
-        }
-            
-        repl.rawCode.append(source, false);
-            
-        auto inBody =            
-            repl.vtblFixup ~
-            code.prefix.data ~
-            source ~ 
-            code.suffix.data ~
-            "if (__expressionResult.length == 0) __expressionResult = `OK`; writeln(`=> `, __expressionResult);\n";
+        		        
+        parseDeclarationsAndStatements();                        
+        return source;
+    } 
 
-        return tuple(code.header.data, inBody);  
-    }           
+    
+    override void error(lazy string message, bool shouldAdvance = true)
+    {
+        if (!suppressMessages)        
+            errors ~= message;         
+        super.error(message, shouldAdvance);
+    }    
 
+    
     /**     
     * Map original text indices to modified text indices
     */
@@ -133,6 +93,7 @@ class DabbleParser : Parser
         return tuple(modFrom, modFrom + len);
     }  
 
+    
     /**     
     * Insert text into modified text starting at mapped index
     */
@@ -153,17 +114,20 @@ class DabbleParser : Parser
 			inserts[pos][1] += text.length;		
 	}     
     
+    
     /**
-    * Blank modified text between given mapped indices
+    * Blank text between given indices in both original and modified text.
     */
     void blank(size_t from, size_t to)
     {
         auto t = mapIndices(from, to);
         source.replaceInPlace(t[0], t[1], iota(t[1]-t[0]).map!(x=>" ")().joiner());        
+        original.replaceInPlace(from, to, iota(to-from).map!(x=>" ")().joiner());        
     }  
-            
+         
+         
     /**
-    * Get the modified code, using indices from the unmodified array
+    * Get the modified code, using indices from the unmodified array.
     */
     string grab(size_t from, size_t to)
     {        
@@ -301,23 +265,26 @@ class DabbleParser : Parser
     }          
  
     override IdentifierOrTemplateInstance parseIdentifierOrTemplateInstance()    
-    {               
+    {     
+        import std.string : strip;    
+                       
         auto i = index;
         auto t = wrap(super.parseIdentifierOrTemplateInstance());        
-        if (suppressMessages == 0)
-        {                        
-            if (i == 0 || (i > 0 && tokens[i - 1].type != TokenType.dot))
-            {                
-                auto ident = std.string.strip(original[t[1]..t[2]]);                
-                if (repl.share.vars.canFind!((a,b) => (a.name == b))(ident))
-                {                  
-                    declCanBeGlobal = false;
-                    dupSearchList ~= ident;
-                    insert(t[1], "(*");
-                    insert(t[2], ")");
-                }                                
-            }            
-        }
+        
+        if (suppressMessages) 
+            return t[0];
+        
+                                
+        if (i == 0 || (i > 0 && tokens[i - 1].type != TokenType.dot))            
+        {                                
+            if (redirectVar(strip(original[t[1]..t[2]])))
+            {
+                declCanBeGlobal = false;                    
+                insert(t[1], "(*");
+                insert(t[2], ")");
+            }
+        }            
+        
         return t[0];
     }
     
@@ -328,8 +295,7 @@ class DabbleParser : Parser
         if (t[0].primary.type == TokenType.stringLiteral ||
             t[0].primary.type == TokenType.dstringLiteral ||
             t[0].primary.type == TokenType.wstringLiteral )                
-        {
-            /// string dup
+        {            
             insert(t[2], ".idup");
         }               
         return t[0];
@@ -357,45 +323,32 @@ class DabbleParser : Parser
     {
         if (suppressMessages || blockDepth)
             return;
-            
-        string type = isAuto ? "auto" : types.length ? types[0] : null;                                    
-        assert(type !is null);
-                   
-        string name = v.autoDeclaration ? 
-            v.autoDeclaration.identifiers.map!(x=>x.value)().joiner(".").to!string() :         
-            v.declarators.map!(x=>x.name.value)().joiner(".").to!string(); 
-                                 
-        string init = lastInit;                       
+                     
+        auto name = v.autoDeclaration ? 
+            v.autoDeclaration.identifiers.map!(x => x.value)().joiner(".").to!string() :         
+            v.declarators.map!(x => x.name.value)().joiner(".").to!string(); 
         
-        if (repl.share.vars.canFind!((a,b) => (a.name == b))(name))
-        {            
-            parseError("Error: redifinition of " ~ name ~ " not allowed");                                
-            return;
-        }
-                
-        repl.rawCode.append(original[declStart..end], false);            
-        repl.share.vars ~= Var(name, type, init);
-        dupSearchList ~= name;               
+        auto type = isAuto ? "auto" : types.length ? types[0] : null;                                              
+        assert(type !is null);       
+        newVar(name, type, lastInit, original[declStart..end]);        
         blank(declStart, end);                        
-        clear();
+        clear();      
     }
     
     void userTypeDecl(size_t start, size_t end, string type)
     {        
         if (suppressMessages || blockDepth) 
             return;
-                
-        auto global = (type == "alias" || type == "enum") ? declCanBeGlobal : true;        
-        auto decl = original[start..end];
-        repl.rawCode.append(decl, global);
-        repl.share.decls ~= Decl(decl, global);        
+            
+        auto global = (type == "alias" || type == "enum") ? declCanBeGlobal : true;                
+        newDecl(global, type, original[start..end]);        
         blank(start, end);
-        clear();                        
+        clear();                                                 
     }
     
     void expr(size_t start, size_t end)
     {
-        if (suppressMessages > 0) 
+        if (suppressMessages) 
             return;
                     
         insert(start, "_REPL.exprResult(");
@@ -405,10 +358,5 @@ class DabbleParser : Parser
     void clear()
     {        
         lastInit = "";
-    }        
-       
-    void parseError(string msg)
-    {
-        errors ~= msg ~ "\n";
-    }
+    }                   
 }
