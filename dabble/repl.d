@@ -422,8 +422,8 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
         auto v = context.share.vars.find!((a,b) => a.name == b)(p[0]);
         if (v.empty) return "";          
         return  v.front.ty !is null ? 
-            text(v.front.name, " (", v.front.displayType, ") = ", v.front.ty.valueOf(p[1], v.front.addr, context.share.map)) :
-                v.front.func ? text(v.front.name, " (", v.front.displayType, ") = ", v.front.init) : "";                
+            v.front.ty.valueOf(p[1], v.front.addr, context.share.map) : 
+                v.front.func ? v.front.init : "";                
     }
     
     /** Type print helper **/
@@ -431,9 +431,9 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
     {
         auto v = context.share.vars.find!((a,b) => a.name == b)(p[0]);
         if (v.empty) return "";          
-        if (v.front.ty is null) return text(v.front.name, " ", v.front.displayType);          
+        if (v.front.ty is null) return v.front.displayType;          
         auto t = v.front.ty.typeOf(p[1], context.share.map);
-        return t[1].length ? t[1] : text(v.front.name, " ", t[0].toString());        
+        return t[1].length ? t[1] : t[0].toString();        
     }
     
     result.success = true;        
@@ -447,7 +447,7 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
         case "print":
         {
             if (args.length == 0 || canFind(args, "all")) // print all vars            
-                result.message ~= context.share.vars.map!(v => printValue(T(v.name,[])))().join("\n");                                        
+                result.message ~= context.share.vars.map!(v => text(v.name, " (", v.displayType, ") = ") ~ printValue(T(v.name,[]))).join("\n");                                        
             else if (args.length == 1 && args[0] == "__keepAlive")                         
                 result.message ~= "SharedLibs still alive:" ~ keepAlive.map!(a=>a.to!string())().join("\n");                                           
             else // print selected symbols            
@@ -457,7 +457,7 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
         case "type":
         {
             if (args.length == 0 || canFind(args, "all")) // print types of all vars            
-                result.message ~= context.share.vars.map!(v => printType(T(v.name,[])))().join("\n");                            
+                result.message ~= context.share.vars.map!(v => text(v.name, " ") ~ printType(T(v.name,[])))().join("\n");                            
             else            
                 result.message ~= args.map!(a => printType(parseExpr(a)))().join("\n");                                                          
             break;

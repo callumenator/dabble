@@ -57,7 +57,8 @@ class DabbleParser : Parser
         inserts.clear();
         
         /// Reset parent state
-        tokens = byToken(cast(ubyte[]) source, config).array();		
+        StringCache cache;
+        tokens = byToken(cast(ubyte[]) source, config, cache).array();		
         suppressMessages = 0;
         index = 0;
         		        
@@ -138,7 +139,7 @@ class DabbleParser : Parser
     
     int charIndex()
     {        
-        return index < tokens.length ? tokens[index].startIndex : original.length;
+        return index < tokens.length ? tokens[index].index : original.length;
     }
     
     auto wrap(E)(lazy E func)
@@ -194,17 +195,17 @@ class DabbleParser : Parser
         
         mixin(traceEnterAndExit!(__FUNCTION__));
         auto node = new LambdaExpression;
-        if (currentIsOneOf(TokenType.function_, TokenType.delegate_))
+        if (currentIsOneOf(tok!"function", tok!"delegate"))
         {
             node.functionType = advance().type;
             goto lParen;
         }
-        else if (currentIs(TokenType.identifier))
+        else if (currentIs(tok!"identifier"))
         {
             node.identifier = advance();
-            params = [node.identifier.value] ~ params;
+            params = [node.identifier.text] ~ params;
         }
-        else if (currentIs(TokenType.lParen))
+        else if (currentIs(tok!"("))
         {
         lParen:
             node.parameters = parseParameters();
@@ -223,7 +224,7 @@ class DabbleParser : Parser
             return null;
         }
 
-        if (expect(TokenType.goesTo) is null) return null;
+        if (expect(tok!"=>") is null) return null;
 
         if ((node.assignExpression = parseAssignExpression()) is null)
             return null;
@@ -236,7 +237,7 @@ class DabbleParser : Parser
     {
         auto t = wrap(super.parseParameters());        
         if (t[0].parameters.length)
-            params = [t[0].parameters.map!( x => x.name.value )().array()] ~ params;
+            params = [t[0].parameters.map!( x => x.name.text )().array()] ~ params;
         return t[0];
     }
             
@@ -340,7 +341,7 @@ class DabbleParser : Parser
         if (suppressMessages) 
             return t[0];
                                        
-        if (i == 0 || (i > 0 && tokens[i - 1].type != TokenType.dot))            
+        if (i == 0 || (i > 0 && tokens[i - 1].type != tok!"."))            
         {
             auto ident = strip(original[t[1]..t[2]]);
             bool redirect = redirectVar(ident);
@@ -363,9 +364,9 @@ class DabbleParser : Parser
     {
         auto t = wrap(super.parsePrimaryExpression());                           
                 
-        if (t[0].primary.type == TokenType.stringLiteral ||
-            t[0].primary.type == TokenType.dstringLiteral ||
-            t[0].primary.type == TokenType.wstringLiteral )                
+        if (t[0].primary.type == tok!"stringLiteral" ||
+            t[0].primary.type == tok!"dstringLiteral" ||
+            t[0].primary.type == tok!"wstringLiteral" )                
         {            
             insert(t[2], ".idup");
         }               
@@ -398,8 +399,8 @@ class DabbleParser : Parser
             return;
                      
         auto name = v.autoDeclaration ? 
-            v.autoDeclaration.identifiers.map!(x => x.value)().joiner(".").to!string() :         
-            v.declarators.map!(x => x.name.value)().joiner(".").to!string(); 
+            v.autoDeclaration.identifiers.map!(x => x.text)().joiner(".").to!string() :         
+            v.declarators.map!(x => x.name.text)().joiner(".").to!string(); 
         
         name = strip(name);
         auto type = isAuto ? "auto" : types.length ? types[0] : null;                                              

@@ -9,33 +9,28 @@
  		{
             "name": "repl",            
             "targetType": "executable",                        
-            "targetPath":"./build",
+            "targetPath":"./bin",
             "platforms": ["windows"],                 
-            "targetName":"repl",
+            "targetName":"repl",                        
             
             "dependencies": {  
                 "pegged":"~master"    
             },
-                        
-            "sourceFiles": [        
-                "dabble/main.d",                
-                "dabble/defs.d",                                
-                "dabble/repl.d",
-                "dabble/util.d",
-                "dabble/parser.d",
-                "dabble/grammars.d",
-                "dabble/testing.d",
-                "dabble/sharedlib.d",                
-                "dabble/stdx/d/ast.d",
-                "dabble/stdx/d/lexer.d",                                 
-                "dabble/stdx/d/parser.d",
-                "dabble/stdx/d/entities.d"                
-            ]
+            
+            "sourcePaths" : [
+                "dabble"              
+            ],
+            
+            "mainSourceFile": "dabble/main.d",
+            
+            "excludedSourceFiles": [
+                "dabble/sourcebrowser.d"
+            ]                        
         },
  		{
  			"name": "browser",
  			"targetType": "executable",            
-            "targetPath":"./build",
+            "targetPath":"./bin",
             "platforms": ["windows"],                 
             "targetName":"browser",
             
