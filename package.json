@@ -10,7 +10,7 @@
             "name": "repl",            
             "targetType": "executable",                        
             "targetPath":"./bin",
-            "platforms": ["windows"],                 
+            "platforms": ["windows","posix"],                 
             "targetName":"repl",                        
             
             "dependencies": {  
@@ -31,7 +31,7 @@
  			"name": "browser",
  			"targetType": "executable",            
             "targetPath":"./bin",
-            "platforms": ["windows"],                 
+            "platforms": ["windows","posix"],                 
             "targetName":"browser",
             
  			"sourceFiles": [
