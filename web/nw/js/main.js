@@ -6,7 +6,7 @@ var browserAction = null, browserStatus = '';
 var historyBuffer = [];
 var maxHistory = 200;
 var lineIndex = 0; // for moving through the history
-
+var lineWidgetCount = 0;
 
 /**
 * Trim string proto
@@ -48,25 +48,25 @@ CodeMirror.commands.autocomplete = function(cm) {
 /**
 * On-load setup
 */
-$(document).ready( function() { 
+$(document).ready(function () {
 
-    require('fs').watch('css/style.css', function(event, name) { 
+    require('fs').watch('css/style.css', function (event, name) {
         var queryString = '?reload=' + new Date().getTime();
         $('link[rel="stylesheet"]').each(function () {
             this.href = this.href.replace(/\?.*|$/, queryString);
-        }); 
-    });    
+        });
+    });
 
     editor = CodeMirror.fromTextArea(document.getElementById("code"), {
-        mode:"text/x-d",
+        mode: "text/x-d",
         viewportMargin: Infinity,
         lineWrapping: true,
         smartIndent: false,
-        extraKeys: {"Ctrl-Down": "autocomplete"}
+        extraKeys: { "Ctrl-Down": "autocomplete" }
     });
 
     history = CodeMirror.fromTextArea(document.getElementById("history"), {
-        mode:"text/x-d",
+        mode: "text/x-d",
         viewportMargin: Infinity,
         readOnly: true,
         lineNumbers: true,
@@ -76,94 +76,77 @@ $(document).ready( function() {
     editor.setOption("theme", "dabble");
     history.setOption("theme", "dabble");
 
-    editor.options.onKeyEvent = function(cm, e) {
+    editor.options.onKeyEvent = function (cm, e) {
 
-    // If currently auto-completing, do nothing
-        if (editor.state.completionActive)
-            return;
+        // If currently auto-completing, do nothing
+        if (e.ctrlKey == true) return;
+        if (editor.state.completionActive) return;
+        if (!e || !(e instanceof KeyboardEvent)) return;
 
-        if (!e || !(e instanceof KeyboardEvent))
-            return;
-
-        if (e.ctrlKey == true)
-            return;        
-
-        if (e.type == 'keydown' &&
-            e.shiftKey == false &&
-            e.keyCode == 13) {
-
+        if (e.type == 'keydown' && e.shiftKey == false && e.keyCode == 13) {            
             var text = editor.getValue();
             preparseInput(text);
             e.preventDefault();
             return true;
-
         } else if (e.type == 'keydown' &&
                    editor.lineCount() == 1 &&
-                   (e.keyCode == 38 || e.keyCode == 40 )) {
+                   (e.keyCode == 38 || e.keyCode == 40)) {
 
             var line = "";
             if (e.keyCode == 38) line = retrieveHistory('up');
-            else line = retrieveHistory('down');            
+            else line = retrieveHistory('down');
             if (typeof line != "undefined")
                 editor.setValue(line);
-      }
-    };   
-    
-    
+        }
+    };
+
+
     (function () {
-        
-        CodeMirror.dHint = function(editor, callback, options) {
+
+        CodeMirror.dHint = function (editor, callback, options) {
             var cursor = editor.getCursor();
-            var tk = editor.getTokenAt(cursor);                           
-            
-            browserAction = function(json) {
+            var tk = editor.getTokenAt(cursor);
+
+            browserAction = function (json) {
                 if (json.length > 0) {
                     callback({
-                        list:json,
+                        list: json,
                         from: CodeMirror.Pos(cursor.line, tk.start),
                         to: CodeMirror.Pos(cursor.line, tk.end)
                     });
                 }
             };
-            
-            browser.stdin.write(new Buffer('suggest-names:' + tk.string.toLowerCase() + '\n'));                        
-        };        
-    }());
 
-    
+            browser.stdin.write(new Buffer('suggest-names:' + tk.string.toLowerCase() + '\n'));
+        };
+    } ());
+
+
     /**
     * Start repl
     */
-    engine = require('child_process').spawn('repl.exe', ['--noConsole'], {cwd:'../../build'});
-
-    engine.stdout.on('data', function(data) {
-        var lines = data.toString().split("\n");
-        var text = "";
-        for (var i = 0; i < lines.length; i++) {
-            var str = lines[i].replace(/(\r\n|\n|\r)/gm,"");
-            updateResult(str);
-        }
-    });
-
+    engine = require('child_process').spawn('repl.exe', ['--noConsole'], { cwd: '../../bin' });
+    engine.stdout.once('data', function (data) { updateResult(data.toString(), false); });
+    
 
     /**
     * Start browser
     */
-    browser = require('child_process').spawn('browser.exe', ['c:/cal/d/dmd2/src/phobos/std'], {cwd:'../../build'});
+    browser = require('child_process').spawn('browser.exe', ['c:/cal/d/dmd2/src/phobos/std'], { cwd: '../../bin' });
 
-    browser.stdout.on('data', function(data) {    
-        if (browserAction !== null) { 
-            try {                
+    browser.stdout.on('data', function (data) {
+        if (browserAction !== null) {
+            try {
                 var json = JSON.parse(data.toString());
                 browserAction(json);
-            } catch(error) {
+            } catch (error) {
                 console.log(error, data.toString(), data);
-            }                       
+            }
         } else {
             browserStatus = 'data.toString()';
         }
     });
-    
+
 });
 
 
@@ -182,17 +165,17 @@ function handleWindowEvent(e) {
 
 
 /**
-* Not needed now
+* 
 */
-function preparseInput(text) {
+function preparseInput(text) {    
     if (text.trim() == "clear") {
         history.setValue("");
-        send("version");
+        send("version", function(text) { updateResult(text, false);  });
     } else {
-        updateHistory(text);
+        updateHistory(text);        
         send(text);
     }
-    editor.setValue("");
+    editor.setValue("");    
 }
 
 
@@ -214,35 +197,40 @@ function retrieveHistory(dir) {
 /**
 * Got a result from the repl
 */
-function updateResult(text) {
-    if (text.length == 0) { return; }
-
-    if (history.getLine(0) == "") {
-        history.setValue(text);
+function updateResult(data, lwidget) {
+    if (lwidget) {
+        if (data.trim().length == 0)
+            return;        
+        data = data.replace(/(\r\r\n|\r\n|\n|\r)/g, "<br>");       
+        var id = "lineWidget" + (lineWidgetCount++).toString();
+        $("body").append("<div class='resultWidget' id='" + id + "'>" + data, + "</div>");
+        history.addLineWidget(history.lineCount() - 1, $("#" + id)[0]);
     } else {
-        history.setValue(history.getValue() + "\n" + text);
+        cmAppend(history, data);
     }
     var el = document.getElementById("codePane");
-    el.scrollTop = el.scrollHeight;
+    el.scrollTop = el.scrollHeight;    
 }
 
+
+function cmAppend(cm, text) {
+    text = text.replace(/(\r\r\n|\r\n|\r)/g, "\n");
+    text = text.split("\n").filter(function (el) { return el.length; }).join("\n")    
+    if (cm.getValue() !== "") text = "\n" + text;
+    cm.replaceRange(text, CodeMirror.Pos(cm.lastLine()));            
+}
 
 /**
 * Add last input to history
 */
 function updateHistory(text) {
-    if (text.length == 0) 
-        return;
-    updateResult(text);
-
-    if (historyBuffer.length > 1 && historyBuffer[historyBuffer.length-1] == text)
-        return;
-
+    if (text.length == 0) return;
+    cmAppend(history, text);
+    if (historyBuffer.length > 1 && historyBuffer[historyBuffer.length-1] == text) return;
     historyBuffer.push(text);
     if (historyBuffer.length > maxHistory)
         for(var i = 0; i < 10; i++)
-            historyBuffer.shift();        
-            
+            historyBuffer.shift();                    
     lineIndex = historyBuffer.length;
 }
 
@@ -250,15 +238,17 @@ function updateHistory(text) {
 /**
 * Send input to the repl
 */
-function send(text) {     
-    engine.stdin.write(new Buffer(text + "\n"));       
+function send(text, callback) {   
+    if (callback === undefined) {
+        engine.stdout.once('data', function (data) { updateResult(data.toString(), true); });
+    } else {        
+        engine.stdout.once('data', function (data) { callback(data.toString()); });
+    }    
+    engine.stdin.write(new Buffer(text + "\n"));
 }
 
-
-
-
 function toggleSearchPaneVisibility() {
-    
+
     var sp = document.getElementById('libPane'), 
         cp = document.getElementById('codePane');    
     
@@ -280,14 +270,6 @@ function toggleSearchPaneVisibility() {
             document.getElementById('searchBox').focus();
         }, 200);                                  
     }
-}
-
-
-function post(to, data, callback) {
-    var xhr = createCORSRequest('POST', to);
-    xhr.setRequestHeader('Content-type', 'text/plain;');
-    xhr.onload = function() { callback(xhr); }; 
-    xhr.send(data);
 }
 
 

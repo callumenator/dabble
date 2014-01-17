@@ -51,10 +51,7 @@ shared static this()
 alias DResult = Tuple!(bool,"success",string,"message");
 struct EvalResult
 {   
-    DResult meta;     
-    DResult parse;
-    DResult build;
-    DResult call;      
+    DResult meta, parse, build, call;             
     string  result;
     
     string toString()
@@ -111,6 +108,13 @@ void setDebugLevel(uint level) in { assert(context.initalized, "Context not init
 void resetSession()
 {    
     context.reset();
+}
+
+
+enum Stage
+{
+	preEval,
+	postEval	
 }
 
 
@@ -216,7 +220,7 @@ EvalResult eval(const char[] inBuffer, ref char[] codeBuffer)
         
         // TODO: Need to handle things like: a = 5; print a <- note no trailing ';' but 0 braces
 
-        if (!multiLine && balanced /** && newInput[$-1] == ';' **/ )
+        if (!multiLine && balanced && newInput[$-1] == ';')
         {
             result = evaluate(codeBuffer.to!string());
             codeBuffer.clear();
@@ -362,7 +366,7 @@ struct ReplContext
 /**
 * Return a command-input prompt.
 */
-string prompt() 
+string prompt()
 { 
     return ": "; 
 }

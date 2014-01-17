@@ -249,7 +249,17 @@ input {
   background: #666 no-repeat center;
 }
 
-::-webkit-scrollbar-thumb:horizontal {
+::-webkit-scrollbar-thumb:horizontal 
+{
   -webkit-border-radius: 6px;
   background: #666 no-repeat center;
+}
+
+.resultWidget 
+{
+    border-radius: 5px; 
+    padding: 2px;
+    padding-left: 5px;
+    margin: 5px 0px;
+    /*background-color: rgb(40,40,40);*/
 }
