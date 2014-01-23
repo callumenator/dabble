@@ -102,21 +102,17 @@ $(document).ready(function () {
 
 
     (function () {
-
         CodeMirror.dHint = function (editor, callback, options) {
             var cursor = editor.getCursor();
             var tk = editor.getTokenAt(cursor);
-
             browserAction = function (json) {
-                if (json.length > 0) {
-                    callback({
-                        list: json,
-                        from: CodeMirror.Pos(cursor.line, tk.start),
-                        to: CodeMirror.Pos(cursor.line, tk.end)
-                    });
-                }
+                if (json.length == 0) return;
+                callback({
+					list: json,
+                    from: CodeMirror.Pos(cursor.line, tk.start),
+                    to: CodeMirror.Pos(cursor.line, tk.end)
+                });                
             };
-
             browser.stdin.write(new Buffer('suggest-names:' + tk.string.toLowerCase() + '\n'));
         };
     } ());
@@ -133,17 +129,17 @@ $(document).ready(function () {
     * Start browser
     */
     browser = require('child_process').spawn('browser.exe', ['c:/cal/d/dmd2/src/phobos/std'], { cwd: '../../bin' });
-
     browser.stdout.on('data', function (data) {
         if (browserAction !== null) {
             try {
                 var json = JSON.parse(data.toString());
                 browserAction(json);
             } catch (error) {
-                console.log(error, data.toString(), data);
+				$("#ajax-loader").css("visibility", "hidden");
+                console.log("Browser stdout error converting to JSON: ", error);
             }
         } else {
-            browserStatus = 'data.toString()';
+            browserStatus = data.toString();
         }
     });
 
@@ -267,25 +263,28 @@ function toggleSearchPaneVisibility() {
         setTimeout(function() {
             sp.style.display = "inline-block";
             sp.style.width = "58%";
-            document.getElementById('searchBox').focus();
+            $("#search-box").focus();
         }, 200);                                  
     }
 }
 
 
 function searchInput() {
-    var prefix = document.getElementById("searchBox").value;
-
+    var prefix = $("#search-box").val();
+	
     if (prefix.length == 0) {
+		$("#ajax-loader").css("visibility", "hidden");	
         clearSuggestions();
         return;
-    }                                     
-      
+    }                                           
     browserAction = function(json) {
-        if (json.length == 0) clearSuggestions();
-        else $("#suggestionsPane").html(listToHTML(json));                    
+		$("#ajax-loader").css("visibility", "hidden");
+        if (json.length == 0) 
+			clearSuggestions();
+        else 
+			$("#suggestionsPane").html(listToHTML(json));                    
     };
-  
+	$("#ajax-loader").css("visibility", "visible");
     browser.stdin.write(new Buffer('search-names:' + prefix.toLowerCase() + "\n"));   
 }
 
@@ -297,17 +296,13 @@ function listToHTML(list) {
     return html;
 }
 
-function panelClick(name) {
-   
-    var el = event.target;        
-   
-    if (typeof el.dataset.expanded == "undefined")
-        return;
-   
-    if (el.dataset.expanded != "true")
-        expandPanel(name, el);
-    else
-        collapsePanel(name, el);
+function panelClick(name) {   
+    var el = event.target;           
+    if (typeof el.dataset.expanded == "undefined") return;   
+    if (el.dataset.expanded != "true") 
+		expandPanel(name, el);
+    else 
+		collapsePanel(name, el);
 }
 
 
@@ -351,8 +346,7 @@ function showSource(uuid) {
 }
 
 function clearSuggestions() {
-    $("#suggestionsPane").html("");
-    $("#searchBoxUnder").val("");
+    $("#suggestionsPane").html("");    
 }
 
 

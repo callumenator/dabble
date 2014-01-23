@@ -10,7 +10,13 @@ Authors:   Callum Anderson
 
 module dabble.repl;
 
+import 
+	std.range, 
+	std.variant, 
+	std.algorithm; 
+	
 import std.typecons : Tuple, tuple;
+import std.stdio : writeln;
     
 import    
     dabble.parser,
@@ -19,15 +25,17 @@ import
     dabble.defs,
     dabble.grammars;   
 
-debug 
-{
-    import std.stdio : writeln;
+enum Stage
+{	
+	none,
+	meta, 
+	parse, 
+	build,	
+	call	
 }
-    
-    
+
 bool consoleSession = true;
 Tuple!(string,"stage",long,"msecs")[] timings;
-
 
 private 
 {
@@ -37,6 +45,7 @@ private
 }
 
 
+
 shared static this()
 {
     context.init();
@@ -44,28 +53,38 @@ shared static this()
 }
 
 
+struct Result
+{
+	Stage stage;
+	bool success;
+	Message[] messages;
+	
+	string toString()
+	{
+		return messages.map!(m => m.toString()).join("\n");
+	}
+}
 
-/**
-* Returned by eval.
-*/
-alias DResult = Tuple!(bool,"success",string,"message");
-struct EvalResult
-{   
-    DResult meta, parse, build, call;             
-    string  result;
-    
-    string toString()
-    {
-        if (meta.success)
-            return meta.message;
-        if (!parse.success)
-            return parse.message;
-        if (!build.success)
-            return build.message;
-        if (!call.success)        
-            return result.length ? result ~ "\n" ~ call.message : call.message;                                     
-        return result;
-    }
+struct Message
+{
+	string summary;
+	string[] fields;
+	Variant[] values;
+	
+	this(T...)(string summ, string[] flds, T vals)
+	{
+		summary = summ;
+		fields = flds;
+		foreach(v; vals)		
+			values ~= Variant(v);							
+	}
+
+	string toString()
+	{		
+		auto toStr = (Variant v) => v.type == typeid(string) ? `"` ~ v.get!string ~ `"` : v.to!string;	
+		return consoleSession ? summary : 
+			"{" ~ zip(fields, values).map!( t => `"` ~ t[0] ~ `":` ~ toStr(t[1]) ).join(",") ~ "}";		
+	}	
 }
 
 
@@ -111,13 +130,6 @@ void resetSession()
 }
 
 
-enum Stage
-{
-	preEval,
-	postEval	
-}
-
-
 
 /**
 * Main repl entry point. Keep reading lines from stdin, handle any
@@ -134,20 +146,19 @@ void loop()
         clearScreen();
     
     writeln(title()); 
-        
-    char[] inBuffer, codeBuffer;
-       
+              
     if (consoleSession) 
         write(prompt()); 
    
     stdout.flush();
+	char[] inBuffer, codeBuffer;    
     stdin.readln(inBuffer);
     
     while (strip(inBuffer) != "exit")
     {
-        auto result = eval(inBuffer, codeBuffer);                        
-        writeln((consoleSession ? "=>" : ""), result);
-                
+        auto r = eval(inBuffer, codeBuffer);                        				
+		writeln( consoleSession ? "=> " : "", r[0].length ? r[0] : r[1].toString());
+                        
         version(none) 
         {
             if (context.debugLevel & Debug.times)        
@@ -186,7 +197,7 @@ void onExit()
 * Evaluate code in the context of the supplied ReplContext. This version assumes
 * inBuffer does not contain multiline input.
 */
-EvalResult eval(const char[] inBuffer)
+Tuple!(string, Result) eval(const char[] inBuffer)
 {
     char[] dummyBuffer;
     return eval(inBuffer, dummyBuffer);
@@ -197,14 +208,14 @@ EvalResult eval(const char[] inBuffer)
 /**
 * Evaluate code in the context of the supplied ReplContext.
 */
-EvalResult eval(const char[] inBuffer, ref char[] codeBuffer)
+Tuple!(string, Result) eval(const char[] inBuffer, ref char[] codeBuffer)
 {
     import std.string : strip, stripRight, toLower;             
 
     assert(context.initalized, "Context not initalized");
     
     timings.clear();
-    EvalResult result;
+    Tuple!(string, Result) result;
             
     bool multiLine = codeBuffer.length > 0;
     char[] newInput = strip(inBuffer.dup);
@@ -212,7 +223,12 @@ EvalResult eval(const char[] inBuffer, ref char[] codeBuffer)
     if (newInput.toLower() == "exit")
         return result;
     
-    if (newInput.length > 0 && !handleMetaCommand(newInput, codeBuffer, result.meta))
+	result[1] = handleMetaCommand(newInput, codeBuffer);
+	
+	if (result[1].success)
+		return result;
+	
+    if (newInput.length > 0)
     {
         codeBuffer ~= inBuffer ~ "\n";         
         auto balanced = Balanced.test(codeBuffer.to!string());
@@ -347,7 +363,7 @@ struct ReplContext
         
         auto build = buildUserModules(true);
         if (!build.success)
-            throw new Exception("Unable to build defs.d, " ~ build.message);
+            throw new Exception("Unable to build defs.d, " ~ build.messages.map!(x => x.toString()).join("\n"));
 
         _initalized = true;
     }
@@ -390,7 +406,7 @@ string title()
 * See if the given buffer contains meta commands, commands which are interpreted directly
 * and do not trigger recompilation.
 */
-bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DResult result)                       
+Result handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer)                       
 {
     import std.conv : text;
     import std.process : system;
@@ -398,10 +414,11 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
     import std.algorithm : canFind, map, find;     
     import std.range : array, front, empty; 
 
-    auto parse = MetaParser.decimateTree(MetaParser(inBuffer.to!string()));
+	auto origCommand = inBuffer.to!string();
+    auto parse = MetaParser.decimateTree(MetaParser(origCommand));
     
     if (!parse.successful) 
-        return false;
+        return Result(Stage.meta, false);
 
     parse = parse.children[0];
     auto cmd = parse.children[0].matches[0];
@@ -440,31 +457,70 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
         return t[1].length ? t[1] : t[0].toString();        
     }
     
-    result.success = true;        
+	/**
+	{
+		"type":"meta",
+		"data":{"command":"title",
+				"result":...}
+	}
+	**/
+
     switch(cmd)
     {
         case "version":
-        {
-            result.message = title() ~ "\n";
-            break;
+        {	
+			return Result(Stage.meta, true, [Message(title(), ["type", "cmd", "result"], "meta", "version", title())]);            
         }
-        case "print":
-        {
-            if (args.length == 0 || canFind(args, "all")) // print all vars            
-                result.message ~= context.share.vars.map!(v => text(v.name, " (", v.displayType, ") = ") ~ printValue(T(v.name,[]))).join("\n");                                        
+        case "print": with(context.share)
+        {											
+            if (args.length == 0 || canFind(args, "all")) // print all vars   
+			{
+				return Result(Stage.meta, true, [
+						Message(
+							vars.map!(v => text(v.name, " (", v.displayType, ") = ", printValue(T(v.name,[])))).join("\n"),
+							["type", "cmd", "result"], 
+							"meta", "print", vars.map!(v => Message("", ["name", "type", "value"], v.name, v.displayType, printValue(T(v.name,[])))).array
+						)]);
+			}												
             else if (args.length == 1 && args[0] == "__keepAlive")                         
-                result.message ~= "SharedLibs still alive:" ~ keepAlive.map!(a=>a.to!string())().join("\n");                                           
+			{
+				return Result(Stage.meta, true, [
+						Message(
+							"SharedLibs still alive:" ~ .keepAlive.map!(a => a.to!string())().join("\n"),
+							["type", "cmd", "result"], 
+							"meta", "__keepAlive", .keepAlive.map!(a => a.to!string()).array
+						)]);
+			}                
             else // print selected symbols            
-                result.message ~= args.map!(a => printValue(parseExpr(a)))().join("\n");                                
-            break;
+			{
+				return Result(Stage.meta, true, [
+						Message(
+							args.map!(a => printValue(parseExpr(a))).join("\n"), 
+							["type", "cmd", "result"], 
+							"meta", "print", args.map!(a => printValue(parseExpr(a))).array
+						)]);
+			}                        
         }
-        case "type":
+        case "type": with(context.share)
         {
             if (args.length == 0 || canFind(args, "all")) // print types of all vars            
-                result.message ~= context.share.vars.map!(v => text(v.name, " ") ~ printType(T(v.name,[])))().join("\n");                            
-            else            
-                result.message ~= args.map!(a => printType(parseExpr(a)))().join("\n");                                                          
-            break;
+			{
+				return Result(Stage.meta, true, [
+						Message(
+							vars.map!(v => text(v.name, " ") ~ printType(T(v.name,[])))().join("\n"), 
+							["type", "cmd", "result"], 
+							"meta", "print", vars.map!(v => Message("", ["name", "type"], v.name, printType(T(v.name,[])))).array
+						)]);
+			}                
+            else 
+			{	
+				return Result(Stage.meta, true, [
+						Message(
+							args.map!(a => printType(parseExpr(a))).join("\n"), 
+							["type", "cmd", "result"], 
+							"meta", "print", args.map!(a => printType(parseExpr(a))).array
+						)]);
+			}            
         }
         case "reset":
         {
@@ -472,7 +528,7 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
             {
                 context.reset();
                 keepAlive.clear();
-                result.message ~= "Session reset";
+				return Result(Stage.meta, true, [Message("Session reset", ["type", "cmd", "result"], "meta", "reset session", "Session reset")]);
             }
             break;
         }
@@ -490,34 +546,45 @@ bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer, ref DR
             import std.datetime : SysTime;            
             alias ElementType!(typeof(context.userModules)) TupType;
 
+			auto r = Result(Stage.meta, true);
+			
             foreach(a; args)
             {
                 if (exists(a))
                     context.userModules ~= TupType(dirName(a), baseName(a), SysTime(0).stdTime());
                 else
-                    result.message ~= text("Error: module ", a, " could not be found\n");
+				{
+					r.messages ~= Message(
+									text("Error: module ", a, " could not be found\n"), 
+									["type", "cmd", "result"], 
+									"meta", "use", text("Error: module ", a, " could not be found\n")
+									);
+				}
             }
-            break;
+			return r;			            
         }
         case "clear":
         {
             if (args.length == 0)
             {
                 clearScreen();
-                result.message = title() ~ "\n";
+				return Result(Stage.meta, true, [Message(title() ~ "\n", ["type", "cmd", "result"], "meta", "clear", title())]);
             }
             else if (args.length == 1 && args[0] == "buffer")
+			{
                 codeBuffer.clear();
+				return Result(Stage.meta, true, [Message("", ["type", "cmd", "result"], "meta", "clear code buffer", "")]);
+			}
             break;
         }
         case "debug on": foreach(arg; args) setDebugLevelFromString!"on"(arg); break;
         case "debug off": foreach(arg; args) setDebugLevelFromString!"off"(arg); break;
-        default: return false;
+        default: return Result(Stage.meta, false);
     }
 
     // If we got to here, we successfully parsed a meta command, so clear the code buffer    
     codeBuffer.clear();
-    return true;
+    return Result(Stage.meta, true);
 }
 
 
@@ -593,57 +660,54 @@ auto timeIt(E)(string stage, lazy E expr)
 /**
 * Evaluate code in the context of the supplied ReplContext.
 */
-EvalResult evaluate(string code)
+Tuple!(string, Result) evaluate(string code)
 {    
     import std.typecons : Tuple;
     import std.conv : to, text;
     import std.string : join; 
     import std.algorithm : map; 
-    
-    EvalResult result;
-                
-    auto parsedCode = timeIt("parse (total)", parse(code, result.parse));       
-        
-    if (!result.parse.success)
-    {
+            
+	string parsedCode = "";
+    auto parseResult = timeIt("parse (total)", parse(code, parsedCode));
+	
+	if (!parseResult.success)
+	{		
         context.share.prune();
         context.rawCode.fail();    
-        return result;
+        return tuple("", parseResult);
     }
+	
+	if (!parsedCode.length)
+		assert(false); /** return Result(Stage.parse, true); **/
         
     if (context.debugLevel & Debug.parseOnly)
-    {
-        result.parse.message = parsedCode;
-        return result;
+    {        		
+        return tuple("", Result(Stage.parse, true, [Message(parsedCode, 
+					["type", "status", "result"], "evaluate", "parseOnly", parsedCode)]));
     }
-
-    if (!parsedCode.length)
-        return result;
     
-    timeIt("build (total)", build(parsedCode, result.build));
+    auto buildResult = timeIt("build (total)", build(parsedCode));
     
-    if (!result.build.success)
+    if (!buildResult.success)
     {
         context.share.prune();
         context.rawCode.fail();        
-        return result;
+        return tuple("", buildResult);
     }
         
-    result.result = timeIt("call (total)", call(result.call));   
+	string replResult;
+    auto callResult = timeIt("call (total)", call(replResult));   
+	
     context.share.prune();
     context.rawCode.pass();
-
-    if (result.call.success)    
-        hookNewClass(typeid(Object) /** dummy **/, null /** dummy **/, &context, false);    
-    else    
-        hookNewClass(typeid(Object) /** dummy **/, null /** dummy **/, &context, true);    
-       
-    return result;
+	hookNewClass(typeid(Object) /** dummy **/, null /** dummy **/, &context, !callResult.success);    
+	      
+    return tuple(replResult, callResult);
 }
 
 
 
-string parse(string code, ref DResult result)
+Result parse(string code, out string parsedCode)
 { 
     import std.algorithm : canFind, countUntil; 
     import std.conv : text;
@@ -680,11 +744,15 @@ string parse(string code, ref DResult result)
     auto source = parser.parse(code, &redirectVar, &newDeclaration, &newVariable);
     
     if (parser.errors.length != 0)
-    {        
-        result = DResult(false, parser.errors.join("\n"));                
-        return null;
-    }
-            
+	{
+		return Result(Stage.parse, false, [
+				Message(
+					parser.errors.join("\n"), 
+					["type", "status", "result"], 
+					"parser", "errors", parser.errors
+				)]);
+	}	
+		           
     auto c = context.share.generate();
             
     foreach(d; dupSearchList)
@@ -694,7 +762,7 @@ string parse(string code, ref DResult result)
         c.suffix.put("if (!_repl_.vars[" ~ index.to!string() ~ "].func) { "
                         "_REPL.dupSearch(*" ~ d ~ ", _repl_.imageBounds[0], _repl_.imageBounds[1], _repl_.keepAlive); }\n");
     }
-                                                     
+
     auto codeOut =
         c.header.data ~
         "string __expressionResult = ``; \n"
@@ -716,10 +784,9 @@ string parse(string code, ref DResult result)
              "if (__expressionResult.length == 0) __expressionResult = `OK`; writeln(__expressionResult);\n") ~
         "}\n" ~ genHeader();
 
-    context.rawCode.append(parser.original, false);
-        
-    result = DResult(true, null);
-    return codeOut;
+    context.rawCode.append(parser.original, false);            
+	parsedCode = codeOut;
+    return Result(Stage.parse, true);
 }
 
 
@@ -727,23 +794,21 @@ string parse(string code, ref DResult result)
 /**
 * Attempt a build command, redirect errout to a text file.
 */
-DResult attempt(string cmd, string codeFilename)
+Result attempt(string cmd, string codeFilename)
 {
     import std.process : system;
     import std.file : exists, readText;
-    
-    auto res = system(cmd ~ " 2> errout.txt");
-
-    if (res != 0)
+      
+    if (system(cmd ~ " 2> errout.txt"))
     {    
-        auto result = DResult(false, "");        
+        auto r = Result(Stage.build, false);        
         auto errFile = context.paths.tempPath ~ "errout.txt";
-        if (exists(errFile))
-            result.message = parseDmdErrorFile(codeFilename, errFile, true);
-        return result;
+        if (exists(errFile))		
+			r.messages = parseDmdErrorFile(codeFilename, errFile, true);            		
+        return r;
     }       
     
-    return DResult(true, null);
+    return Result(Stage.build, true);
 }
 
 
@@ -751,7 +816,7 @@ DResult attempt(string cmd, string codeFilename)
 /**
 * Build a shared lib from supplied code.
 */
-void build(string code, ref DResult result)
+Result build(string code)
 {
     import std.stdio : File; 
     import std.string : join; 
@@ -781,9 +846,10 @@ void build(string code, ref DResult result)
         file.close();
     }
     
-    result = timeIt("build - userMod", buildUserModules());    
-    if (!result.success)
-        return;
+    auto userModResult = timeIt("build - userMod", buildUserModules());    
+	
+    if (!userModResult.success)
+        return userModResult;
         
     auto dirChange = "cd " ~ escapeShellFileName(context.paths.tempPath);
     auto linkFlags = ["-L/NORELOCATIONCHECK", "-L/NOMAP"];   
@@ -798,22 +864,23 @@ void build(string code, ref DResult result)
     
     if (context.userModules.length)    
         cmd ~= context.userModules.map!(a => "-I" ~ a.path)().join(" ");
-            
-    
-    auto buildAttempt = timeIt("build - build", attempt(cmd, context.fullName ~ ".d"));
-        
-    if (!buildAttempt.success)
-    {
-        // If the full build fails, try to get a better error message by compiling the
-        // raw code. (Originally this was done in a background thread along with the
-        // full build, but it adds latency for all code, not just that which is wrong).
-        auto test = timeIt("build - testCompile", testCompile());
-        result.success = false;        
-        result.message = test.length ? test : "Internal error: test compile passed, full build failed. Error follows:\n" ~ buildAttempt.message;                                                           
-        return;
-    }           
 
-    result.success = true;
+	// Try to build the full hacked source
+    auto buildAttempt = timeIt("build - build", attempt(cmd, context.fullName ~ ".d"));
+	
+	if (buildAttempt.success)
+		return buildAttempt;
+        
+    // If the full build fails, try to get a better error message by compiling the
+    // raw code. (Originally this was done in a background thread along with the
+    // full build, but it adds latency for all code, not just that which is wrong).
+    auto testResult = timeIt("build - testCompile", testCompile());        
+		
+	if (!testResult.success)
+		return testResult;
+			
+    auto msg = "Internal error: test compile passed, full build failed. Error follows:\n" ~ buildAttempt.messages.map!(x=>x.toString()).join("\n");                                                           		
+    return Result(Stage.build, false, [Message(msg, ["type", "status", "result"], "", "", msg)]);		                  
 }
 
 
@@ -825,7 +892,7 @@ void build(string code, ref DResult result)
 *   error message string if compilation failed
 *   else an empty string
 */
-string testCompile()
+Result testCompile()
 {
     import std.stdio : File; 
     import std.file : exists, remove;
@@ -844,12 +911,11 @@ string testCompile()
 
     auto dirChange = "cd " ~ escapeShellFileName(context.paths.tempPath);
     auto cmd = dirChange ~ " & dmd -o- -c testCompile.d";
-
-    string result;
-    if (system(cmd ~ " 2> testCompileErrout.txt") != 0 || errFile.exists())
-        result = parseDmdErrorFile(srcFile, errFile, false);
-
-    return result;
+    	
+    if (system(cmd ~ " 2> testCompileErrout.txt") || errFile.exists())	
+		return Result(Stage.build, false, parseDmdErrorFile(srcFile, errFile, false));
+        			
+	return Result(Stage.build, true);    
 }
 
 
@@ -857,7 +923,7 @@ string testCompile()
 /**
 * Rebuild user modules into a lib to link with. Only rebuild files that have changed.
 */
-DResult buildUserModules(bool init = false)
+Result buildUserModules(bool init = false)
 {
     import std.stdio : File;
     import std.string : join;
@@ -884,7 +950,7 @@ DResult buildUserModules(bool init = false)
     }
 
     if (context.userModules.length == 0 && !rebuildLib)
-        return DResult(true, null);
+        return Result(Stage.build, true);
 
     auto allIncludes = context.userModules.map!(a => "-I" ~ a.path)().join(" ");
 
@@ -916,7 +982,7 @@ DResult buildUserModules(bool init = false)
             return buildAttempt;
     }
 
-    return DResult(true, null);
+    return Result(Stage.build, true);
 }
 
 
@@ -944,7 +1010,7 @@ void cleanup()
 /**
 * Load the shared lib, and call the _main function. Free the lib on exit.
 */
-string call(ref DResult result)
+Result call(out string replResult)
 {
     import std.exception;
     import core.memory : GC;   
@@ -954,8 +1020,7 @@ string call(ref DResult result)
     alias extern(C) int function(ref ReplShare) FuncType;
     alias extern(C) void* function() GCFunc;
     
-    context.share.keepAlive = false;
-    string evalResult;   
+    context.share.keepAlive = false;    
     
     version(Windows)
     {        
@@ -981,21 +1046,28 @@ string call(ref DResult result)
     
     if (!lib.loaded)
     {
-        result = DResult(false, "loadError");
-        return evalResult;
+        return Result(Stage.call, false, [
+				Message(
+					"loadError",
+					["type", "status", "result"], 
+					"", "", "loadError"
+				)]);        
     }
        
     version(Windows)
     {
         auto rangeBottom = (lib.getFunction!(GCFunc)("_gcRange"))();
-        GC.removeRange(rangeBottom);     
-        
+        GC.removeRange(rangeBottom);             
         auto funcPtr = lib.getFunction!(FuncType)("_main");
 
         if (funcPtr is null)
-        {
-            result = DResult(false, "Unable to obtain function pointer");
-            return evalResult;
+        {            
+			return Result(Stage.call, false, [
+				Message(
+					"Unable to obtain function pointer",
+					["type", "status", "result"], 
+					"", "", "Unable to obtain function pointer"
+				)]);        
         }
 
         auto res = funcPtr(context.share);       
@@ -1005,12 +1077,12 @@ string call(ref DResult result)
     {
         static assert(false, "Need to implement dabble.repl.call for this platform");
     }
-                    
+      	
     if (exists(context.share.resultFile))
     {
         try
         {
-            evalResult = readText(context.share.resultFile).stripRight();
+            replResult = readText(context.share.resultFile).stripRight();
             remove(context.share.resultFile);
         }
         catch(Exception e) {}
@@ -1028,13 +1100,17 @@ string call(ref DResult result)
         
     if (res == -1)
     {
-        auto e = collectException!Throwable(GC.collect());
-        result = DResult(false, "runtimeError");
-        return evalResult;
+        auto e = collectException!Throwable(GC.collect());        		
+		return Result(Stage.call, false, [
+				Message(
+					"Runtime Error",
+					["type", "status", "result"], 
+					"", "", "Runtime Error"
+				)]); 
+		
     }
-
-    result.success = true;
-    return evalResult;
+    
+	return Result(Stage.call, true);	    			
 }
 
 
@@ -1082,7 +1158,7 @@ string deDereference(string line, bool parens)
 /**
 * Given source code filename and error filename, generate formatted errors
 */
-string parseDmdErrorFile(string srcFile, string errFile, bool dederef)
+Message[] parseDmdErrorFile(string srcFile, string errFile, bool dederef)
 {    
     import std.regex;
     import std.path: baseName;
@@ -1126,7 +1202,10 @@ string parseDmdErrorFile(string srcFile, string errFile, bool dederef)
 
         previousLineNumber = split[1];
     }
-    return result;
+	
+	return [Message(result, ["type", "status", "result"], "build", "error", result)];
+	
+    //return result;
 }
 
 
@@ -1136,25 +1215,10 @@ string parseDmdErrorFile(string srcFile, string errFile, bool dederef)
 */
 private string replPath()
 {
-    version(Windows)
-    {
-        import std.string : join; 
-        import std.array : array; 
-        import std.algorithm : splitter;
-    
-        import core.sys.windows.windows;        
-        import std.path : dirName, dirSeparator;
-                
-        char[100] filename;
-        GetModuleFileNameA(null, filename.ptr, filename.length);
-        auto path = dirName((filename ~ "\0").to!string());
-        
-        return path.splitter(dirSeparator).array()[0..$-1].join(dirSeparator);
-    }
-    else 
-    {
-        static assert(false, "Need to implement replPath!");
-    }
+    import std.string : join;     
+	import std.file : thisExePath;
+	import std.path : dirName, dirSeparator;
+	return dirName(thisExePath()).splitter(dirSeparator).array()[0..$-1].join(dirSeparator);	
 }
 
 

@@ -112,20 +112,6 @@ input {
 }
 
 
-#searchBox {
-  border-radius: 5px;
-  padding-left: 5px;
-  line-height:2em;
-  border: 0px;
-  font: inherit;  
-  color: white;
-  background-color: transparent;
-  box-shadow: 0 0 10px rgba(27, 224, 211, 1);
-  -webkit-box-shadow: 0 0 10px rgba(27, 224, 211, 1); 
-  -moz-box-shadow: 0 0 10px rgba(27, 224, 211, 1);
-}
-
-
 #prompt {
   text-align: middle;
   float: left;
@@ -158,6 +144,24 @@ input {
 #logo {
   margin-right: -.3em;        
   margin-bottom: -.3em;
+}
+
+
+#search-box {
+  border-radius: 5px;
+  padding-left: 5px;
+  line-height:2em;
+  border: 0px;
+  font: inherit;  
+  color: white;
+  background-color: transparent;
+  box-shadow: 0 0 10px rgba(27, 224, 211, 1);
+  -webkit-box-shadow: 0 0 10px rgba(27, 224, 211, 1); 
+  -moz-box-shadow: 0 0 10px rgba(27, 224, 211, 1);
+}
+
+#ajax-loader {	
+	visibility: hidden;
 }
 
 
