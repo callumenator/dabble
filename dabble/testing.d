@@ -20,7 +20,7 @@ void expect(string code, string expected)
     import std.string : strip; 
     
     auto res = eval(code);
-	assert(res[1].stage == Stage.call && res[1].success);		        
+	assert(res[1] == Stage.call);		        
 	assert(strip(res[0]) == strip(expected), res[0]);	    
 }
 
@@ -38,7 +38,7 @@ void run(string[] code)
     {
         writeln("Line: ", i, " -> ", c);
         auto res = evaluate(c);
-		assert(res[1].stage == Stage.call);		                
+		assert(res[1] == Stage.call);		                
         writeln(res[0]);
     }    
     
@@ -118,7 +118,7 @@ void libTest()
     { 
         writeln(i); 
         auto res = eval(i);
-		assert(res[1].stage == Stage.call && res[1].success);		        
+		assert(res[1] == Stage.call);		        
     }
     
     test("import std.typecons;");

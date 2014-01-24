@@ -10,82 +10,47 @@ Authors:   Callum Anderson
 
 module dabble.repl;
 
-import 
-	std.range, 
-	std.variant, 
-	std.algorithm; 
-	
+import
+	std.range,
+	std.conv,
+	std.variant,
+	std.algorithm;
+
 import std.typecons : Tuple, tuple;
 import std.stdio : writeln;
-    
-import    
+
+import
     dabble.parser,
     dabble.sharedlib,
     dabble.util,
     dabble.defs,
-    dabble.grammars;   
+    dabble.grammars;
 
 enum Stage
-{	
+{
 	none,
-	meta, 
-	parse, 
-	build,	
-	call	
+	meta,
+	parse,
+	build,
+	call
 }
 
 bool consoleSession = true;
 Tuple!(string,"stage",long,"msecs")[] timings;
 
-private 
+private
 {
-    SharedLib[] keepAlive;    
+    SharedLib[] keepAlive;
     ReplContext context;
-    DabbleParser parser;    
+    DabbleParser parser;
 }
-
-
 
 shared static this()
 {
     context.init();
-    parser = new DabbleParser;      
+    parser = new DabbleParser;
 }
 
-
-struct Result
-{
-	Stage stage;
-	bool success;
-	Message[] messages;
-	
-	string toString()
-	{
-		return messages.map!(m => m.toString()).join("\n");
-	}
-}
-
-struct Message
-{
-	string summary;
-	string[] fields;
-	Variant[] values;
-	
-	this(T...)(string summ, string[] flds, T vals)
-	{
-		summary = summ;
-		fields = flds;
-		foreach(v; vals)		
-			values ~= Variant(v);							
-	}
-
-	string toString()
-	{		
-		auto toStr = (Variant v) => v.type == typeid(string) ? `"` ~ v.get!string ~ `"` : v.to!string;	
-		return consoleSession ? summary : 
-			"{" ~ zip(fields, values).map!( t => `"` ~ t[0] ~ `":` ~ toStr(t[1]) ).join(",") ~ "}";		
-	}	
-}
 
 
 
@@ -95,7 +60,7 @@ struct Message
 enum Debug
 {
     none        = 0x00, /// no debug output
-    times       = 0x01, /// display time to parse, build and call    
+    times       = 0x01, /// display time to parse, build and call
     parseOnly   = 0x04, /// show parse tree and return
 }
 
@@ -104,9 +69,9 @@ enum Debug
 /**
 * Add a debug level to the session.
 */
-void addDebugLevel(Debug level) in { assert(context.initalized, "Context not initalized"); } body 
-{    
-    context.debugLevel |= level;    
+void addDebugLevel(Debug level) in { assert(context.initalized, "Context not initalized"); } body
+{
+    context.debugLevel |= level;
 }
 
 
@@ -114,9 +79,9 @@ void addDebugLevel(Debug level) in { assert(context.initalized, "Context not ini
 /**
 * Set the debug level to the session.
 */
-void setDebugLevel(uint level) in { assert(context.initalized, "Context not initalized"); } body 
-{    
-    context.debugLevel = level;  
+void setDebugLevel(uint level) in { assert(context.initalized, "Context not initalized"); } body
+{
+    context.debugLevel = level;
 }
 
 
@@ -125,7 +90,7 @@ void setDebugLevel(uint level) in { assert(context.initalized, "Context not init
 * Reset the repl session
 */
 void resetSession()
-{    
+{
     context.reset();
 }
 
@@ -142,35 +107,35 @@ void loop()
 
     assert(context.initalized, "Context not initalized");
 
-    if (consoleSession) 
+    if (consoleSession)
         clearScreen();
-    
-    writeln(title()); 
-              
-    if (consoleSession) 
-        write(prompt()); 
-   
+
+    writeln(title());
+
+    if (consoleSession)
+        write(prompt());
+
     stdout.flush();
-	char[] inBuffer, codeBuffer;    
+	char[] inBuffer, codeBuffer;
     stdin.readln(inBuffer);
-    
+
     while (strip(inBuffer) != "exit")
     {
-        auto r = eval(inBuffer, codeBuffer);                        				
-		writeln( consoleSession ? "=> " : "", r[0].length ? r[0] : r[1].toString());
-                        
-        version(none) 
+        auto r = eval(inBuffer, codeBuffer);		
+		writeln( consoleSession ? "=> " : "", r[0]);
+
+        version(none)
         {
-            if (context.debugLevel & Debug.times)        
-                result[1] ~= "Timings:\n" ~ timings.map!( x => text("  ",x.stage," - ",x.msecs) )().join("\n") ~ "\n";                                
+            if (context.debugLevel & Debug.times)
+                result[1] ~= "Timings:\n" ~ timings.map!( x => text("  ",x.stage," - ",x.msecs) )().join("\n") ~ "\n";
         }
-        
-        if (consoleSession) 
-            write(prompt()); 
-        
-        stdout.flush();  
+
+        if (consoleSession)
+            write(prompt());
+
+        stdout.flush();
         stdin.readln(inBuffer);
-    }    
+    }
     return;
 }
 
@@ -180,9 +145,9 @@ void loop()
 * Free any shared libs that were kept alive.
 */
 void onExit()
-{   
-    import std.array : empty, front, popFront; 
-    
+{
+    import std.array : empty, front, popFront;
+
     while(!keepAlive.empty)
     {
         debug { writeln("Free'ing lib: ", keepAlive.front.filename); }
@@ -197,7 +162,7 @@ void onExit()
 * Evaluate code in the context of the supplied ReplContext. This version assumes
 * inBuffer does not contain multiline input.
 */
-Tuple!(string, Result) eval(const char[] inBuffer)
+Tuple!(string, Stage) eval(const char[] inBuffer)
 {
     char[] dummyBuffer;
     return eval(inBuffer, dummyBuffer);
@@ -208,32 +173,29 @@ Tuple!(string, Result) eval(const char[] inBuffer)
 /**
 * Evaluate code in the context of the supplied ReplContext.
 */
-Tuple!(string, Result) eval(const char[] inBuffer, ref char[] codeBuffer)
+Tuple!(string, Stage) eval(const char[] inBuffer, ref char[] codeBuffer)
 {
-    import std.string : strip, stripRight, toLower;             
+    import std.string : strip, stripRight, toLower;
 
     assert(context.initalized, "Context not initalized");
-    
+
     timings.clear();
-    Tuple!(string, Result) result;
-            
+	Tuple!(string, Stage) result;
     bool multiLine = codeBuffer.length > 0;
     char[] newInput = strip(inBuffer.dup);
 
     if (newInput.toLower() == "exit")
         return result;
-    
-	result[1] = handleMetaCommand(newInput, codeBuffer);
-	
-	if (result[1].success)
-		return result;
-	
+
+	if (handleMetaCommand(newInput, codeBuffer))
+		return tuple("", Stage.meta);
+
     if (newInput.length > 0)
     {
-        codeBuffer ~= inBuffer ~ "\n";         
+        codeBuffer ~= inBuffer ~ "\n";
         auto balanced = Balanced.test(codeBuffer.to!string());
         auto braceCount = Balanced.braceCount;
-        
+
         // TODO: Need to handle things like: a = 5; print a <- note no trailing ';' but 0 braces
 
         if (!multiLine && balanced && newInput[$-1] == ';')
@@ -252,7 +214,6 @@ Tuple!(string, Result) eval(const char[] inBuffer, ref char[] codeBuffer)
             }
         }
     }
-        
     return result;
 }
 
@@ -262,31 +223,31 @@ Tuple!(string, Result) eval(const char[] inBuffer, ref char[] codeBuffer)
 * Raw code, for better error messages.
 */
 struct RawCode
-{   
-    import std.algorithm, std.range;        
-    
-    struct Entry 
-    { 
-        bool valid; 
-        string code; 
-    }    
-    
+{
+    import std.algorithm, std.range;
+
+    struct Entry
+    {
+        bool valid;
+        string code;
+    }
+
     Entry[] _header, _body;
-        
+
     void append(string s, bool global)
     {
-        if (global)        
-            _header ~= Entry(false, s);                    
-        else        
-            _body ~= Entry(false, s);                    
+        if (global)
+            _header ~= Entry(false, s);
+        else
+            _body ~= Entry(false, s);
     }
-    
+
     void fail()
-    {        
+    {
         _header = _header.filter!(x => x.valid)().array();
-        _body = _body.filter!(x => x.valid)().array();               
+        _body = _body.filter!(x => x.valid)().array();
     }
-    
+
     void pass()
     {
         foreach(ref i; _header)
@@ -298,7 +259,7 @@ struct RawCode
     void reset()
     {
         _header.clear();
-        _body.clear();        
+        _body.clear();
     }
 
     /**
@@ -306,10 +267,10 @@ struct RawCode
     */
     string toString()
     {
-        import std.string : join; 
-        auto autoImports = "import std.traits, std.stdio, std.range, std.algorithm, std.conv;\n";  
-        return autoImports ~ 
-               _header.map!( x => x.code )().join("\n") ~ "\nvoid main() {\n" ~ 
+        import std.string : join;
+        auto autoImports = "import std.traits, std.stdio, std.range, std.algorithm, std.conv;\n";
+        return autoImports ~
+               _header.map!( x => x.code )().join("\n") ~ "\nvoid main() {\n" ~
                _body.map!( x => x.code )().join("\n") ~ "\n}";
     }
 }
@@ -320,58 +281,57 @@ struct RawCode
 * REPL state.
 */
 struct ReplContext
-{            
+{
     uint count = 0;
     RawCode rawCode;
     ReplShare share;
-    string vtblFixup;        
+    string vtblFixup;
     uint debugLevel = Debug.none;
-    
+
     Tuple!(string,"filename",string,"tempPath") paths;
     Tuple!(string,"path",string,"name",long,"modified")[] userModules;
- 
+
     private bool _initalized = false;
-     
+
     @property bool initalized()
     {
         return _initalized;
     }
-     
+
     @property string filename()
     {
         return paths.filename ~ count.to!string();
     }
-    
+
     @property string fullName()
     {
         import std.path : dirSeparator;
         return paths.tempPath ~ dirSeparator ~ filename;
     }
-        
+
     void init()
     {
         import std.path : dirSeparator;
         import std.file : readText, exists;
-        
+
         paths.filename = "repl";
-        paths.tempPath = getTempDir() ~ dirSeparator;        
+        paths.tempPath = getTempDir() ~ dirSeparator;
         debugLevel = debugLevel;
         share.gc = gc_getProxy();
         share.resultFile = paths.tempPath ~ "__dabbleTemp";
-
         share.init();
-        
-        auto build = buildUserModules(true);
-        if (!build.success)
-            throw new Exception("Unable to build defs.d, " ~ build.messages.map!(x => x.toString()).join("\n"));
+
+		DMDMessage[] errors;
+        if (!buildUserModules(errors, true))
+            throw new Exception("Unable to build defs.d, " ~ errors.map!(x => text(x.sourceCode, ":", x.errorMessage)).join("\n"));
 
         _initalized = true;
     }
-    
+
     void reset()
-    {        
+    {
         rawCode.reset();
-        share.reset();        
+        share.reset();
         userModules.clear();
         vtblFixup.clear();
     }
@@ -383,8 +343,8 @@ struct ReplContext
 * Return a command-input prompt.
 */
 string prompt()
-{ 
-    return ": "; 
+{
+    return ": ";
 }
 
 
@@ -406,23 +366,23 @@ string title()
 * See if the given buffer contains meta commands, commands which are interpreted directly
 * and do not trigger recompilation.
 */
-Result handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer)                       
+bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer)
 {
     import std.conv : text;
     import std.process : system;
-    import std.string : join; 
-    import std.algorithm : canFind, map, find;     
-    import std.range : array, front, empty; 
+    import std.string : join;
+    import std.algorithm : canFind, map, find;
+    import std.range : array, front, empty;
 
 	auto origCommand = inBuffer.to!string();
     auto parse = MetaParser.decimateTree(MetaParser(origCommand));
-    
-    if (!parse.successful) 
-        return Result(Stage.meta, false);
+
+    if (!parse.successful)
+        return false;
 
     parse = parse.children[0];
     auto cmd = parse.children[0].matches[0];
-    
+
     string[] args;
     if (parse.children.length == 2)
     {
@@ -434,93 +394,73 @@ Result handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer)
                 args[i] = p.matches[0];
         }
     }
-        
+
     alias T = Tuple!(string, Operation[]);
-    
+
     /** Value print helper **/
     string printValue(T p)
-    {        
+    {
         auto v = context.share.vars.find!((a,b) => a.name == b)(p[0]);
-        if (v.empty) return "";          
-        return  v.front.ty !is null ? 
-            v.front.ty.valueOf(p[1], v.front.addr, context.share.map) : 
-                v.front.func ? v.front.init : "";                
+        if (v.empty) return "";
+        return  v.front.ty !is null ?
+            v.front.ty.valueOf(p[1], v.front.addr, context.share.map) :
+                v.front.func ? v.front.init : "";
     }
-    
+
     /** Type print helper **/
     string printType(T p)
     {
         auto v = context.share.vars.find!((a,b) => a.name == b)(p[0]);
-        if (v.empty) return "";          
-        if (v.front.ty is null) return v.front.displayType;          
+        if (v.empty) return "";
+        if (v.front.ty is null) return v.front.displayType;
         auto t = v.front.ty.typeOf(p[1], context.share.map);
-        return t[1].length ? t[1] : t[0].toString();        
+        return t[1].length ? t[1] : t[0].toString();
     }
-    
-	/**
-	{
-		"type":"meta",
-		"data":{"command":"title",
-				"result":...}
-	}
-	**/
+
+	string summary, jsonstr;
 
     switch(cmd)
     {
         case "version":
-        {	
-			return Result(Stage.meta, true, [Message(title(), ["type", "cmd", "result"], "meta", "version", title())]);            
+        {
+			summary = title();
+			jsonstr = json(tuple("id","meta","cmd","version","data",title()));
+			break;
         }
         case "print": with(context.share)
-        {											
-            if (args.length == 0 || canFind(args, "all")) // print all vars   
+        {
+            if (args.length == 0 || canFind(args, "all")) // print all vars
 			{
-				return Result(Stage.meta, true, [
-						Message(
-							vars.map!(v => text(v.name, " (", v.displayType, ") = ", printValue(T(v.name,[])))).join("\n"),
-							["type", "cmd", "result"], 
-							"meta", "print", vars.map!(v => Message("", ["name", "type", "value"], v.name, v.displayType, printValue(T(v.name,[])))).array
-						)]);
-			}												
-            else if (args.length == 1 && args[0] == "__keepAlive")                         
+				summary = vars.map!(v => text(v.name, " (", v.displayType, ") = ", printValue(T(v.name,[])))).join("\n");
+				jsonstr = json(tuple("id", "meta", "cmd", "print",
+							   "data", vars.map!(v => tuple("name", v.name, "type", v.displayType, "value", printValue(T(v.name,[])))).array));
+			}
+            else if (args.length == 1 && args[0] == "__keepAlive")
 			{
-				return Result(Stage.meta, true, [
-						Message(
-							"SharedLibs still alive:" ~ .keepAlive.map!(a => a.to!string())().join("\n"),
-							["type", "cmd", "result"], 
-							"meta", "__keepAlive", .keepAlive.map!(a => a.to!string()).array
-						)]);
-			}                
-            else // print selected symbols            
+				summary = "SharedLibs still alive:" ~ .keepAlive.map!(a => a.to!string()).join("\n");
+				jsonstr = json(tuple("id", "meta", "cmd", "__keepAlive", "data", .keepAlive.map!(a => a.to!string()).array));
+			}
+            else // print selected symbols
 			{
-				return Result(Stage.meta, true, [
-						Message(
-							args.map!(a => printValue(parseExpr(a))).join("\n"), 
-							["type", "cmd", "result"], 
-							"meta", "print", args.map!(a => printValue(parseExpr(a))).array
-						)]);
-			}                        
+				summary = args.map!(a => printValue(parseExpr(a))).join("\n");
+				jsonstr = json(tuple("id", "meta", "cmd", "print", "data", args.map!(a => printValue(parseExpr(a))).array));
+			}
+			break;
         }
         case "type": with(context.share)
         {
-            if (args.length == 0 || canFind(args, "all")) // print types of all vars            
+            if (args.length == 0 || canFind(args, "all")) // print types of all vars
 			{
-				return Result(Stage.meta, true, [
-						Message(
-							vars.map!(v => text(v.name, " ") ~ printType(T(v.name,[])))().join("\n"), 
-							["type", "cmd", "result"], 
-							"meta", "print", vars.map!(v => Message("", ["name", "type"], v.name, printType(T(v.name,[])))).array
-						)]);
-			}                
-            else 
-			{	
-				return Result(Stage.meta, true, [
-						Message(
-							args.map!(a => printType(parseExpr(a))).join("\n"), 
-							["type", "cmd", "result"], 
-							"meta", "print", args.map!(a => printType(parseExpr(a))).array
-						)]);
-			}            
+				summary = vars.map!(v => text(v.name, " ") ~ printType(T(v.name,[]))).join("\n");
+				jsonstr = json(tuple("id", "meta", "cmd", "type",
+						 	   "data", vars.map!(v => tuple("name", v.name, "type", printType(T(v.name,[])))).array));
+			}
+            else
+			{
+				summary = args.map!(a => printType(parseExpr(a))).join("\n");
+				jsonstr = json(tuple("id", "meta", "cmd", "type", "data", args.map!(a => printType(parseExpr(a))).array));
+			}
+			break;
         }
         case "reset":
         {
@@ -528,63 +468,63 @@ Result handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer)
             {
                 context.reset();
                 keepAlive.clear();
-				return Result(Stage.meta, true, [Message("Session reset", ["type", "cmd", "result"], "meta", "reset session", "Session reset")]);
+				summary = "Session reset";
+				jsonstr = json(tuple("id", "meta", "cmd", "reset session", "data", "Session reset"));
             }
             break;
         }
         case "delete":
-        {                
-            foreach(a; args)            
+        {
+            foreach(a; args)
                 context.share.deleteVar(a);
-            break;            
+            break;
         }
         case "use":
         {
             import std.file : exists;
-            import std.range : ElementType; 
-            import std.path : dirName, baseName; 
-            import std.datetime : SysTime;            
+            import std.range : ElementType;
+            import std.path : dirName, baseName;
+            import std.datetime : SysTime;
             alias ElementType!(typeof(context.userModules)) TupType;
 
-			auto r = Result(Stage.meta, true);
-			
+			string[] msg;
+
             foreach(a; args)
             {
                 if (exists(a))
                     context.userModules ~= TupType(dirName(a), baseName(a), SysTime(0).stdTime());
                 else
-				{
-					r.messages ~= Message(
-									text("Error: module ", a, " could not be found\n"), 
-									["type", "cmd", "result"], 
-									"meta", "use", text("Error: module ", a, " could not be found\n")
-									);
-				}
+					msg ~= text("Error: module ", a, " could not be found");
             }
-			return r;			            
+
+			summary = msg.join("\n");
+			jsonstr = json(tuple("id", "meta", "cmd", "use", "data", msg));
+			break;
         }
         case "clear":
         {
             if (args.length == 0)
-            {
                 clearScreen();
-				return Result(Stage.meta, true, [Message(title() ~ "\n", ["type", "cmd", "result"], "meta", "clear", title())]);
-            }
             else if (args.length == 1 && args[0] == "buffer")
-			{
                 codeBuffer.clear();
-				return Result(Stage.meta, true, [Message("", ["type", "cmd", "result"], "meta", "clear code buffer", "")]);
-			}
             break;
         }
-        case "debug on": foreach(arg; args) setDebugLevelFromString!"on"(arg); break;
-        case "debug off": foreach(arg; args) setDebugLevelFromString!"off"(arg); break;
-        default: return Result(Stage.meta, false);
+        case "debug on":
+			foreach(arg; args)
+				setDebugLevelFromString!"on"(arg);
+			break;
+        case "debug off":
+			foreach(arg; args)
+				setDebugLevelFromString!"off"(arg);
+			break;
+        default:
+			return false;
     }
 
-    // If we got to here, we successfully parsed a meta command, so clear the code buffer    
-    codeBuffer.clear();
-    return Result(Stage.meta, true);
+    // If we got to here, we successfully parsed a meta command, so clear the code buffer
+	writeln(consoleSession ? summary : jsonstr);
+	codeBuffer.clear();
+    return true;
 }
 
 
@@ -598,7 +538,7 @@ void clearScreen()
 
     if (!consoleSession)
         return;
-    
+
     version(Windows)
     {
         system("cls");
@@ -631,7 +571,7 @@ void setDebugLevelFromString(string s)(string level)
     switch(toLower(level))
     {
         case "times": goto case "showtimes";
-        case "showtimes": mixin(op ~ "Debug.times;"); break;                
+        case "showtimes": mixin(op ~ "Debug.times;"); break;
         case "parseonly": mixin(op ~ "Debug.parseOnly;"); break;
         default: break;
     }
@@ -646,11 +586,11 @@ auto timeIt(E)(string stage, lazy E expr)
     sw.start();
     static if (is(typeof(expr) == void))
         expr;
-    else 
+    else
         auto result = expr;
     sw.stop();
     timings ~= Tuple!(string,"stage",long,"msecs")(stage, sw.peek().msecs());
-    
+
     static if (!is(typeof(expr) == void))
         return result;
 }
@@ -660,104 +600,108 @@ auto timeIt(E)(string stage, lazy E expr)
 /**
 * Evaluate code in the context of the supplied ReplContext.
 */
-Tuple!(string, Result) evaluate(string code)
-{    
+Tuple!(string, Stage) evaluate(string code)
+{
     import std.typecons : Tuple;
     import std.conv : to, text;
-    import std.string : join; 
-    import std.algorithm : map; 
-            
+    import std.string : join;
+    import std.algorithm : map;
+
 	string parsedCode = "";
-    auto parseResult = timeIt("parse (total)", parse(code, parsedCode));
-	
-	if (!parseResult.success)
-	{		
+	if (!timeIt("parse (total)", parse(code, parsedCode)))
+	{
         context.share.prune();
-        context.rawCode.fail();    
-        return tuple("", parseResult);
+        context.rawCode.fail();
+        return tuple("", Stage.parse);
     }
-	
+
 	if (!parsedCode.length)
-		assert(false); /** return Result(Stage.parse, true); **/
-        
+		assert(false);
+
     if (context.debugLevel & Debug.parseOnly)
-    {        		
-        return tuple("", Result(Stage.parse, true, [Message(parsedCode, 
-					["type", "status", "result"], "evaluate", "parseOnly", parsedCode)]));
+    {
+		auto summary = "Parse only:\n" ~ parsedCode;
+		consoleSession ? writeln(summary) :
+			writeln(json(tuple("id", "parse-parseOnly", "result", parsedCode)));
+		return tuple("", Stage.parse);
     }
-    
-    auto buildResult = timeIt("build (total)", build(parsedCode));
-    
-    if (!buildResult.success)
+
+    if (!timeIt("build (total)", build(parsedCode)))
     {
         context.share.prune();
-        context.rawCode.fail();        
-        return tuple("", buildResult);
+        context.rawCode.fail();
+        return tuple("", Stage.build);
     }
-        
+
 	string replResult;
-    auto callResult = timeIt("call (total)", call(replResult));   
-	
+    auto callResult = timeIt("call (total)", call(replResult));
     context.share.prune();
     context.rawCode.pass();
-	hookNewClass(typeid(Object) /** dummy **/, null /** dummy **/, &context, !callResult.success);    
-	      
-    return tuple(replResult, callResult);
+
+	hookNewClass(typeid(Object) /** dummy **/, null /** dummy **/, &context, !callResult);
+
+	if (!callResult)
+    {
+		auto summary = "Internal error: " ~ replResult;
+		consoleSession ? writeln(summary) :
+			writeln(json(tuple("id", "call-internal-error", "error", replResult)));
+		return tuple("", Stage.call);
+    }
+
+    return tuple(replResult, Stage.call);
 }
 
 
 
-Result parse(string code, out string parsedCode)
-{ 
-    import std.algorithm : canFind, countUntil; 
+bool parse(string code, out string parsedCode)
+{
+    import std.algorithm : canFind, countUntil;
     import std.conv : text;
-    import std.string : join; 
-             
+    import std.string : join;
+
     string[] dupSearchList;
-   
-    /** Handlers for the parser **/    
-        void newVariable(string name, string type, string init, string source) 
+
+    /** Handlers for the parser **/
+        void newVariable(string name, string type, string init, string source)
         {
             if (context.share.vars.canFind!((a,b) => (a.name == b))(name))
-            {                 
-                parser.errors ~= "Error: redifinition of " ~ name ~ " not allowed";                                            
+            {
+                parser.errors ~= "Error: redifinition of " ~ name ~ " not allowed";
                 return;
             }
-                    
-            context.rawCode.append(source, false);            
+
+            context.rawCode.append(source, false);
             context.share.vars ~= Var(name, type, init);
-            dupSearchList ~= name;       
+            dupSearchList ~= name;
         }
-            
+
         void newDeclaration(bool global, string type, string source)
         {
             context.rawCode.append(source, global);
-            context.share.decls ~= Decl(source, global);   
+            context.share.decls ~= Decl(source, global);
         }
-        
+
         bool redirectVar(string name)
         {
             return context.share.vars.canFind!((a,b) => (a.name == b))(name);
         }
      /** ----------------------- **/
-    
+
     auto source = parser.parse(code, &redirectVar, &newDeclaration, &newVariable);
-    
+
     if (parser.errors.length != 0)
 	{
-		return Result(Stage.parse, false, [
-				Message(
-					parser.errors.join("\n"), 
-					["type", "status", "result"], 
-					"parser", "errors", parser.errors
-				)]);
-	}	
-		           
+		auto summary = text("Parser error", parser.errors.length > 1 ? "s:" : ":", parser.errors.join("\n"));
+		consoleSession ? writeln(summary) :
+			writeln(json(tuple("id", "parse-error", "errors", parser.errors)));
+		return false;
+	}
+
     auto c = context.share.generate();
-            
+
     foreach(d; dupSearchList)
-    {                   
-        auto index = context.share.vars.countUntil!( (a,b) => a.name == b )(d);                    
+    {
+        auto index = context.share.vars.countUntil!( (a,b) => a.name == b )(d);
         assert(index >= 0, "Parser: undefined var in string dups");
         c.suffix.put("if (!_repl_.vars[" ~ index.to!string() ~ "].func) { "
                         "_REPL.dupSearch(*" ~ d ~ ", _repl_.imageBounds[0], _repl_.imageBounds[1], _repl_.keepAlive); }\n");
@@ -768,7 +712,7 @@ Result parse(string code, out string parsedCode)
         "string __expressionResult = ``; \n"
         "\n\nexport extern(C) int _main(ref _REPL.ReplShare _repl_)\n"
         "{\n"
-        "    import std.exception, std.stdio;\n"        
+        "    import std.exception, std.stdio;\n"
         "    gc_setProxy(_repl_.gc);\n"
         "    auto saveOut = stdout;\n"
         "    scope(exit) { stdout = saveOut; } \n"
@@ -780,35 +724,34 @@ Result parse(string code, out string parsedCode)
 
         "void _main2(ref _REPL.ReplShare _repl_)\n"
         "{\n" ~
-        text(context.vtblFixup, c.prefix.data, source, c.suffix.data, 
+        text(context.vtblFixup, c.prefix.data, source, c.suffix.data,
              "if (__expressionResult.length == 0) __expressionResult = `OK`; writeln(__expressionResult);\n") ~
         "}\n" ~ genHeader();
 
-    context.rawCode.append(parser.original, false);            
+    context.rawCode.append(parser.original, false);
 	parsedCode = codeOut;
-    return Result(Stage.parse, true);
+    return true;
 }
 
 
 
 /**
 * Attempt a build command, redirect errout to a text file.
+* Returns: array of tuples containing (source line, error message)
 */
-Result attempt(string cmd, string codeFilename)
+bool attempt(string cmd, string codeFilename, out DMDMessage[] errors)
 {
     import std.process : system;
     import std.file : exists, readText;
-      
+
     if (system(cmd ~ " 2> errout.txt"))
-    {    
-        auto r = Result(Stage.build, false);        
+    {
         auto errFile = context.paths.tempPath ~ "errout.txt";
-        if (exists(errFile))		
-			r.messages = parseDmdErrorFile(codeFilename, errFile, true);            		
-        return r;
-    }       
-    
-    return Result(Stage.build, true);
+        if (exists(errFile))
+			errors = parseDmdErrorFile(codeFilename, errFile, true);
+		return false;
+    }
+    return true;
 }
 
 
@@ -816,21 +759,21 @@ Result attempt(string cmd, string codeFilename)
 /**
 * Build a shared lib from supplied code.
 */
-Result build(string code)
+bool build(string code)
 {
-    import std.stdio : File; 
-    import std.string : join; 
-    import std.algorithm : map; 
+    import std.stdio : File;
+    import std.string : join;
+    import std.algorithm : map;
     import std.file : exists, readText;
     import std.path : dirSeparator;
     import std.process : system, escapeShellFileName;
     import std.parallelism;
     import core.thread;
     import std.conv : text;
-                
-    auto file = File(context.fullName ~ ".d", "w");    
+
+    auto file = File(context.fullName ~ ".d", "w");
     timeIt("build - write", file.write(code));
-    file.close();           
+    file.close();
 
     if (!exists(context.fullName ~ ".def"))
     {
@@ -845,42 +788,52 @@ Result build(string code)
         file.write(def);
         file.close();
     }
-    
-    auto userModResult = timeIt("build - userMod", buildUserModules());    
-	
-    if (!userModResult.success)
-        return userModResult;
-        
-    auto dirChange = "cd " ~ escapeShellFileName(context.paths.tempPath);
-    auto linkFlags = ["-L/NORELOCATIONCHECK", "-L/NOMAP"];   
-    auto dmdFlags = ["-shared"];
-    
-    debug
+
+	DMDMessage[] errors;
+
+    if (!timeIt("build - userMod", buildUserModules(errors)))
     {
-        dmdFlags ~= ["-debug"];
-    } 
-                                             
-    string cmd = text(dirChange," & dmd ",dmdFlags.join(" ")," ",linkFlags.join(" ")," ",context.filename,".d ",context.filename,".def extra.lib");                               
-    
-    if (context.userModules.length)    
+		auto summary = "Failed building user modules: errors follow:\n" ~ errors.map!(e => e.toStr()).join("\n");					
+		consoleSession ? writeln(summary) :
+			writeln(json(tuple("id", "build-error-usermod", "summary", summary, "data", 
+				errors.map!(e => e.toTup()).array)));
+	}
+
+    auto dirChange = "cd " ~ escapeShellFileName(context.paths.tempPath);
+    auto linkFlags = ["-L/NORELOCATIONCHECK", "-L/NOMAP"];
+    auto dmdFlags = ["-shared"];
+    debug dmdFlags ~= ["-debug"];
+
+    string cmd = text(dirChange," & dmd ",dmdFlags.join(" ")," ",linkFlags.join(" ")," ",context.filename,".d ",context.filename,".def extra.lib");
+
+    if (context.userModules.length)
         cmd ~= context.userModules.map!(a => "-I" ~ a.path)().join(" ");
 
 	// Try to build the full hacked source
-    auto buildAttempt = timeIt("build - build", attempt(cmd, context.fullName ~ ".d"));
-	
-	if (buildAttempt.success)
-		return buildAttempt;
-        
+	if (timeIt("build - build", attempt(cmd, context.fullName ~ ".d", errors)))
+		return true;
+
     // If the full build fails, try to get a better error message by compiling the
     // raw code. (Originally this was done in a background thread along with the
     // full build, but it adds latency for all code, not just that which is wrong).
-    auto testResult = timeIt("build - testCompile", testCompile());        
-		
-	if (!testResult.success)
-		return testResult;
+	auto fullBuildErrors = errors;
+	if (timeIt("build - testCompile", testCompile(errors)))
+	{
+		auto summary = "Internal error: test compile passed, full build failed. Error follows:\n" ~ 
+			fullBuildErrors.map!(e => e.toStr()).join("\n");
 			
-    auto msg = "Internal error: test compile passed, full build failed. Error follows:\n" ~ buildAttempt.messages.map!(x=>x.toString()).join("\n");                                                           		
-    return Result(Stage.build, false, [Message(msg, ["type", "status", "result"], "", "", msg)]);		                  
+		consoleSession ? writeln(summary) :
+			writeln(json(tuple("id", "build-error-internal", "summary", summary, "data", 
+				fullBuildErrors.map!(e => e.toTup()).array)));
+	}
+	else
+	{		
+		auto summary = errors.map!(e => e.toStr()).join("\n");					
+		consoleSession ? writeln(summary) :
+			writeln(json(tuple("id", "build-error", "summary", summary, "data", 
+				errors.map!(e => e.toTup()).array)));
+	}
+	return false;
 }
 
 
@@ -892,9 +845,9 @@ Result build(string code)
 *   error message string if compilation failed
 *   else an empty string
 */
-Result testCompile()
+bool testCompile(out DMDMessage[] errors)
 {
-    import std.stdio : File; 
+    import std.stdio : File;
     import std.file : exists, remove;
     import std.process : system, escapeShellFileName;
 
@@ -905,17 +858,19 @@ Result testCompile()
     rawFile.write(context.rawCode.toString());
     rawFile.close();
 
-    if (errFile.exists()) {
+    if (errFile.exists())
         try { errFile.remove(); } catch(Exception e) {}
-    }
 
     auto dirChange = "cd " ~ escapeShellFileName(context.paths.tempPath);
     auto cmd = dirChange ~ " & dmd -o- -c testCompile.d";
-    	
-    if (system(cmd ~ " 2> testCompileErrout.txt") || errFile.exists())	
-		return Result(Stage.build, false, parseDmdErrorFile(srcFile, errFile, false));
-        			
-	return Result(Stage.build, true);    
+
+    if (system(cmd ~ " 2> testCompileErrout.txt"))
+	{
+		if (errFile.exists())
+			errors = parseDmdErrorFile(srcFile, errFile, false);
+		return false;
+	}
+	return true;
 }
 
 
@@ -923,11 +878,11 @@ Result testCompile()
 /**
 * Rebuild user modules into a lib to link with. Only rebuild files that have changed.
 */
-Result buildUserModules(bool init = false)
+bool buildUserModules(out DMDMessage[] errors, bool init = false)
 {
     import std.stdio : File;
     import std.string : join;
-    import std.algorithm : findSplitAfter, map; 
+    import std.algorithm : findSplitAfter, map;
     import std.datetime : SysTime, getTimes;
     import std.path : dirSeparator, stripExtension;
     import std.file : getTimes, readText, getcwd, copy;
@@ -935,22 +890,21 @@ Result buildUserModules(bool init = false)
     bool rebuildLib = false;
 
     if (init) // Compile defs.d
-    {        
-        rebuildLib = true;                
+    {
+        rebuildLib = true;
         auto text = "module defs;\n"
                   ~ readText(replPath() ~ "/dabble/defs.d").findSplitAfter("module dabble.defs;")[1];
 
         auto f = File(context.paths.tempPath ~ "defs.d", "w");
         f.write(text);
-        f.close();                        
-        
-        auto initAttempt = attempt("cd " ~ context.paths.tempPath ~ " & dmd -c -release -noboundscheck -O defs.d", context.paths.tempPath ~ "defs.d");
-        if (!initAttempt.success)
-            return initAttempt;
+        f.close();
+
+        if (!attempt("cd " ~ context.paths.tempPath ~ " & dmd -c -release -noboundscheck -O defs.d", context.paths.tempPath ~ "defs.d", errors))
+			return false;
     }
 
     if (context.userModules.length == 0 && !rebuildLib)
-        return Result(Stage.build, true);
+        return true;
 
     auto allIncludes = context.userModules.map!(a => "-I" ~ a.path)().join(" ");
 
@@ -960,29 +914,26 @@ Result buildUserModules(bool init = false)
         auto fullPath = m.path ~ dirSeparator ~ m.name;
         getTimes(fullPath, access, modified);
 
-        if (modified.stdTime() == m.modified) // file has not changed
+		if (modified.stdTime() == m.modified) // file has not changed
             continue;
 
         rebuildLib = true;
-        auto cmd = "cd " ~ context.paths.tempPath ~ " & dmd -c " ~ allIncludes ~ " " ~ fullPath;
 
-        auto buildAttempt = attempt(cmd, fullPath);
-        if (!buildAttempt.success)
-            return buildAttempt;
+        if (!attempt("cd " ~ context.paths.tempPath ~ " & dmd -c " ~ allIncludes ~ " " ~ fullPath, fullPath, errors))
+            return false;
 
         getTimes(fullPath, access, modified);
         m.modified = modified.stdTime();
     }
 
     if (rebuildLib)
-    {        
+    {
         auto objs = context.userModules.map!(a => stripExtension(a.name)~".obj")().join(" ");
-        auto buildAttempt = attempt("cd " ~ context.paths.tempPath ~ " & dmd -lib -ofextra.lib defs.obj " ~ objs, "");
-        if (!buildAttempt.success)
-            return buildAttempt;
+        if (!attempt("cd " ~ context.paths.tempPath ~ " & dmd -lib -ofextra.lib defs.obj " ~ objs, "", errors))
+            return false;
     }
 
-    return Result(Stage.build, true);
+	return true;
 }
 
 
@@ -1010,20 +961,20 @@ void cleanup()
 /**
 * Load the shared lib, and call the _main function. Free the lib on exit.
 */
-Result call(out string replResult)
+bool call(out string replResult)
 {
     import std.exception;
-    import core.memory : GC;   
+    import core.memory : GC;
     import std.string : stripRight;
     import std.file : DirEntry, readText, exists, remove;
 
     alias extern(C) int function(ref ReplShare) FuncType;
     alias extern(C) void* function() GCFunc;
-    
-    context.share.keepAlive = false;    
-    
+
+    context.share.keepAlive = false;
+
     version(Windows)
-    {        
+    {
         string ext = ".dll";
     }
     else version(Posix)
@@ -1034,50 +985,42 @@ Result call(out string replResult)
     {
         static assert(false, "Platform not supported");
     }
-        
+
     auto lib = SharedLib(context.fullName ~ ext);
-    
+
     /** Experimental over-estimate image memory bounds */
-    
-    context.share.imageBounds[0] = lib.handle; 
+
+    context.share.imageBounds[0] = lib.handle;
     context.share.imageBounds[1] = lib.handle + DirEntry(context.fullName ~ ext).size();
-    
+
     /** ------------ */
-    
+
     if (!lib.loaded)
-    {
-        return Result(Stage.call, false, [
-				Message(
-					"loadError",
-					["type", "status", "result"], 
-					"", "", "loadError"
-				)]);        
+	{
+		replResult = "Failed to load shared library";
+		return false;
     }
-       
+
     version(Windows)
     {
         auto rangeBottom = (lib.getFunction!(GCFunc)("_gcRange"))();
-        GC.removeRange(rangeBottom);             
+        GC.removeRange(rangeBottom);
         auto funcPtr = lib.getFunction!(FuncType)("_main");
 
         if (funcPtr is null)
-        {            
-			return Result(Stage.call, false, [
-				Message(
-					"Unable to obtain function pointer",
-					["type", "status", "result"], 
-					"", "", "Unable to obtain function pointer"
-				)]);        
+		{
+			replResult = "Function ptr is null";
+			return false;
         }
 
-        auto res = funcPtr(context.share);       
-        GC.removeRange(rangeBottom); 
+        auto res = funcPtr(context.share);
+        GC.removeRange(rangeBottom);
     }
     else
     {
         static assert(false, "Need to implement dabble.repl.call for this platform");
     }
-      	
+
     if (exists(context.share.resultFile))
     {
         try
@@ -1087,30 +1030,22 @@ Result call(out string replResult)
         }
         catch(Exception e) {}
     }
-        
+
     if (context.share.keepAlive)
     {
         context.count ++;
-        keepAlive ~= lib;        
-    } 
-    else 
+        keepAlive ~= lib;
+    }
+    else
     {
         lib.free();
     }
-        
+
     if (res == -1)
-    {
-        auto e = collectException!Throwable(GC.collect());        		
-		return Result(Stage.call, false, [
-				Message(
-					"Runtime Error",
-					["type", "status", "result"], 
-					"", "", "Runtime Error"
-				)]); 
-		
-    }
-    
-	return Result(Stage.call, true);	    			
+        auto e = collectException!Throwable(GC.collect());
+
+	// Note that a runtime error is still treated as success
+	return true;
 }
 
 
@@ -1121,9 +1056,9 @@ Result call(out string replResult)
 Tuple!(string, int) stripDmdErrorLine(string line)
 {
     import std.regex : splitter, match, regex;
-    import std.string : join; 
-    import std.array : array; 
-    
+    import std.string : join;
+    import std.array : array;
+
     Tuple!(string, int) err;
     auto split = splitter(line, regex(`:`, `g`)).array();
     if (split.length >= 3)
@@ -1156,30 +1091,49 @@ string deDereference(string line, bool parens)
 
 
 /**
-* Given source code filename and error filename, generate formatted errors
+* Holds DMD error messages and corresponding source code.
 */
-Message[] parseDmdErrorFile(string srcFile, string errFile, bool dederef)
-{    
+struct DMDMessage
+{
+	string sourceCode;
+	string errorMessage;
+	
+	string toStr()
+	{
+		import std.string: splitLines;
+		return text("< ", sourceCode, " >\n", errorMessage.splitLines().map!(l => "---" ~ l).join("\n")); 
+	}
+	
+	auto toTup()
+	{
+		return tuple("source", sourceCode, "error", errorMessage);
+	}
+}
+
+
+/**
+* Given source code filename and error filename, generate formatted errors.
+* Returns: an array of DMDMessage
+*/
+DMDMessage[] parseDmdErrorFile(string srcFile, string errFile, bool dederef)
+{
     import std.regex;
     import std.path: baseName;
     import std.file : readText, exists;
     import std.string : splitLines, strip;
-    
+
     if (!exists(srcFile))
         throw new Exception("parseDmdErrorFile: srcFile does not exist");
     if (!exists(errFile))
         throw new Exception("parseDmdErrorFile: errFile does not exist");
 
-    string result;
-    auto previousLineNumber = -1;    
+	DMDMessage[] result;
+    auto previousLineNumber = -1;
     auto src = readText(srcFile).splitLines();
     auto err = readText(errFile).splitLines();
-        
-    foreach(count, l; err)
-    {
-        if (l.length == 0) 
-            continue;
 
+    foreach(l; err.filter!(e => e.length))
+    {
         auto split = stripDmdErrorLine(replace(l, regex(srcFile.baseName("d"), "g"), ""));
         string srcLine, errLine = strip(split[0]);
 
@@ -1193,19 +1147,55 @@ Message[] parseDmdErrorFile(string srcFile, string errFile, bool dederef)
         }
 
         if (previousLineNumber != split[1])
-            result ~= "< " ~ srcLine ~ " >\n  " ~ errLine;
+             result ~= DMDMessage(srcLine, errLine);
         else // error refers to same line as previous, don't repeat src
-            result ~= "  " ~ errLine;
-
-        if (count < err.length - 1)
-            result ~= "\n";
+            result[$-1].errorMessage ~= "\n" ~ errLine;
 
         previousLineNumber = split[1];
     }
-	
-	return [Message(result, ["type", "status", "result"], "build", "error", result)];
-	
-    //return result;
+	return result;
+}
+
+
+
+/**
+* Make JSON string.
+*/
+private string json(T)(T t)
+{
+	string result = "{";
+	foreach(i, v; t)
+	{
+		if (i % 2 == 0)
+		{
+			static if (is(typeof(v) == string))
+				result ~= `"` ~ v ~ `":`;
+			else assert(false);
+		}
+		else
+		{
+			static if (is(typeof(v) == string))
+				result ~= `"` ~ v ~ `"`;
+			else static if (is(typeof(v) _ : Tuple!(X), X...))
+				result ~= json(v);
+			else static if (is(typeof(v) _ : Tuple!(X)[], X...))
+			{
+				result ~= "[";
+				foreach(ii, tt; v)
+				{
+					result ~= json(tt);
+					if (ii < v.length - 1)
+						result ~= ",";
+				}
+				result ~= "]";
+			}
+			else
+				result ~= v.to!string;
+			if (i < t.length - 1)
+				result ~= ",";
+		}
+	}
+	return result ~ "}";
 }
 
 
@@ -1215,10 +1205,10 @@ Message[] parseDmdErrorFile(string srcFile, string errFile, bool dederef)
 */
 private string replPath()
 {
-    import std.string : join;     
+    import std.string : join;
 	import std.file : thisExePath;
 	import std.path : dirName, dirSeparator;
-	return dirName(thisExePath()).splitter(dirSeparator).array()[0..$-1].join(dirSeparator);	
+	return dirName(thisExePath()).splitter(dirSeparator).array()[0..$-1].join(dirSeparator);
 }
 
 
