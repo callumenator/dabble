@@ -20,12 +20,35 @@ import std.typecons : Tuple, tuple;
 import std.stdio : writeln;
 
 import
+	dabble.meta,
     dabble.parser,
     dabble.sharedlib,
     dabble.util,
     dabble.defs,
     dabble.grammars;
 
+protected:    
+SharedLib[] keepAlive;
+ReplContext context;
+DabbleParser parser;
+
+public:
+bool consoleSession = true;
+Tuple!(string,"stage",long,"msecs")[] timings;
+
+
+
+shared static this()
+{
+    context.init();
+    parser = new DabbleParser;
+}
+
+
+
+/**
+* Stages of evaluation.
+*/
 enum Stage
 {
 	none,
@@ -34,23 +57,6 @@ enum Stage
 	build,
 	call
 }
-
-bool consoleSession = true;
-Tuple!(string,"stage",long,"msecs")[] timings;
-
-private
-{
-    SharedLib[] keepAlive;
-    ReplContext context;
-    DabbleParser parser;
-}
-
-shared static this()
-{
-    context.init();
-    parser = new DabbleParser;
-}
-
 
 
 
@@ -127,7 +133,8 @@ void loop()
         version(none)
         {
             if (context.debugLevel & Debug.times)
-                result[1] ~= "Timings:\n" ~ timings.map!( x => text("  ",x.stage," - ",x.msecs) )().join("\n") ~ "\n";
+                result[1] ~= "Timings:\n" ~ timings.map!( x => text("  ",
+					x.stage," - ",x.msecs) )().join("\n") ~ "\n";
         }
 
         if (consoleSession)
@@ -196,8 +203,9 @@ Tuple!(string, Stage) eval(const char[] inBuffer, ref char[] codeBuffer)
         auto balanced = Balanced.test(codeBuffer.to!string());
         auto braceCount = Balanced.braceCount;
 
-        // TODO: Need to handle things like: a = 5; print a <- note no trailing ';' but 0 braces
-
+        /** TODO: Need to handle things like: a = 5; print a 
+			note no trailing ';' but 0 braces **/
+	
         if (!multiLine && balanced && newInput[$-1] == ';')
         {
             result = evaluate(codeBuffer.to!string());
@@ -267,9 +275,8 @@ struct RawCode
     */
     string toString()
     {
-        import std.string : join;
-        auto autoImports = "import std.traits, std.stdio, std.range, std.algorithm, std.conv;\n";
-        return autoImports ~
+        import std.string : join;        
+        return "import std.traits, std.stdio, std.range, std.algorithm, std.conv;\n" ~
                _header.map!( x => x.code )().join("\n") ~ "\nvoid main() {\n" ~
                _body.map!( x => x.code )().join("\n") ~ "\n}";
     }
@@ -358,173 +365,6 @@ string title()
     auto writer = appender!string();
 	formattedWrite(writer, "DABBLE: (DMD %d.%03d)", version_major, version_minor);
     return writer.data;
-}
-
-
-
-/**
-* See if the given buffer contains meta commands, commands which are interpreted directly
-* and do not trigger recompilation.
-*/
-bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer)
-{
-    import std.conv : text;
-    import std.process : system;
-    import std.string : join;
-    import std.algorithm : canFind, map, find;
-    import std.range : array, front, empty;
-
-	auto origCommand = inBuffer.to!string();
-    auto parse = MetaParser.decimateTree(MetaParser(origCommand));
-
-    if (!parse.successful)
-        return false;
-
-    parse = parse.children[0];
-    auto cmd = parse.children[0].matches[0];
-
-    string[] args;
-    if (parse.children.length == 2)
-    {
-        if (parse.children[1].name == "MetaParser.MetaArgs")
-        {
-            auto seq = parse.children[1].children[0].children;
-            args.length = seq.length;
-            foreach(i, p; seq)
-                args[i] = p.matches[0];
-        }
-    }
-
-    alias T = Tuple!(string, Operation[]);
-
-    /** Value print helper **/
-    string printValue(T p)
-    {
-        auto v = context.share.vars.find!((a,b) => a.name == b)(p[0]);
-        if (v.empty) return "";
-        return  v.front.ty !is null ?
-            v.front.ty.valueOf(p[1], v.front.addr, context.share.map) :
-                v.front.func ? v.front.init : "";
-    }
-
-    /** Type print helper **/
-    string printType(T p)
-    {
-        auto v = context.share.vars.find!((a,b) => a.name == b)(p[0]);
-        if (v.empty) return "";
-        if (v.front.ty is null) return v.front.displayType;
-        auto t = v.front.ty.typeOf(p[1], context.share.map);
-        return t[1].length ? t[1] : t[0].toString();
-    }
-
-	string summary, jsonstr;
-
-    switch(cmd)
-    {
-        case "version":
-        {
-			summary = title();
-			jsonstr = json(tuple("id","meta","cmd","version","data",title()));
-			break;
-        }
-        case "print": with(context.share)
-        {
-            if (args.length == 0 || canFind(args, "all")) // print all vars
-			{
-				summary = vars.map!(v => text(v.name, " (", v.displayType, ") = ", printValue(T(v.name,[])))).join("\n");
-				jsonstr = json(tuple("id", "meta", "cmd", "print",
-							   "data", vars.map!(v => tuple("name", v.name, "type", v.displayType, "value", printValue(T(v.name,[])))).array));
-			}
-            else if (args.length == 1 && args[0] == "__keepAlive")
-			{
-				summary = "SharedLibs still alive:" ~ .keepAlive.map!(a => a.to!string()).join("\n");
-				jsonstr = json(tuple("id", "meta", "cmd", "__keepAlive", "data", .keepAlive.map!(a => a.to!string()).array));
-			}
-            else // print selected symbols
-			{
-				summary = args.map!(a => printValue(parseExpr(a))).join("\n");
-				jsonstr = json(tuple("id", "meta", "cmd", "print", "data", args.map!(a => printValue(parseExpr(a))).array));
-			}
-			break;
-        }
-        case "type": with(context.share)
-        {
-            if (args.length == 0 || canFind(args, "all")) // print types of all vars
-			{
-				summary = vars.map!(v => text(v.name, " ") ~ printType(T(v.name,[]))).join("\n");
-				jsonstr = json(tuple("id", "meta", "cmd", "type",
-						 	   "data", vars.map!(v => tuple("name", v.name, "type", printType(T(v.name,[])))).array));
-			}
-            else
-			{
-				summary = args.map!(a => printType(parseExpr(a))).join("\n");
-				jsonstr = json(tuple("id", "meta", "cmd", "type", "data", args.map!(a => printType(parseExpr(a))).array));
-			}
-			break;
-        }
-        case "reset":
-        {
-            if (canFind(args, "session"))
-            {
-                context.reset();
-                keepAlive.clear();
-				summary = "Session reset";
-				jsonstr = json(tuple("id", "meta", "cmd", "reset session", "data", "Session reset"));
-            }
-            break;
-        }
-        case "delete":
-        {
-            foreach(a; args)
-                context.share.deleteVar(a);
-            break;
-        }
-        case "use":
-        {
-            import std.file : exists;
-            import std.range : ElementType;
-            import std.path : dirName, baseName;
-            import std.datetime : SysTime;
-            alias ElementType!(typeof(context.userModules)) TupType;
-
-			string[] msg;
-
-            foreach(a; args)
-            {
-                if (exists(a))
-                    context.userModules ~= TupType(dirName(a), baseName(a), SysTime(0).stdTime());
-                else
-					msg ~= text("Error: module ", a, " could not be found");
-            }
-
-			summary = msg.join("\n");
-			jsonstr = json(tuple("id", "meta", "cmd", "use", "data", msg));
-			break;
-        }
-        case "clear":
-        {
-            if (args.length == 0)
-                clearScreen();
-            else if (args.length == 1 && args[0] == "buffer")
-                codeBuffer.clear();
-            break;
-        }
-        case "debug on":
-			foreach(arg; args)
-				setDebugLevelFromString!"on"(arg);
-			break;
-        case "debug off":
-			foreach(arg; args)
-				setDebugLevelFromString!"off"(arg);
-			break;
-        default:
-			return false;
-    }
-
-    // If we got to here, we successfully parsed a meta command, so clear the code buffer
-	writeln(consoleSession ? summary : jsonstr);
-	codeBuffer.clear();
-    return true;
 }
 
 
@@ -1161,7 +1001,7 @@ DMDMessage[] parseDmdErrorFile(string srcFile, string errFile, bool dederef)
 /**
 * Make JSON string.
 */
-private string json(T)(T t)
+protected string json(T)(T t)
 {
 	string result = "{";
 	foreach(i, v; t)
