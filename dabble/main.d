@@ -26,6 +26,7 @@ void main(char[][] args)
 void parseArgs(char[][] args)
 { 
     import std.string : toLower;
+	import std.stdio: writeln;
     
     foreach(arg; args)
     {

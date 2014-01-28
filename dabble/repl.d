@@ -14,10 +14,10 @@ import
 	std.range,
 	std.conv,
 	std.variant,
-	std.algorithm;
+	std.algorithm,
+	std.stdio;
 
 import std.typecons : Tuple, tuple;
-import std.stdio : writeln;
 
 import
 	dabble.meta,
@@ -114,36 +114,37 @@ void loop()
     assert(context.initalized, "Context not initalized");
 
     if (consoleSession)
+	{
         clearScreen();
-
-    writeln(title());
-
-    if (consoleSession)
-        write(prompt());
-
-    stdout.flush();
+		writeln(title());
+		write(prompt());
+		stdout.flush();
+	}
+    
 	char[] inBuffer, codeBuffer;
     stdin.readln(inBuffer);
 
     while (strip(inBuffer) != "exit")
     {
         auto r = eval(inBuffer, codeBuffer);		
-		writeln( consoleSession ? "=> " : "", r[0]);
-
-        version(none)
+		
+		if (codeBuffer.length) // multiLine				
+			consoleSession ? prompt().send : json("id", "parse-multiline").send;							
+		else		
+		{
+			if (r[1] == Stage.call)
+				consoleSession ? text("=> ", r[0]).send : json("id", "repl-result", "summary", r[0]).send;
+		}
+		                
+        stdin.readln(inBuffer);
+		
+		version(none)
         {
             if (context.debugLevel & Debug.times)
                 result[1] ~= "Timings:\n" ~ timings.map!( x => text("  ",
 					x.stage," - ",x.msecs) )().join("\n") ~ "\n";
         }
-
-        if (consoleSession)
-            write(prompt());
-
-        stdout.flush();
-        stdin.readln(inBuffer);
-    }
-    return;
+    }    
 }
 
 
@@ -196,32 +197,25 @@ Tuple!(string, Stage) eval(const char[] inBuffer, ref char[] codeBuffer)
 
 	if (handleMetaCommand(newInput, codeBuffer))
 		return tuple("", Stage.meta);
-
-    if (newInput.length > 0)
-    {
-        codeBuffer ~= inBuffer ~ "\n";
-        auto balanced = Balanced.test(codeBuffer.to!string());
-        auto braceCount = Balanced.braceCount;
-
-        /** TODO: Need to handle things like: a = 5; print a 
-			note no trailing ';' but 0 braces **/
-	
-        if (!multiLine && balanced && newInput[$-1] == ';')
-        {
-            result = evaluate(codeBuffer.to!string());
-            codeBuffer.clear();
-        }
-        else
-        {
-            if ((balanced && braceCount > 0) ||
-                (balanced && braceCount == 0 && newInput[$-1] == ';'))
-            {
-                result = evaluate(codeBuffer.to!string());
-                codeBuffer.clear();
-                multiLine = false;
-            }
-        }
-    }
+		
+	if (newInput.length > 0)
+	{
+		codeBuffer ~= inBuffer ~ "\n";	
+		if (canParse(codeBuffer.to!string))
+		{
+			result = evaluate(codeBuffer.to!string());			
+			codeBuffer.clear;
+		}
+	}			
+	else
+	{
+		// If line is empty, but codebuffer is not, evaluate whatever is available in the buffer
+		if (codeBuffer.length)
+		{
+			result = evaluate(codeBuffer.to!string());		
+			codeBuffer.clear;
+		}
+	}
     return result;
 }
 
@@ -398,8 +392,7 @@ void clearScreen()
 /**
 * Turn a debug level on or off, using a string to identify the debug level.
 */
-void setDebugLevelFromString(string s)(string level)
-    if (s == "on" || s == "off")
+void setDebugLevelFromString(string s)(string level) if (s == "on" || s == "off")
 {
     import std.string;
 
@@ -415,24 +408,6 @@ void setDebugLevelFromString(string s)(string level)
         case "parseonly": mixin(op ~ "Debug.parseOnly;"); break;
         default: break;
     }
-}
-
-
-
-auto timeIt(E)(string stage, lazy E expr)
-{
-    import std.datetime : StopWatch;
-    StopWatch sw;
-    sw.start();
-    static if (is(typeof(expr) == void))
-        expr;
-    else
-        auto result = expr;
-    sw.stop();
-    timings ~= Tuple!(string,"stage",long,"msecs")(stage, sw.peek().msecs());
-
-    static if (!is(typeof(expr) == void))
-        return result;
 }
 
 
@@ -460,9 +435,8 @@ Tuple!(string, Stage) evaluate(string code)
 
     if (context.debugLevel & Debug.parseOnly)
     {
-		auto summary = "Parse only:\n" ~ parsedCode;
-		consoleSession ? writeln(summary) :
-			writeln(json(tuple("id", "parse-parseOnly", "result", parsedCode)));
+		auto summary = "Parse only:" ~ newl ~ parsedCode;
+		consoleSession ? summary.send : json("id", "parse-parseOnly", "result", parsedCode).send;
 		return tuple("", Stage.parse);
     }
 
@@ -483,8 +457,7 @@ Tuple!(string, Stage) evaluate(string code)
 	if (!callResult)
     {
 		auto summary = "Internal error: " ~ replResult;
-		consoleSession ? writeln(summary) :
-			writeln(json(tuple("id", "call-internal-error", "error", replResult)));
+		consoleSession ? summary.send : json("id", "call-internal-error", "error", replResult).send;
 		return tuple("", Stage.call);
     }
 
@@ -493,23 +466,32 @@ Tuple!(string, Stage) evaluate(string code)
 
 
 
+/**
+* Just see if the code can be parsed, for testing multiline.
+*/
+bool canParse(string code)
+{
+	void v(string,string,string,string) {}
+	void d(bool,string,string) {}
+	bool r(string) { return false; }
+	parser.parse(code, &r, &d, &v); 
+	return parser.errors.length == 0;
+}
+
+
 bool parse(string code, out string parsedCode)
 {
     import std.algorithm : canFind, countUntil;
     import std.conv : text;
-    import std.string : join;
+    import std.string : join, splitLines;
 
     string[] dupSearchList;
 
     /** Handlers for the parser **/
         void newVariable(string name, string type, string init, string source)
         {
-            if (context.share.vars.canFind!((a,b) => (a.name == b))(name))
-            {
-                parser.errors ~= "Error: redifinition of " ~ name ~ " not allowed";
-                return;
-            }
-
+            if (context.share.vars.canFind!((a,b) => (a.name == b))(name))          
+                return; // let compiler deal with redefinition            
             context.rawCode.append(source, false);
             context.share.vars ~= Var(name, type, init);
             dupSearchList ~= name;
@@ -531,9 +513,19 @@ bool parse(string code, out string parsedCode)
 
     if (parser.errors.length != 0)
 	{
-		auto summary = text("Parser error", parser.errors.length > 1 ? "s:" : ":", parser.errors.join("\n"));
-		consoleSession ? writeln(summary) :
-			writeln(json(tuple("id", "parse-error", "errors", parser.errors)));
+		auto lines = code.splitLines();
+		string[] niceErrors;
+		foreach(e; parser.errors)
+		{		
+			niceErrors ~= e[2];
+			niceErrors ~= lines[e[0]-1];
+			niceErrors ~= iota(e[1]).map!(x => " ").join("") ~ "^";
+		}
+				
+		auto summary = text("Parser error", parser.errors.length > 1 ? "s:" :":", newl, niceErrors.join(newl));
+		consoleSession ? summary.send : 
+			json("id", "parse-error", "summary", summary, "errors", 
+				parser.errors.map!(t => tuple("source",lines[t[0]-1],"column",t[1],"error",t[2])).array).send;
 		return false;
 	}
 
@@ -633,10 +625,9 @@ bool build(string code)
 
     if (!timeIt("build - userMod", buildUserModules(errors)))
     {
-		auto summary = "Failed building user modules: errors follow:\n" ~ errors.map!(e => e.toStr()).join("\n");					
-		consoleSession ? writeln(summary) :
-			writeln(json(tuple("id", "build-error-usermod", "summary", summary, "data", 
-				errors.map!(e => e.toTup()).array)));
+		auto summary = "Failed building user modules: errors follow:" ~ newl ~ errors.map!(e => e.toStr()).join(newl);					
+		consoleSession ? summary.send :
+			json("id", "build-error-usermod", "summary", summary, "data", errors.map!(e => e.toTup()).array).send;
 	}
 
     auto dirChange = "cd " ~ escapeShellFileName(context.paths.tempPath);
@@ -659,19 +650,17 @@ bool build(string code)
 	auto fullBuildErrors = errors;
 	if (timeIt("build - testCompile", testCompile(errors)))
 	{
-		auto summary = "Internal error: test compile passed, full build failed. Error follows:\n" ~ 
-			fullBuildErrors.map!(e => e.toStr()).join("\n");
+		auto summary = "Internal error: test compile passed, full build failed. Error follows:" ~ newl ~ 
+			fullBuildErrors.map!(e => e.toStr()).join(newl);
 			
-		consoleSession ? writeln(summary) :
-			writeln(json(tuple("id", "build-error-internal", "summary", summary, "data", 
-				fullBuildErrors.map!(e => e.toTup()).array)));
+		consoleSession ? summary.send :
+			json("id", "build-error-internal", "summary", summary, "data", fullBuildErrors.map!(e => e.toTup()).array).send;
 	}
 	else
 	{		
-		auto summary = errors.map!(e => e.toStr()).join("\n");					
-		consoleSession ? writeln(summary) :
-			writeln(json(tuple("id", "build-error", "summary", summary, "data", 
-				errors.map!(e => e.toTup()).array)));
+		auto summary = errors.map!(e => e.toStr()).join(newl);					
+		consoleSession ? summary.send :
+			json("id", "build-error", "summary", summary, "data", errors.map!(e => e.toTup()).array).send;
 	}
 	return false;
 }
@@ -731,14 +720,10 @@ bool buildUserModules(out DMDMessage[] errors, bool init = false)
 
     if (init) // Compile defs.d
     {
-        rebuildLib = true;
-        auto text = "module defs;\n"
-                  ~ readText(replPath() ~ "/dabble/defs.d").findSplitAfter("module dabble.defs;")[1];
-
-        auto f = File(context.paths.tempPath ~ "defs.d", "w");
-        f.write(text);
+        rebuildLib = true;        
+        auto f = File(context.paths.tempPath ~ "defs.d", "w");		
+        f.write("module defs;\n" ~ readText(replPath() ~ "/dabble/defs.d").findSplitAfter("module dabble.defs;")[1]);
         f.close();
-
         if (!attempt("cd " ~ context.paths.tempPath ~ " & dmd -c -release -noboundscheck -O defs.d", context.paths.tempPath ~ "defs.d", errors))
 			return false;
     }
@@ -941,7 +926,7 @@ struct DMDMessage
 	string toStr()
 	{
 		import std.string: splitLines;
-		return text("< ", sourceCode, " >\n", errorMessage.splitLines().map!(l => "---" ~ l).join("\n")); 
+		return text("< ", sourceCode, " >", newl, errorMessage.splitLines().map!(l => "---" ~ l).join(newl)); 
 	}
 	
 	auto toTup()
@@ -989,7 +974,7 @@ DMDMessage[] parseDmdErrorFile(string srcFile, string errFile, bool dederef)
         if (previousLineNumber != split[1])
              result ~= DMDMessage(srcLine, errLine);
         else // error refers to same line as previous, don't repeat src
-            result[$-1].errorMessage ~= "\n" ~ errLine;
+            result[$-1].errorMessage ~= newl ~ errLine;
 
         previousLineNumber = split[1];
     }
@@ -998,32 +983,39 @@ DMDMessage[] parseDmdErrorFile(string srcFile, string errFile, bool dederef)
 
 
 
+@property void send(string s)
+{
+	consoleSession ? writeln(s) : writeln("\u0006", s, "\u0006");
+	stdout.flush();
+}
+
+
+
 /**
 * Make JSON string.
 */
-protected string json(T)(T t)
-{
+protected string json(T...)(T t)
+{		
 	string result = "{";
 	foreach(i, v; t)
 	{
-		if (i % 2 == 0)
-		{
+		static if (i % 2 == 0)
+		{			
 			static if (is(typeof(v) == string))
-				result ~= `"` ~ v ~ `":`;
-			else assert(false);
+				result ~= `"` ~ v ~ `":`;						
 		}
 		else
 		{
 			static if (is(typeof(v) == string))
 				result ~= `"` ~ v ~ `"`;
 			else static if (is(typeof(v) _ : Tuple!(X), X...))
-				result ~= json(v);
+				result ~= json(v.expand);
 			else static if (is(typeof(v) _ : Tuple!(X)[], X...))
 			{
 				result ~= "[";
 				foreach(ii, tt; v)
 				{
-					result ~= json(tt);
+					result ~= json(tt.expand);
 					if (ii < v.length - 1)
 						result ~= ",";
 				}
@@ -1031,11 +1023,30 @@ protected string json(T)(T t)
 			}
 			else
 				result ~= v.to!string;
-			if (i < t.length - 1)
+				
+			static if (i < t.length - 1)
 				result ~= ",";
 		}
 	}
 	return result ~ "}";
+}
+
+
+
+private auto timeIt(E)(string stage, lazy E expr)
+{
+    import std.datetime : StopWatch;
+    StopWatch sw;
+    sw.start();
+    static if (is(typeof(expr) == void))
+        expr;
+    else
+        auto result = expr;
+    sw.stop();
+    timings ~= Tuple!(string,"stage",long,"msecs")(stage, sw.peek().msecs());
+
+    static if (!is(typeof(expr) == void))
+        return result;
 }
 
 
@@ -1079,4 +1090,12 @@ private string getTempDir()
         enforce(tmpRootEntry.isDir, "Entry `"~tmpRoot~"' exists but is not a directory.");
 
     return tmpRoot;
+}
+
+
+
+private @property string newl()
+{
+	return "\n";
+	//return consoleSession ? "\n" : "<br>";
 }

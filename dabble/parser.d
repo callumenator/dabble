@@ -23,6 +23,9 @@ import
     stdx.d.parser, 
     stdx.d.ast;    
 
+	
+void hideMessages(string, size_t, size_t, string, bool) { }
+	
 class DabbleParser : Parser
 {
     alias Insert = Tuple!(uint,uint); // index, length
@@ -30,7 +33,9 @@ class DabbleParser : Parser
         
     LexerConfig config;        
     string source, original, lastInit;          
-    string[] errors, types;        
+	
+	Tuple!(uint,uint,string)[] errors; // line, col, msg
+    string[] types;        
     string[][] params;        
     bool declCanBeGlobal;                         
     int blockDepth = 0, declStart = 0, funcLiteralDepth = 0;   
@@ -43,7 +48,9 @@ class DabbleParser : Parser
                  bool delegate(string) _redirectVar,
                  void delegate(bool,string,string) _newDecl,
                  void delegate(string,string,string,string) _newVar)
-    {   
+    {  				
+		messageFunction = &hideMessages;
+	
         redirectVar = _redirectVar;        
         newDecl = _newDecl;
         newVar = _newVar;
@@ -53,8 +60,8 @@ class DabbleParser : Parser
                                
         lastInit = "";        
         blockDepth = 0;        
-        errors.clear();
-        inserts.clear();
+        errors.clear;
+        inserts.clear;
         
         /// Reset parent state
         StringCache cache;
@@ -69,8 +76,12 @@ class DabbleParser : Parser
     
     override void error(lazy string message, bool shouldAdvance = true)
     {
-        if (!suppressMessages)        
-            errors ~= message;         
+        if (!suppressMessages)  
+		{
+			uint column = index < tokens.length ? tokens[index].column : tokens[$ - 1].column;
+            uint line = index < tokens.length ? tokens[index].line : tokens[$ - 1].line;
+            errors ~= tuple(line, column, message);         
+		}
         super.error(message, shouldAdvance);
     }    
 

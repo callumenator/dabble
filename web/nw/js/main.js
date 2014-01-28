@@ -122,7 +122,7 @@ $(document).ready(function () {
     * Start repl
     */
     engine = require('child_process').spawn('repl.exe', ['--noConsole'], { cwd: '../../bin' });
-    engine.stdout.once('data', function (data) { updateResult(data.toString(), false); });
+    send("version");
     
 
     /**
@@ -193,11 +193,8 @@ function retrieveHistory(dir) {
 /**
 * Got a result from the repl
 */
-function updateResult(data, lwidget) {
-    if (lwidget) {
-        if (data.trim().length == 0)
-            return;        
-        data = data.replace(/(\r\r\n|\r\n|\n|\r)/g, "<br>");       
+function updateResult(data, lwidget) {	
+    if (lwidget) {       
         var id = "lineWidget" + (lineWidgetCount++).toString();
         $("body").append("<div class='resultWidget' id='" + id + "'>" + data, + "</div>");
         history.addLineWidget(history.lineCount() - 1, $("#" + id)[0]);
@@ -206,6 +203,48 @@ function updateResult(data, lwidget) {
     }
     var el = document.getElementById("codePane");
     el.scrollTop = el.scrollHeight;    
+}
+
+
+/**
+* Filter-out json messages from REPL
+*/
+function filterMessages(str, textCallback, msgCallback)
+{
+	str = str.replace(/(\r\r\n|\r\n|\n|\r)/g, "<br>");       
+	var parts = str.split(/\u0006/g);
+	for(var i = 0; p = parts[i], i < parts.length; i++) {
+		if (p.replace(/<br>/g,'').trim().length == 0) continue;
+		var msg = null;
+		try {
+			 msg = JSON.parse(p);			
+		} catch(error) {}
+		msg == null ? textCallback(p) : msgCallback(msg);
+	}	
+}
+
+
+/** 
+* Handle json messages
+*/ 
+function handleMessage(json)
+{
+	var multiline = false;
+	switch (json.id) {
+		case "parse-multiline":
+			multiline = true;
+			break;
+		default: 
+			if (json.hasOwnProperty("summary")) 
+				updateResult(json.summary, true);
+			else 
+				console.log("Unhandled message: ", json);
+		break;
+	}	
+	if (multiline)
+		$("#repl-status").html("Multi-line input");
+	else
+		$("#repl-status").html("");
 }
 
 
@@ -235,10 +274,17 @@ function updateHistory(text) {
 * Send input to the repl
 */
 function send(text, callback) {   
-    if (callback === undefined) {
-        engine.stdout.once('data', function (data) { updateResult(data.toString(), true); });
-    } else {        
-        engine.stdout.once('data', function (data) { callback(data.toString()); });
+    if (callback === undefined) {		
+        engine.stdout.once('data', function (data) { 
+			filterMessages(data.toString(), 
+						  function(text) { updateResult(text, true); },
+						  handleMessage					
+			);
+		});
+    } else {        		        
+		engine.stdout.once('data', function (data) { 
+			filterMessages(data.toString(), callback, handleMessage);
+		});
     }    
     engine.stdin.write(new Buffer(text + "\n"));
 }
