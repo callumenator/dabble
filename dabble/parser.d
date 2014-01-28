@@ -64,7 +64,7 @@ class DabbleParser : Parser
         inserts.clear;
         
         /// Reset parent state
-        StringCache cache;
+        StringCache* cache = new StringCache(StringCache.defaultBucketCount);
         tokens = byToken(cast(ubyte[]) source, config, cache).array();		
         suppressMessages = 0;
         index = 0;
