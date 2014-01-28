@@ -17,28 +17,43 @@
 </head>
 <body>
    
-    <div id="titleOuter">
-        <div id="titleInner">
-            <img id="logo" src="../images/dlogosmall.png" /> <span id="titleText"> abble </span>
-        </div>
-    </div>
-
-    <div id="codePane">
-        <textarea id="history"></textarea>
-        <div id="input">
-			<div id="prompt"> >> </div>
-            <textarea id="code" class="editor"></textarea>
-        </div>
-		<div id="repl-status"></div>
-    </div>
-
-    <div id="libPane">        
-        <table><tr>
-			<td><input id="search-box" onkeyup="searchInput()" size="30" spellcheck="false" type="text"></td>
-			<td><img id="ajax-loader" src="../images/loader.gif" /></td>
-		</tr></table>		
-        <div id="suggestionsPane"></div>
-    </div>
-    
+	<div id="header">
+		<div id="titleOuter">
+			<div id="titleInner">
+				<img id="logo" src="../images/dlogosmall.png" /> <span id="titleText"> abble </span>
+			</div>
+		</div>	
+	</div>
+	
+	<div id="content">
+		<div id="code-pane">
+		
+			<div>
+			<textarea id="history"></textarea>
+			</div>
+			
+			<div>			
+			<textarea id="code" class="editor"></textarea>
+			</div>
+			
+			<div>
+			
+			</div>
+			
+		</div>
+	
+		<div id="libPane">        
+			<table><tr>
+				<td><input id="search-box" onkeyup="searchInput()" size="30" spellcheck="false" type="text"></td>
+				<td><img id="ajax-loader" src="../images/loader.gif" /></td>
+			</tr></table>		
+			<div id="suggestionsPane"></div>
+		</div>
+	</div>
+	
+	<div id="footer">
+		<div id="repl-status">Hello</div>
+	</div>
+	
 </body>
 </html>

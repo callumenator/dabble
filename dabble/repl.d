@@ -133,7 +133,11 @@ void loop()
 		else		
 		{
 			if (r[1] == Stage.call)
-				consoleSession ? text("=> ", r[0]).send : json("id", "repl-result", "summary", r[0]).send;
+			{
+				import std.regex;
+				enum reg = regex(`"`, "g");				
+				consoleSession ? text("=> ", r[0]).send : json("id", "repl-result", "summary", r[0].replace(reg, `\"`)).send;
+			}
 		}
 		                
         stdin.readln(inBuffer);
@@ -847,7 +851,7 @@ bool call(out string replResult)
     }
 
     if (exists(context.share.resultFile))
-    {
+    {		
         try
         {
             replResult = readText(context.share.resultFile).stripRight();

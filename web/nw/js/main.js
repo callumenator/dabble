@@ -45,10 +45,20 @@ CodeMirror.commands.autocomplete = function(cm) {
 }
 
 
+function windowResize() {
+	$('#content').height(window.innerHeight - $("#header").height() - $("#footer").height());
+	scrollToBottom($("#code-pane > div:first-child"));
+}
+
+
 /**
 * On-load setup
 */
 $(document).ready(function () {
+	
+	windowResize();
+    $(window).resize(windowResize);              
+	
 
     require('fs').watch('css/style.css', function (event, name) {
         var queryString = '?reload=' + new Date().getTime();
@@ -95,8 +105,10 @@ $(document).ready(function () {
             var line = "";
             if (e.keyCode == 38) line = retrieveHistory('up');
             else line = retrieveHistory('down');
-            if (typeof line != "undefined")
-                editor.setValue(line);
+            if (typeof line != "undefined") {
+                editor.setValue(line);				
+				setTimeout( function() { editor.setCursor(editor.lineCount(), 0); }, 50);								
+			}
         }
     };
 
@@ -201,8 +213,7 @@ function updateResult(data, lwidget) {
     } else {
         cmAppend(history, data);
     }
-    var el = document.getElementById("codePane");
-    el.scrollTop = el.scrollHeight;    
+    scrollToBottom($("#code-pane > div:first-child"));
 }
 
 
@@ -213,13 +224,20 @@ function filterMessages(str, textCallback, msgCallback)
 {
 	str = str.replace(/(\r\r\n|\r\n|\n|\r)/g, "<br>");       
 	var parts = str.split(/\u0006/g);
-	for(var i = 0; p = parts[i], i < parts.length; i++) {
-		if (p.replace(/<br>/g,'').trim().length == 0) continue;
+	console.log("FilterMessages: ", parts);
+	for(var i = 0; p = parts[i], i < parts.length; i++) {		
+		if (p.replace(/<br>/g,'').trim().length == 0) 
+			continue;
+		
 		var msg = null;
-		try {
-			 msg = JSON.parse(p);			
+		try { 
+			msg = JSON.parse(p); 
 		} catch(error) {}
-		msg == null ? textCallback(p) : msgCallback(msg);
+		
+		if (msg !== null && typeof msg === "object" && !Array.isArray(msg))
+			msgCallback(msg);
+		else
+			textCallback(p);		
 	}	
 }
 
@@ -234,6 +252,9 @@ function handleMessage(json)
 		case "parse-multiline":
 			multiline = true;
 			break;
+		case "repl-result":
+			filterMessages(json.summary, function(text) { updateResult(text, true); }, handleMessage);
+			break;
 		default: 
 			if (json.hasOwnProperty("summary")) 
 				updateResult(json.summary, true);
@@ -246,7 +267,6 @@ function handleMessage(json)
 	else
 		$("#repl-status").html("");
 }
-
 
 function cmAppend(cm, text) {
     text = text.replace(/(\r\r\n|\r\n|\r)/g, "\n");
@@ -261,6 +281,7 @@ function cmAppend(cm, text) {
 function updateHistory(text) {
     if (text.length == 0) return;
     cmAppend(history, text);
+	scrollToBottom($("#code-pane > div:first-child"));
     if (historyBuffer.length > 1 && historyBuffer[historyBuffer.length-1] == text) return;
     historyBuffer.push(text);
     if (historyBuffer.length > maxHistory)
@@ -274,6 +295,7 @@ function updateHistory(text) {
 * Send input to the repl
 */
 function send(text, callback) {   
+	//engine.stdout.removeAllListeners('data');
     if (callback === undefined) {		
         engine.stdout.once('data', function (data) { 
 			filterMessages(data.toString(), 
@@ -292,7 +314,7 @@ function send(text, callback) {
 function toggleSearchPaneVisibility() {
 
     var sp = document.getElementById('libPane'), 
-        cp = document.getElementById('codePane');    
+        cp = document.getElementById('code-pane');    
     
     if (sp.style.display == "")
         sp.style.display = "none";
@@ -396,5 +418,7 @@ function clearSuggestions() {
 }
 
 
-
+function scrollToBottom(jqEl) {
+	jqEl.scrollTop(jqEl[0].scrollHeight);
+}
 
