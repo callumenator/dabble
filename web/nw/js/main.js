@@ -321,14 +321,11 @@ function toggleSearchPaneVisibility() {
     if (sp.style.display == "")
         sp.style.display = "none";
         
-    if (sp.style.display == "inline-block") {
-        
+    if (sp.style.display == "inline-block") {       
         sp.style.display = "none";
         cp.style.width = "99%"; 
-        editor.focus();
-        
-    } else if (sp.style.display == "none") {        
-        
+        editor.focus();   
+    } else if (sp.style.display == "none") {                
         cp.style.width = "40%";        
         setTimeout(function() {
             sp.style.display = "inline-block";

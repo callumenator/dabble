@@ -28,21 +28,19 @@ body {
 
 #content {	
 	overflow: hidden;	
+	position: relative;
 }
 
 #footer {
 	height: 100px;
-	margin-left: 10px;
+	padding-left: 10px;
+	background-color: teal;
 }
 
 input {
     outline: none;
     transition: all 0.25s ease-in-out;
     -webkit-transition: all 0.25s ease-in-out;
-}
-
-#splitPane {
-    height: 100%;
 }
 
 #code-pane {  		
@@ -60,12 +58,12 @@ input {
 
 #code-pane > div:first-child {
 	max-height: 80%;
-	overflow-y: scroll;
+	overflow-y: auto;
 }
 
 #code-pane > div:nth-child(2) {
 	height: 20%;
-	overflow-y: scroll;
+	overflow-y: auto;
 }
 
 /** 
@@ -81,12 +79,13 @@ input {
 	color: white;
 }
 
-#libPane {    
-  vertical-align: middle;        
-  color: white;
-  display: none;    
-  margin: 0 auto;
+#libPane {              
+  display: none;      
   height:100%;     
+  overflow-y: scroll;
+  position: absolute;
+  right: 0px;
+  top: 0px;
 }
 
 #suggestionsPane {
@@ -169,8 +168,8 @@ input {
 }
 
 #logo {
-  margin-right: -.3em;        
-  margin-bottom: -.3em;
+	display: none;
+	width: 20px;	
 }
 
 

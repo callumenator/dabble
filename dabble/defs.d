@@ -253,6 +253,7 @@ auto exprResult(E)(lazy E expr, ref string result)
     }
     else
     {
+		result = "";
         expr();
     }        
 }

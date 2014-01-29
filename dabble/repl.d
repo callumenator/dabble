@@ -37,7 +37,6 @@ bool consoleSession = true;
 Tuple!(string,"stage",long,"msecs")[] timings;
 
 
-
 shared static this()
 {
     context.init();
@@ -117,38 +116,45 @@ void loop()
 	{
         clearScreen();
 		writeln(title());
-		write(prompt());
-		stdout.flush();
+		write(prompt());				
 	}
     	
-	string input, codeBuffer;	
-    input = stdin.readln();
-
-    while (strip(input) != "exit")
-    {
+	string input, codeBuffer;	    
+    
+	do
+    {				
+		input = stdin.readln();
         auto r = eval(input, codeBuffer);		
 		
-		if (codeBuffer.length) // multiLine					
-			consoleSession ? prompt().send(false) : json("id", "parse-multiline").send;									
+		if (codeBuffer.length) // multiLine	
+		{
+			consoleSession ? prompt(true).send(false) : json("id", "parse-multiline").send;									
+		}
 		else		
 		{
 			if (r[1] == Stage.call)
 			{
 				import std.regex;
-				enum reg = regex(`"`, "g");				
-				consoleSession ? text("=> ", r[0]).send : json("id", "repl-result", "summary", r[0].replace(reg, `\"`)).send;
+				enum reg = regex(`"`, "g");		
+
+				if (consoleSession)								
+					r[0].send;
+				else	
+					json("id", "repl-result", "summary", r[0].replace(reg, `\"`)).send;
 			}
+			
+			if (consoleSession)
+				prompt().send(false);
 		}
-		                
-        input = stdin.readln();
-		
+		                        		
 		version(none)
         {
             if (context.debugLevel & Debug.times)
                 result[1] ~= "Timings:\n" ~ timings.map!( x => text("  ",
 					x.stage," - ",x.msecs) )().join("\n") ~ "\n";
         }
-    }    
+		
+    } while (strip(input) != "exit");
 }
 
 
@@ -347,9 +353,9 @@ struct ReplContext
 /**
 * Return a command-input prompt.
 */
-string prompt()
+string prompt(bool multiline = false)
 {
-    return ": ";
+    return multiline ? ".. " : ">> ";
 }
 
 
@@ -440,7 +446,7 @@ Tuple!(string, Stage) evaluate(string code)
     if (context.debugLevel & Debug.parseOnly)
     {
 		auto summary = "Parse only:" ~ newl ~ parsedCode;
-		consoleSession ? summary.send : json("id", "parse-parseOnly", "result", parsedCode).send;
+		consoleSession ? summary.send : json("id", "parse-parseOnly", "summary", parsedCode).send;
 		return tuple("", Stage.parse);
     }
 
@@ -461,7 +467,7 @@ Tuple!(string, Stage) evaluate(string code)
 	if (!callResult)
     {
 		auto summary = "Internal error: " ~ replResult;
-		consoleSession ? summary.send : json("id", "call-internal-error", "error", replResult).send;
+		consoleSession ? summary.send : json("id", "call-internal-error", "summary", replResult).send;
 		return tuple("", Stage.call);
     }
 
@@ -527,7 +533,7 @@ bool parse(string code, out string parsedCode)
 		{		
 			niceErrors ~= e[2];
 			niceErrors ~= lines[e[0]-1];
-			niceErrors ~= iota(e[1]).map!(x => " ").join("") ~ "^";
+			niceErrors ~= iota(e[1]-1).map!(x => " ").join("") ~ "^";
 		}
 				
 		auto summary = text("Parser error", parser.errors.length > 1 ? "s:" :":", newl, niceErrors.join(newl));
@@ -565,7 +571,7 @@ bool parse(string code, out string parsedCode)
         "void _main2(ref _REPL.ReplShare _repl_)\n"
         "{\n" ~
         text(context.vtblFixup, c.prefix.data, source, c.suffix.data,
-             "if (__expressionResult.length == 0) __expressionResult = `OK`; writeln(__expressionResult);\n") ~
+             "if (__expressionResult.length != 0) writeln(__expressionResult);\n") ~
         "}\n" ~ genHeader();
 
     context.rawCode.append(parser.original, false);
@@ -859,6 +865,8 @@ bool call(out string replResult)
         try
         {
             replResult = readText(context.share.resultFile).stripRight();
+			if (replResult.length == 0)
+				replResult = "OK";
             remove(context.share.resultFile);
         }
         catch(Exception e) {}

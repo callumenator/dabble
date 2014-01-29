@@ -374,7 +374,10 @@ class DabbleParser : Parser
     override PrimaryExpression parsePrimaryExpression()
     {
         auto t = wrap(super.parsePrimaryExpression());                           
-                
+
+		if (t[0] is null)
+			return null;
+		
         if (t[0].primary.type == tok!"stringLiteral" ||
             t[0].primary.type == tok!"dstringLiteral" ||
             t[0].primary.type == tok!"wstringLiteral" )                
