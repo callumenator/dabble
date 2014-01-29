@@ -31,7 +31,7 @@ class DabbleParser : Parser
     alias Insert = Tuple!(uint,uint); // index, length
 	Insert[] inserts; // sorted list of inserts
         
-    LexerConfig config;        
+    LexerConfig config;         
     string source, original, lastInit;          
 	
 	Tuple!(uint,uint,string)[] errors; // line, col, msg
@@ -43,7 +43,7 @@ class DabbleParser : Parser
     bool delegate(string) redirectVar;
     void delegate(bool,string,string) newDecl;
     void delegate(string,string,string,string) newVar;    
-                               
+                                
     string parse(string _source, 
                  bool delegate(string) _redirectVar,
                  void delegate(bool,string,string) _newDecl,
@@ -69,7 +69,7 @@ class DabbleParser : Parser
         suppressMessages = 0;
         index = 0;
         		        
-        parseDeclarationsAndStatements();                        
+        parseDeclarationsAndStatements();                        		
         return source;
     } 
 

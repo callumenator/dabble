@@ -128,8 +128,8 @@ void loop()
     {
         auto r = eval(inBuffer, codeBuffer);		
 		
-		if (codeBuffer.length) // multiLine				
-			consoleSession ? prompt().send : json("id", "parse-multiline").send;							
+		if (codeBuffer.length) // multiLine					
+			consoleSession ? prompt().send(false) : json("id", "parse-multiline").send;									
 		else		
 		{
 			if (r[1] == Stage.call)
@@ -204,7 +204,7 @@ Tuple!(string, Stage) eval(const char[] inBuffer, ref char[] codeBuffer)
 		
 	if (newInput.length > 0)
 	{
-		codeBuffer ~= inBuffer ~ "\n";	
+		codeBuffer ~= inBuffer;	
 		if (canParse(codeBuffer.to!string))
 		{
 			result = evaluate(codeBuffer.to!string());			
@@ -478,6 +478,11 @@ bool canParse(string code)
 	void v(string,string,string,string) {}
 	void d(bool,string,string) {}
 	bool r(string) { return false; }
+	
+	writeln("Testing parse: <");
+	writeln(code);
+	writeln(">");
+	
 	parser.parse(code, &r, &d, &v); 
 	return parser.errors.length == 0;
 }
@@ -987,9 +992,12 @@ DMDMessage[] parseDmdErrorFile(string srcFile, string errFile, bool dederef)
 
 
 
-@property void send(string s)
+@property void send(string s, bool newline = true)
 {
-	consoleSession ? writeln(s) : writeln("\u0006", s, "\u0006");
+	if (newline)
+		consoleSession ? writeln(s) : writeln("\u0006", s, "\u0006");
+	else
+		consoleSession ? write(s) : write("\u0006", s, "\u0006");
 	stdout.flush();
 }
 
