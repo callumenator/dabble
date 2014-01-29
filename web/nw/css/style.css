@@ -74,7 +74,7 @@ input {
 #code + .CodeMirror {
 	background-color: rgb(55,55,55);
 	border-radius: 5px;
-	margin-left: 20px;
+	margin-left: 26px;
 }
 
 #repl-status {

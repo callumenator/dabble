@@ -176,6 +176,7 @@ function handleWindowEvent(e) {
 * 
 */
 function preparseInput(text) {    
+	console.log(text);
     if (text.trim() == "clear") {
         history.setValue("");
         send("version", function(text) { updateResult(text, false);  });
@@ -223,8 +224,7 @@ function updateResult(data, lwidget) {
 function filterMessages(str, textCallback, msgCallback)
 {
 	str = str.replace(/(\r\r\n|\r\n|\n|\r)/g, "<br>");       
-	var parts = str.split(/\u0006/g);
-	console.log("FilterMessages: ", parts);
+	var parts = str.split(/\u0006/g);	
 	for(var i = 0; p = parts[i], i < parts.length; i++) {		
 		if (p.replace(/<br>/g,'').trim().length == 0) 
 			continue;
@@ -295,19 +295,21 @@ function updateHistory(text) {
 * Send input to the repl
 */
 function send(text, callback) {   
-	//engine.stdout.removeAllListeners('data');
-    if (callback === undefined) {		
-        engine.stdout.once('data', function (data) { 
+	engine.stdout.removeAllListeners('data');
+    if (callback === undefined) {							
+        engine.stdout.on('data', function (data) { 
+			console.log("In callback: ", data.toString());
 			filterMessages(data.toString(), 
 						  function(text) { updateResult(text, true); },
 						  handleMessage					
 			);
 		});
     } else {        		        
-		engine.stdout.once('data', function (data) { 
+		engine.stdout.on('data', function (data) { 
 			filterMessages(data.toString(), callback, handleMessage);
 		});
     }    
+	console.log("Sending: ", text);
     engine.stdin.write(new Buffer(text + "\n"));
 }
 

@@ -120,13 +120,13 @@ void loop()
 		write(prompt());
 		stdout.flush();
 	}
-    
-	char[] inBuffer, codeBuffer;
-    stdin.readln(inBuffer);
+    	
+	string input, codeBuffer;	
+    input = stdin.readln();
 
-    while (strip(inBuffer) != "exit")
+    while (strip(input) != "exit")
     {
-        auto r = eval(inBuffer, codeBuffer);		
+        auto r = eval(input, codeBuffer);		
 		
 		if (codeBuffer.length) // multiLine					
 			consoleSession ? prompt().send(false) : json("id", "parse-multiline").send;									
@@ -140,7 +140,7 @@ void loop()
 			}
 		}
 		                
-        stdin.readln(inBuffer);
+        input = stdin.readln();
 		
 		version(none)
         {
@@ -174,9 +174,9 @@ void onExit()
 * Evaluate code in the context of the supplied ReplContext. This version assumes
 * inBuffer does not contain multiline input.
 */
-Tuple!(string, Stage) eval(const char[] inBuffer)
+Tuple!(string, Stage) eval(string inBuffer)
 {
-    char[] dummyBuffer;
+    string dummyBuffer;
     return eval(inBuffer, dummyBuffer);
 }
 
@@ -185,7 +185,7 @@ Tuple!(string, Stage) eval(const char[] inBuffer)
 /**
 * Evaluate code in the context of the supplied ReplContext.
 */
-Tuple!(string, Stage) eval(const char[] inBuffer, ref char[] codeBuffer)
+Tuple!(string, Stage) eval(string inBuffer, ref string codeBuffer)
 {
     import std.string : strip, stripRight, toLower;
 
@@ -194,7 +194,7 @@ Tuple!(string, Stage) eval(const char[] inBuffer, ref char[] codeBuffer)
     timings.clear();
 	Tuple!(string, Stage) result;
     bool multiLine = codeBuffer.length > 0;
-    char[] newInput = strip(inBuffer.dup);
+    auto newInput = strip(inBuffer);
 
     if (newInput.toLower() == "exit")
         return result;
@@ -471,23 +471,22 @@ Tuple!(string, Stage) evaluate(string code)
 
 
 /**
-* Just see if the code can be parsed, for testing multiline.
+* Just see if the code can be parsed (generates no errors), for testing multiline input.
 */
 bool canParse(string code)
 {
 	void v(string,string,string,string) {}
 	void d(bool,string,string) {}
-	bool r(string) { return false; }
-	
-	writeln("Testing parse: <");
-	writeln(code);
-	writeln(">");
-	
+	bool r(string) { return false; }	
 	parser.parse(code, &r, &d, &v); 
 	return parser.errors.length == 0;
 }
 
 
+
+/**
+* Do a full parse of the input.
+*/
 bool parse(string code, out string parsedCode)
 {
     import std.algorithm : canFind, countUntil;

@@ -14,7 +14,7 @@ import
 * See if the given buffer contains meta commands, which are interpreted directly
 * and do not trigger recompilation.
 */
-bool handleMetaCommand(ref const(char[]) inBuffer, ref char[] codeBuffer)
+bool handleMetaCommand(ref string inBuffer, ref string codeBuffer)
 {
     import std.conv : text;
     import std.process : system;
