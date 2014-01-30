@@ -65,6 +65,7 @@ $(document).ready(function () {
         $('link[rel="stylesheet"]').each(function () {
             this.href = this.href.replace(/\?.*|$/, queryString);
         });
+		setTimeout(windowResize, 500);
     });
 
     editor = CodeMirror.fromTextArea(document.getElementById("code"), {
