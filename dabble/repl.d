@@ -553,7 +553,7 @@ bool parse(string code, out string parsedCode)
                         "_REPL.dupSearch(*" ~ d ~ ", _repl_.imageBounds[0], _repl_.imageBounds[1], _repl_.keepAlive); }\n");
     }
 
-    auto codeOut =
+    auto codeOut = 
         c.header.data ~
         "string __expressionResult = ``; \n"
         "\n\nexport extern(C) int _main(ref _REPL.ReplShare _repl_)\n"

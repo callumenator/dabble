@@ -200,8 +200,6 @@ input {
 }
 
 
-
-
 .cm-s-dabble.CodeMirror             { background: #1d1e1c; color: #A4A49D; }
 .cm-s-dabble .CodeMirror-selected   { background: #253B76 !important;}
 .cm-s-dabble .CodeMirror-gutters    { background: transparent; border-right: 0; }
@@ -231,69 +229,64 @@ input {
 .cm-s-dabble .cm-link     { color: #8DA6CE; }
 
 .CodeMirror-hints {
-  position: absolute;
-  z-index: 10;
-  overflow: hidden;
-  list-style: none;
-
-  margin: 0;
-  padding: 2px;
-
-  -webkit-box-shadow: 2px 3px 5px rgba(0,0,0,.2);
-  -moz-box-shadow: 2px 3px 5px rgba(0,0,0,.2);
-  box-shadow: 2px 3px 5px rgba(0,0,0,.2);        
-  border: 0px solid silver;
-
-  background: rgba(0,0,0,.6);
-  font-size: 90%;
-  font-family: monospace;
-
-  max-height: 20em;
-  overflow-y: auto;
+	position: absolute;
+	z-index: 10;
+	overflow: hidden;
+	list-style: none;
+	margin: 0;
+	padding: 2px;
+	-webkit-box-shadow: 2px 3px 5px rgba(0,0,0,.2);  
+	box-shadow: 2px 3px 5px rgba(0,0,0,.2);        
+	border: 0px solid silver;
+	background: rgba(0,0,0,.6);
+	font-size: 90%;
+	font-family: monospace;
+	max-height: 20em;
+	overflow-y: auto;
 }
 
 .CodeMirror-hint {
-  font-family: Droid Sans Mono;
-  font-size: 1.2em;
-  margin: 0;
-  padding: 0 4px;        
-  max-width: 100%;
-  overflow: hidden;
-  white-space: pre;
-  color: white;
-  cursor: pointer;
+	font-family: Droid Sans Mono;
+	font-size: 1.2em;
+	margin: 0;
+	padding: 0 4px;        
+	max-width: 100%;
+	overflow: hidden;
+	white-space: pre;
+	color: white;
+	cursor: pointer;
 }
 
 .CodeMirror-hint-active {
-  background: #009933;
-  color: white;
+	background: #009933;
+	color: white;
 }
 
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+	width: 10px;
+	height: 10px;
 }
 
 ::-webkit-scrollbar-button:start:decrement,
 ::-webkit-scrollbar-button:end:increment  {
-  display: none;
+	display: none;
 }
 
 ::-webkit-scrollbar-track-piece  {
-  background-color: transparent;
-  -webkit-border-radius: 6px;
+	background-color: transparent;
+	-webkit-border-radius: 6px;
 }
 
 ::-webkit-scrollbar-thumb:vertical {
-  -webkit-border-radius: 6px;
-  background: #666 no-repeat center;
+	-webkit-border-radius: 6px;
+	background: #666 no-repeat center;
 }
 
 ::-webkit-scrollbar-thumb:horizontal 
 {
-  -webkit-border-radius: 6px;
-  background: #666 no-repeat center;
+	-webkit-border-radius: 6px;
+	background: #666 no-repeat center;
 }
 
 .resultWidget 
