@@ -139,7 +139,7 @@ $(document).ready(function () {
     * Start repl
     */
 	var os = require('os');
-	if (os.type() == "Windows_N")
+	if (os.type() == "Windows_NT")
 		engine = require('child_process').spawn('repl.exe', ['--noConsole'], { cwd: '../' });
 	else if (os.type == "Linux")
 		engine = require('child_process').spawn('../repl', ['--noConsole']);
@@ -150,7 +150,7 @@ $(document).ready(function () {
     /**
     * Start browser
     */
-	if (os.type() == "Windows_N")
+	if (os.type() == "Windows_NT")
 		browser = require('child_process').spawn('browser.exe', ['c:/users/cal/d/dmd2/src/phobos/std'], { cwd: '../' });	
 	else if (os.type == "Linux")
 		browser = require('child_process').spawn('../browser', ['c:/users/cal/d/dmd2/src/phobos/std']);	    
