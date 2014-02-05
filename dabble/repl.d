@@ -697,8 +697,6 @@ bool testCompile(out DMDMessage[] errors)
     auto rawFile = File(srcFile, "w");
     rawFile.write(context.rawCode.toString());
     rawFile.close();   
-	
-	
      
     if (errFile.exists())
         try { errFile.remove(); } catch(Exception e) {}
