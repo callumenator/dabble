@@ -63,7 +63,6 @@ $(document).ready(function () {
 	windowResize();
     $(window).resize(windowResize);              
 	
-
     require('fs').watch('../../ui/css/style.css', function (event, name) {
         var queryString = '?reload=' + new Date().getTime();
         $('link[rel="stylesheet"]').each(function () {
@@ -139,7 +138,7 @@ $(document).ready(function () {
     * Start repl
     */
 	engine = require('child_process').spawn('../repl', ['--noConsole']);	
-    send("version");
+    send("version", function(text) { updateResult(text, false); });
     
 
     /**
@@ -184,7 +183,7 @@ function preparseInput(text) {
 	console.log(text);
     if (text.trim() == "clear") {
         history.setValue("");
-        send("version", function(text) { updateResult(text, false);  });
+        send("version", function(text) { updateResult(text, false); });
     } else {
         updateHistory(text);        
         send(text);
@@ -302,8 +301,7 @@ function updateHistory(text) {
 function send(text, callback) {   
 	engine.stdout.removeAllListeners('data');
     if (callback === undefined) {							
-        engine.stdout.on('data', function (data) { 
-			console.log("In callback: ", data.toString());
+        engine.stdout.on('data', function (data) { 			
 			filterMessages(data.toString(), 
 						  function(text) { updateResult(text, true); },
 						  handleMessage					
@@ -313,8 +311,7 @@ function send(text, callback) {
 		engine.stdout.on('data', function (data) { 
 			filterMessages(data.toString(), callback, handleMessage);
 		});
-    }    
-	console.log("Sending: ", text);
+    }    	
     engine.stdin.write(new Buffer(text + "\n"));
 }
 
