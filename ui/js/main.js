@@ -138,7 +138,7 @@ $(document).ready(function () {
     * Start repl
     */
 	engine = require('child_process').spawn('../repl', ['--noConsole']);	
-    send("version", function(text) { updateResult(text, false); });
+    send("version");
     
 
     /**
@@ -183,7 +183,7 @@ function preparseInput(text) {
 	console.log(text);
     if (text.trim() == "clear") {
         history.setValue("");
-        send("version", function(text) { updateResult(text, false); });
+        send("version");
     } else {
         updateHistory(text);        
         send(text);
@@ -259,6 +259,12 @@ function handleMessage(json)
 		case "repl-result":
 			filterMessages(json.summary, function(text) { updateResult(text, true); }, handleMessage);
 			break;
+		case "meta":
+			if (json.cmd == "version")
+				updateResult(json.summary, false);
+			else
+				updateResult(json.summary, true);	
+			break;			
 		default: 
 			if (json.hasOwnProperty("summary")) 
 				updateResult(json.summary, true);
@@ -298,20 +304,14 @@ function updateHistory(text) {
 /**
 * Send input to the repl
 */
-function send(text, callback) {   
-	engine.stdout.removeAllListeners('data');
-    if (callback === undefined) {							
-        engine.stdout.on('data', function (data) { 			
+function send(text) {   
+	engine.stdout.removeAllListeners('data');    
+    engine.stdout.on('data', function (data) { 			
 			filterMessages(data.toString(), 
 						  function(text) { updateResult(text, true); },
 						  handleMessage					
 			);
-		});
-    } else {        		        
-		engine.stdout.on('data', function (data) { 
-			filterMessages(data.toString(), callback, handleMessage);
-		});
-    }    	
+		});   	
     engine.stdin.write(new Buffer(text + "\n"));
 }
 
