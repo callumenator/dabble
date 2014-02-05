@@ -1,26 +1,31 @@
 # Dabble
 
-A small repl for the D programming language (Windows and DMD32 only). 
+A repl for the D programming language (Windows and Linux).
 
-### Get and Build
+### Get started:
 
-1. Get DUB package manager: http://registry.vibed.org/download
+You will need to have the Digital Mars D compiler installed and on your executable path.
+
+1. Get DUB (currently requires git-head): http://registry.vibed.org/download
+
 2. Get dabble:
-```
-git clone https://github.com/callumenator/dabble
-```
-3. Build a configuration. There are two configurations available:
-    * console: builds dabble as a stand-alone Windows command line application.
-    * server (not available): builds dabble as a web-server using vibe.d, and a supplied client web page is used to interact with the REPL.
+   
+   ```
+   git clone https://github.com/callumenator/dabble --branch linux --single-branch
+   cd dabble
+   git submodule update --init --recursive
+   ```
+
+3. Build:
 
    ```
-   cd dabble
-   dub build --config=console
+   dub build dabble:repl
+   dub build dabble:browser
    ```
-4. Run the application. 
-    * console mode: ```dabble-console```
-    * server mode (not available): ```dabble-server```, then launch a browser and point it to http://localhost:8080/repl.html.
-    (To allow searching the std lib, provide a path to Phobos src as argument to dabble-server, ie: ```dabble-server ../dmd2/src/phobos/std```
+   
+4. Run:
+   * ui mode: ```./bin/nw/nw```
+   * console mode: ```./bin/repl```
 
 
 ### How it works
@@ -36,36 +41,6 @@ The parsed/modified code is then written to a temporary .d file, and compiled in
 If the user's code resulted in a value, that value is printed to the screen. Else, 'OK' is printed to indicate success. The loop then continues.
 
 Read-eval-print latency is usually acceptable, since DMD compiles simple code blazingly fast. 
-### Example session
-A short example session is shown below:
-```
-DABBLE: (DMD 2.62)
-: a = 5;
-=> 5
-: b = [1,2,3,4];
-=> [1, 2, 3, 4]
-: import std.algorithm;  /// algorithm is actually imported by default...
-=> OK
-: b.reverse;
-=> [4, 3, 2, 1]
-: struct S {      /// multi-line input detected
-:    int a = 5;
-:    void foo() {
-:       writeln(a);
-:    }
-: }
-=> OK
-: s = S(67);
-=> S(67)
-: s.foo();
-67
-=> OK
-: print all    /// meta-command, to print all defined variables
-a (int) = 5
-b (int[]) = [4, 3, 2, 1]
-s (S) = S(67)
-```
-
 
 ### Meta Commands
 
@@ -137,7 +112,6 @@ Turn on or off debug switches.
 * times - output the times (in msecs) taken to complete each stage (parse, build, call).
 
 
-### Limitations:
-- Error messages - these are sometimes bad, exposing dabble internals.
+### Issues:
 - Static variables (TLS or standard globals) - in particular, static data used by imported modules will not work as expected, since these data are not preserved between DLL loads.
 - Storing the address of code or static data - this should still work (assuming the pointer is detected), but will prevent the DLL from being unloaded, 
