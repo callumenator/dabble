@@ -10,7 +10,7 @@ Authors:   Callum Anderson
 
 module dabble.defs;
 
-version = log;
+//version = log;
 package bool trace = false;
 private enum replSharePrefix = "_repl_";
 

@@ -579,8 +579,7 @@ bool attempt(string cmd, string codeFilename, out DMDMessage[] errors)
 		static assert(false, "Implement 'attempt' on this platform");
 	
     if (system(cmd))
-    {
-		writeln("Command: ", cmd, " failed");
+    {		
         auto errFile = context.paths.tempPath ~ "errout.txt";
         if (codeFilename.length && exists(errFile))
 			errors = parseDmdErrorFile(codeFilename, errFile, true);
@@ -703,7 +702,7 @@ bool testCompile(out DMDMessage[] errors)
         try { errFile.remove(); } catch(Exception e) {}
 
     auto dirChange = "cd " ~ escapeShellFileName(context.paths.tempPath);
-    auto cmd = dirChange ~ " & dmd -o- -c testCompile.d";
+    auto cmd = [dirChange, cmdJoin, "dmd -c testCompile.d"].join(" ");
 
 	version(Windows)
 		cmd ~= " 2> testCompileErrout.txt";
@@ -711,9 +710,9 @@ bool testCompile(out DMDMessage[] errors)
 		cmd ~= " > testCompileErrout.txt";
 	else
 		static assert(false, "Implement 'testCompile' on this platform");
-	
+			
     if (system(cmd))
-	{
+	{		
 		if (errFile.exists())
 			errors = parseDmdErrorFile(srcFile, errFile, false);
 		return false;
