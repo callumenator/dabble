@@ -192,13 +192,25 @@ string genHeader()
         
         return obj;
     }
+`;
+}
 
+}
+else version(Posix)
+{
+
+string genHeader() 
+{
+	return 
+`
+	import std.traits, std.stdio, std.range, std.algorithm, std.conv;
+    import _REPL = defs;        
 `;
 }
 
 }
 else
 {
-    static assert(false, "Need to implement genHeader on this platform");
+    static assert(false, "Implement 'genHeader' on this platform");
 }
 

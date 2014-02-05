@@ -44,7 +44,6 @@ shared static this()
 }
 
 
-
 /**
 * Stages of evaluation.
 */
@@ -58,7 +57,6 @@ enum Stage
 }
 
 
-
 /**
 * Available levels of debug info.
 */
@@ -70,7 +68,6 @@ enum Debug
 }
 
 
-
 /**
 * Add a debug level to the session.
 */
@@ -78,7 +75,6 @@ void addDebugLevel(Debug level) in { assert(context.initalized, "Context not ini
 {
     context.debugLevel |= level;
 }
-
 
 
 /**
@@ -90,7 +86,6 @@ void setDebugLevel(uint level) in { assert(context.initalized, "Context not init
 }
 
 
-
 /**
 * Reset the repl session
 */
@@ -98,7 +93,6 @@ void resetSession()
 {
     context.reset();
 }
-
 
 
 /**
@@ -158,7 +152,6 @@ void loop()
 }
 
 
-
 /**
 * Free any shared libs that were kept alive.
 */
@@ -175,7 +168,6 @@ void onExit()
 }
 
 
-
 /**
 * Evaluate code in the context of the supplied ReplContext. This version assumes
 * inBuffer does not contain multiline input.
@@ -185,7 +177,6 @@ Tuple!(string, Stage) eval(string inBuffer)
     string dummyBuffer;
     return eval(inBuffer, dummyBuffer);
 }
-
 
 
 /**
@@ -228,7 +219,6 @@ Tuple!(string, Stage) eval(string inBuffer, ref string codeBuffer)
 	}
     return result;
 }
-
 
 
 /**
@@ -285,7 +275,6 @@ struct RawCode
                _body.map!( x => x.code )().join("\n") ~ "\n}";
     }
 }
-
 
 
 /**
@@ -349,7 +338,6 @@ struct ReplContext
 }
 
 
-
 /**
 * Return a command-input prompt.
 */
@@ -357,7 +345,6 @@ string prompt(bool multiline = false)
 {
     return multiline ? ".. " : ">> ";
 }
-
 
 
 /**
@@ -370,7 +357,6 @@ string title()
 	formattedWrite(writer, "DABBLE: (DMD %d.%03d)", version_major, version_minor);
     return writer.data;
 }
-
 
 
 /**
@@ -398,7 +384,6 @@ void clearScreen()
 }
 
 
-
 /**
 * Turn a debug level on or off, using a string to identify the debug level.
 */
@@ -419,7 +404,6 @@ void setDebugLevelFromString(string s)(string level) if (s == "on" || s == "off"
         default: break;
     }
 }
-
 
 
 /**
@@ -475,7 +459,6 @@ Tuple!(string, Stage) evaluate(string code)
 }
 
 
-
 /**
 * Just see if the code can be parsed (generates no errors), for testing multiline input.
 */
@@ -487,7 +470,6 @@ bool canParse(string code)
 	parser.parse(code, &r, &d, &v); 
 	return parser.errors.length == 0;
 }
-
 
 
 /**
@@ -559,7 +541,7 @@ bool parse(string code, out string parsedCode)
         "\n\nexport extern(C) int _main(ref _REPL.ReplShare _repl_)\n"
         "{\n"
         "    import std.exception, std.stdio;\n"
-        "    gc_setProxy(_repl_.gc);\n"
+        "    version(Windows) gc_setProxy(_repl_.gc);\n"
         "    auto saveOut = stdout;\n"
         "    scope(exit) { stdout = saveOut; } \n"
         "    stdout.open(_repl_.resultFile, `wt`);\n"
@@ -580,7 +562,6 @@ bool parse(string code, out string parsedCode)
 }
 
 
-
 /**
 * Attempt a build command, redirect errout to a text file.
 * Returns: array of tuples containing (source line, error message)
@@ -590,16 +571,23 @@ bool attempt(string cmd, string codeFilename, out DMDMessage[] errors)
     import std.process : system;
     import std.file : exists, readText;
 
-    if (system(cmd ~ " 2> errout.txt"))
+	version(Windows)	
+		cmd ~= " 2> errout.txt";
+	else version(Posix)	
+		cmd ~= " > errout.txt";	
+	else
+		static assert(false, "Implement 'attempt' on this platform");
+	
+    if (system(cmd))
     {
+		writeln("Command: ", cmd, " failed");
         auto errFile = context.paths.tempPath ~ "errout.txt";
-        if (exists(errFile))
+        if (codeFilename.length && exists(errFile))
 			errors = parseDmdErrorFile(codeFilename, errFile, true);
 		return false;
     }
     return true;
 }
-
 
 
 /**
@@ -621,20 +609,23 @@ bool build(string code)
     timeIt("build - write", file.write(code));
     file.close();
 
-    if (!exists(context.fullName ~ ".def"))
-    {
-        file = File(context.fullName ~ ".def", "w");
+	version(Windows)
+	{
+		if (!exists(context.fullName ~ ".def"))
+		{
+			file = File(context.fullName ~ ".def", "w");
 
-        enum def = "LIBRARY repl\n"
-                   "DESCRIPTION 'repl'\n"
-                   "EXETYPE	 NT\n"
-                   "CODE PRELOAD\n"
-                   "DATA PRELOAD";
+			enum def = "LIBRARY repl\n"
+					   "DESCRIPTION 'repl'\n"
+					   "EXETYPE	 NT\n"
+					   "CODE PRELOAD\n"
+					   "DATA PRELOAD";
 
-        file.write(def);
-        file.close();
-    }
-
+			file.write(def);
+			file.close();
+		}
+	}
+	
 	DMDMessage[] errors;
 
     if (!timeIt("build - userMod", buildUserModules(errors)))
@@ -642,20 +633,28 @@ bool build(string code)
 		auto summary = "Failed building user modules: errors follow:" ~ newl ~ errors.map!(e => e.toStr()).join(newl);					
 		consoleSession ? summary.send :
 			json("id", "build-error-usermod", "summary", summary, "data", errors.map!(e => e.toTup()).array).send;
-	}
+	} 
 
     auto dirChange = "cd " ~ escapeShellFileName(context.paths.tempPath);
-    auto linkFlags = ["-L/NORELOCATIONCHECK", "-L/NOMAP"];
-    auto dmdFlags = ["-shared"];
-    debug dmdFlags ~= ["-debug"];
+    
+	version(Windows)
+		auto dmdFlags = ["-L/NORELOCATIONCHECK", "-L/NOMAP", "-shared"];
+	else version(Posix)
+		auto dmdFlags = ["-of" ~ context.filename ~ ".so", "-fPIC", "-shared", "-defaultlib=libphobos2.so"];
+	else
+		static assert(false, "Implement 'build' for this platform");
+	
+    debug dmdFlags ~= "-debug";
 
-    string cmd = text(dirChange," & dmd ",dmdFlags.join(" ")," ",linkFlags.join(" ")," ",context.filename,".d ",context.filename,".def extra.lib");
-
+	auto cmd = [dirChange, cmdJoin, "dmd", dmdFlags.join(" "), context.filename ~ ".d"];	
+	version(Windows) cmd ~= context.filename ~ ".def";
+	cmd ~= "extra." ~ libExt;
+	
     if (context.userModules.length)
         cmd ~= context.userModules.map!(a => "-I" ~ a.path)().join(" ");
 
 	// Try to build the full hacked source
-	if (timeIt("build - build", attempt(cmd, context.fullName ~ ".d", errors)))
+	if (timeIt("build - build", attempt(cmd.join(" "), context.fullName ~ ".d", errors)))
 		return true;
 
     // If the full build fails, try to get a better error message by compiling the
@@ -678,7 +677,6 @@ bool build(string code)
 	}
 	return false;
 }
-
 
 
 /**
@@ -707,7 +705,14 @@ bool testCompile(out DMDMessage[] errors)
     auto dirChange = "cd " ~ escapeShellFileName(context.paths.tempPath);
     auto cmd = dirChange ~ " & dmd -o- -c testCompile.d";
 
-    if (system(cmd ~ " 2> testCompileErrout.txt"))
+	version(Windows)
+		cmd ~= " 2> testCompileErrout.txt";
+	else version(Posix)
+		cmd ~= " > testCompileErrout.txt";
+	else
+		static assert(false, "Implement 'testCompile' on this platform");
+	
+    if (system(cmd))
 	{
 		if (errFile.exists())
 			errors = parseDmdErrorFile(srcFile, errFile, false);
@@ -715,7 +720,6 @@ bool testCompile(out DMDMessage[] errors)
 	}
 	return true;
 }
-
 
 
 /**
@@ -737,8 +741,10 @@ bool buildUserModules(out DMDMessage[] errors, bool init = false)
         rebuildLib = true;        
         auto f = File(context.paths.tempPath ~ "defs.d", "w");		
         f.write("module defs;\n" ~ readText(replPath() ~ "/dabble/defs.d").findSplitAfter("module dabble.defs;")[1]);
-        f.close();
-        if (!attempt("cd " ~ context.paths.tempPath ~ " & dmd -c -release -noboundscheck -O defs.d", context.paths.tempPath ~ "defs.d", errors))
+        f.close();		
+		
+		auto command = ["cd", context.paths.tempPath, cmdJoin, "dmd -c -release -noboundscheck -O defs.d"].join(" ");		
+        if (!attempt(command, context.paths.tempPath ~ "defs.d", errors))
 			return false;
     }
 
@@ -757,8 +763,8 @@ bool buildUserModules(out DMDMessage[] errors, bool init = false)
             continue;
 
         rebuildLib = true;
-
-        if (!attempt("cd " ~ context.paths.tempPath ~ " & dmd -c " ~ allIncludes ~ " " ~ fullPath, fullPath, errors))
+		auto command = ["cd", context.paths.tempPath, cmdJoin, "dmd -c", allIncludes, fullPath].join(" ");		
+        if (!attempt(command, fullPath, errors))
             return false;
 
         getTimes(fullPath, access, modified);
@@ -767,14 +773,14 @@ bool buildUserModules(out DMDMessage[] errors, bool init = false)
 
     if (rebuildLib)
     {
-        auto objs = context.userModules.map!(a => stripExtension(a.name)~".obj")().join(" ");
-        if (!attempt("cd " ~ context.paths.tempPath ~ " & dmd -lib -ofextra.lib defs.obj " ~ objs, "", errors))
+        auto objs = context.userModules.map!(a => stripExtension(a.name) ~ objExt)().join(" ");
+		auto command = ["cd", context.paths.tempPath, cmdJoin, "dmd -lib -ofextra."~libExt, "defs."~objExt, objs].join(" ");
+        if (!attempt(command, "", errors))
             return false;
     }
 
 	return true;
 }
-
 
 
 /**
@@ -785,7 +791,7 @@ void cleanup()
     import std.file : exists, remove;
 
     auto clean = [
-        context.fullName ~ ".obj",
+        context.fullName ~ "." ~ objExt,
         context.fullName ~ ".map",
         context.paths.tempPath ~ "errout.txt"
     ];
@@ -794,7 +800,6 @@ void cleanup()
         if (exists(f))
             try { remove(f); } catch(Exception e) {}
 }
-
 
 
 /**
@@ -845,16 +850,19 @@ bool call(out string replResult)
         auto rangeBottom = (lib.getFunction!(GCFunc)("_gcRange"))();
         GC.removeRange(rangeBottom);
         auto funcPtr = lib.getFunction!(FuncType)("_main");
-
         if (funcPtr is null)
 		{
 			replResult = "Function ptr is null";
 			return false;
         }
-
-        auto res = funcPtr(context.share);
+        auto res = funcPtr(context.share);		
         GC.removeRange(rangeBottom);
     }
+	else version(Posix)
+	{
+		auto funcPtr = lib.getFunction!(FuncType)("_main");
+		auto res = funcPtr(context.share);	
+	}
     else
     {
         static assert(false, "Need to implement dabble.repl.call for this platform");
@@ -864,7 +872,7 @@ bool call(out string replResult)
     {		
         try
         {
-            replResult = readText(context.share.resultFile).stripRight();
+            replResult = readText(context.share.resultFile).stripRight();			
 			if (replResult.length == 0)
 				replResult = "OK";
             remove(context.share.resultFile);
@@ -890,7 +898,6 @@ bool call(out string replResult)
 }
 
 
-
 /**
 * Return error message and line number from a DMD error string.
 */
@@ -914,7 +921,6 @@ Tuple!(string, int) stripDmdErrorLine(string line)
 }
 
 
-
 /**
 * Remove * from user defined vars.
 */
@@ -928,7 +934,6 @@ string deDereference(string line, bool parens)
     else
         return replace(line, regex(`(\*)([_a-zA-Z][_0-9a-zA-Z]*)`, "g"), "$2");
 }
-
 
 
 /**
@@ -962,7 +967,7 @@ DMDMessage[] parseDmdErrorFile(string srcFile, string errFile, bool dederef)
     import std.path: baseName;
     import std.file : readText, exists;
     import std.string : splitLines, strip;
-
+	
     if (!exists(srcFile))
         throw new Exception("parseDmdErrorFile: srcFile does not exist");
     if (!exists(errFile))
@@ -998,7 +1003,6 @@ DMDMessage[] parseDmdErrorFile(string srcFile, string errFile, bool dederef)
 }
 
 
-
 @property void send(string s, bool newline = true)
 {
 	if (newline)
@@ -1007,7 +1011,6 @@ DMDMessage[] parseDmdErrorFile(string srcFile, string errFile, bool dederef)
 		consoleSession ? write(s) : write("\u0006", s, "\u0006");
 	stdout.flush();
 }
-
 
 
 /**
@@ -1051,7 +1054,6 @@ protected string json(T...)(T t)
 }
 
 
-
 private auto timeIt(E)(string stage, lazy E expr)
 {
     import std.datetime : StopWatch;
@@ -1069,7 +1071,6 @@ private auto timeIt(E)(string stage, lazy E expr)
 }
 
 
-
 /**
 * Try to find the absolute path of the repl executable
 */
@@ -1078,9 +1079,8 @@ private string replPath()
     import std.string : join;
 	import std.file : thisExePath;
 	import std.path : dirName, dirSeparator;
-	return dirName(thisExePath()).splitter(dirSeparator).array()[0..$-1].join(dirSeparator);
+	return dirName(thisExePath()).splitter(dirSeparator).array()[0..$-1].join(dirSeparator);		
 }
-
 
 
 /**
@@ -1107,14 +1107,49 @@ private string getTempDir()
         mkdirRecurse(tmpRoot);
     else
         enforce(tmpRootEntry.isDir, "Entry `"~tmpRoot~"' exists but is not a directory.");
-
+	
     return tmpRoot;
 }
 
 
-
 private @property string newl()
 {
-	return "\n";
-	//return consoleSession ? "\n" : "<br>";
+	return "\n";	
+}
+
+
+private @property string libExt()
+{
+	version(Windows) 	
+		return "lib";			
+	else version(Posix)	
+		return "a";	
+	else
+		static assert(false, "Implement 'libExt' on this platform");	
+}
+
+
+private @property string objExt()
+{
+	version(Windows) 	
+		return "obj";			
+	else version(Posix)	
+		return "o";	
+	else
+		static assert(false, "Implement 'objExt' on this platform");	
+}
+
+
+private @property string cmdJoin()
+{
+	version(Windows) 
+	{
+		return "&";		
+	}
+	else version(Posix)
+	{
+		return "&&";
+	}
+	else
+		static assert(false, "Implement 'cmdJoin' on this platform");
 }

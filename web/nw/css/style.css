@@ -1,4 +1,15 @@
-.CodeMirror {
+@font-face { 
+	font-family: 'OpenSans';
+    src: url('../fonts/OpenSans-Regular-webfont.woff') format('woff');         
+}
+
+@font-face { 
+	font-family: 'DroidSansMono';
+    src: url('../fonts/DroidSansMono-webfont.woff') format('woff');         
+}
+
+.CodeMirror {	
+	font-family: inherit;
 	border: 0px solid;
 	height: auto;
 	line-height: 1.3;
@@ -15,8 +26,8 @@ html {
 }
 
 body {
-	background-color: #1d1e1c;  
-	font-family: Droid Sans Mono;
+	font-family: DroidSansMono;
+	background-color: #1d1e1c;  	
 	color: white;
 	font-size: 12px; 
 	width: 100%;
@@ -73,9 +84,8 @@ input {
 * Repl input panel 
 */
 #code + .CodeMirror {
-	background-color: rgb(55,55,55);
-	border-radius: 5px;
-	margin-left: 26px;
+	background-color: rgb(55,55,55);		
+	border-left: 20px solid teal;
 }
 
 #repl-status {
@@ -246,7 +256,7 @@ input {
 }
 
 .CodeMirror-hint {
-	font-family: Droid Sans Mono;
+	font-family: DroidSansMono;
 	font-size: 1.2em;
 	margin: 0;
 	padding: 0 4px;        

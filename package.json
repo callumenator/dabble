@@ -10,21 +10,42 @@
             "name": "repl",            
             "targetType": "executable",                        
             "targetPath":"./bin",
-            "platforms": ["windows","posix"],                 
-            "targetName":"repl",                        
+            "platforms": ["windows", "posix"],                 
+            "targetName":"repl", 	
+
+			"dflags-posix": [
+				"-defaultlib=libphobos2.so", 
+				"-release"
+			],
+			
+			"libs-posix": [
+				"dl"
+			],
+									
+			"buildTypes": {
+				"debug": { "buildOptions": ["debugInfo"] },
+				"release": { "buildOptions": ["releaseMode"] }
+			},						
             
             "dependencies": {  
                 "pegged":"~master"    
             },
             
+			"importPaths": ["."], 
+			
             "sourcePaths" : [
                 "dabble"              
-            ],
+            ],						
             
-            "mainSourceFile": "dabble/main.d",
+			"mainSourceFile": "dabble/main.d",            
             
             "excludedSourceFiles": [
-                "dabble/sourcebrowser.d"
+                "dabble/sourcebrowser.d",
+				"dabble/DCD/client.d",
+				"dabble/DCD/server.d",
+				"dabble/DCD/dscanner/main.d",
+				"dabble/DCD/dscanner/analysis/*",
+				"dabble/DCD/msgpack-d/example/*"
             ]                        
         },
  		{
@@ -32,11 +53,10 @@
  			"targetType": "executable",            
             "targetPath":"./bin",
             "platforms": ["windows","posix"],                 
-            "targetName":"browser",
-            
- 			"sourceFiles": [
-                "dabble/sourcebrowser.d"
-            ]
+            "targetName":"browser",            			
+			"importPaths": ["."], 
+			"sourceFiles": ["dabble/sourcebrowser.d"],			
+ 			"mainSourceFile": "dabble/sourcebrowser.d"
  		}
  	]        
 }

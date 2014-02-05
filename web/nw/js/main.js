@@ -51,6 +51,10 @@ function windowResize() {
 }
 
 
+shortcut.add("Ctrl+Shift+J",function() { 
+    require('nw.gui').Window.get().showDevTools();
+});    
+
 /**
 * On-load setup
 */
@@ -141,7 +145,7 @@ $(document).ready(function () {
     /**
     * Start browser
     */
-    browser = require('child_process').spawn('browser.exe', ['c:/cal/d/dmd2/src/phobos/std'], { cwd: '../../bin' });
+    browser = require('child_process').spawn('browser.exe', ['c:/users/cal/d/dmd2/src/phobos/std'], { cwd: '../../bin' });
     browser.stdout.on('data', function (data) {
         if (browserAction !== null) {
             try {

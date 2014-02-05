@@ -19,6 +19,12 @@ version(Windows)
     import core.sys.windows.windows;
     extern(Windows) void* GetProcAddress(HMODULE hModule,  LPCSTR lpProcName);                                           
 }
+else version(Posix)
+{
+	import core.sys.posix.dlfcn;
+}
+else
+	static assert(false, "Implement SharedLib for this platform");		
 
 import core.runtime;
 import std.string : toStringz;          
@@ -40,29 +46,43 @@ struct SharedLib
     }
 
     bool load()
-    {            
-        handle = Runtime.loadLibrary(filename);                    
+    {
+		version(Windows)		
+			handle = Runtime.loadLibrary(filename);                    				
+		else version(Posix)
+			handle = dlopen(cast(char*)filename.toStringz(), RTLD_LAZY);					
+		else
+			static assert(false);
+		
         return handle !is null;                       
     }
 
     void free()
-    {
+    {			
         if (handle is null)
             return;
-            
-        if (Runtime.unloadLibrary(handle))
-            handle = null;
+         
+		version(Windows)
+		{			
+			if (Runtime.unloadLibrary(handle)) 
+				handle = null;	
+		}	
+		else version(Posix)
+		{
+			dlclose(handle);
+			handle = null;		
+		}    		
+		else
+			static assert(false);
     }
 
     T getFunction(T)(string name) in {assert(handle !is null, "Null handle");} body
     {            
-        version(Windows) 
-        {                       
-            return cast(T) GetProcAddress(handle, cast(char*)(name.toStringz()));                     
-        }
-        else
-        {
-            static assert(false, "SharedLib getFunction - platform not supported");
-        }
+        version(Windows)        
+            return cast(T) GetProcAddress(handle, cast(char*)(name.toStringz()));                             
+		else version(Posix)		
+			return cast(T) dlsym(handle, cast(char*)(name.toStringz()));	
+		else
+			static assert(false);
     }
 }
