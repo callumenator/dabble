@@ -8,7 +8,7 @@ You will need to have the Digital Mars D compiler installed and on your executab
 
 1. Get DUB (currently requires git-head): http://registry.vibed.org/download
 
-2. Get dabble:
+2. Get the version of dabble for your platform:
    
    ```
    git clone https://github.com/callumenator/dabble --branch linux --single-branch
