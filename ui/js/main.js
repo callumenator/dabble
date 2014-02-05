@@ -138,14 +138,22 @@ $(document).ready(function () {
     /**
     * Start repl
     */
-    engine = require('child_process').spawn('../repl', ['--noConsole']);
+	var os = require('os');
+	if (os.type() == "Windows_N")
+		engine = require('child_process').spawn('repl.exe', ['--noConsole'], { cwd: '../' });
+	else if (os.type == "Linux")
+		engine = require('child_process').spawn('../repl', ['--noConsole']);
+	
     send("version");
     
 
     /**
     * Start browser
     */
-    browser = require('child_process').spawn('../browser', ['c:/users/cal/d/dmd2/src/phobos/std']);
+	if (os.type() == "Windows_N")
+		browser = require('child_process').spawn('browser.exe', ['c:/users/cal/d/dmd2/src/phobos/std'], { cwd: '../' });	
+	else if (os.type == "Linux")
+		browser = require('child_process').spawn('../browser', ['c:/users/cal/d/dmd2/src/phobos/std']);	    
     browser.stdout.on('data', function (data) {
         if (browserAction !== null) {
             try {
