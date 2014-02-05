@@ -1,0 +1,10 @@
+{
+  "name": "dabble",
+  "main": "../../ui/html/repl.html",
+  "single-instance": false,
+  "window": {
+    "title": "dabble",
+    "toolbar": true,
+    "frame": true    
+  }
+}
