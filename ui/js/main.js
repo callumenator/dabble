@@ -64,7 +64,7 @@ $(document).ready(function () {
     $(window).resize(windowResize);              
 	
 
-    require('fs').watch('css/style.css', function (event, name) {
+    require('fs').watch('../../ui/css/style.css', function (event, name) {
         var queryString = '?reload=' + new Date().getTime();
         $('link[rel="stylesheet"]').each(function () {
             this.href = this.href.replace(/\?.*|$/, queryString);
@@ -138,14 +138,14 @@ $(document).ready(function () {
     /**
     * Start repl
     */
-    engine = require('child_process').spawn('repl.exe', ['--noConsole'], { cwd: '../../bin' });
+    engine = require('child_process').spawn('repl.exe', ['--noConsole'], { cwd: '../' });
     send("version");
     
 
     /**
     * Start browser
     */
-    browser = require('child_process').spawn('browser.exe', ['c:/users/cal/d/dmd2/src/phobos/std'], { cwd: '../../bin' });
+    browser = require('child_process').spawn('browser.exe', ['c:/users/cal/d/dmd2/src/phobos/std'], { cwd: '../' });
     browser.stdout.on('data', function (data) {
         if (browserAction !== null) {
             try {
