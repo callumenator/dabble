@@ -138,14 +138,14 @@ $(document).ready(function () {
     /**
     * Start repl
     */
-    engine = require('child_process').spawn('repl.exe', ['--noConsole'], { cwd: '../' });
+    engine = require('child_process').spawn('../repl', ['--noConsole']);
     send("version");
     
 
     /**
     * Start browser
     */
-    browser = require('child_process').spawn('browser.exe', ['c:/users/cal/d/dmd2/src/phobos/std'], { cwd: '../' });
+    browser = require('child_process').spawn('../browser', ['c:/users/cal/d/dmd2/src/phobos/std']);
     browser.stdout.on('data', function (data) {
         if (browserAction !== null) {
             try {
