@@ -10,6 +10,7 @@ Authors:   Callum Anderson
 
 module dabble.defs;
 
+version = log;
 package bool trace = false;
 private enum replSharePrefix = "_repl_";
 
@@ -129,9 +130,9 @@ struct Var
             }                        
 
             string _maker()
-            {                               
-                string s = "{\n";
-                            
+            {   
+				string assign;    			
+                string s = "{\n";				                          
                 string utype = text("Unqual!(",type,")");
                         
                 s ~= text("  static if (is(",type," == class)) {\n");
@@ -142,19 +143,20 @@ struct Var
 
                 if (strip(init).length == 0)
                     return s ~ "}\n";
-                
-                string assign;
-                
+                                 
                 assign = text("*cast(",utype,"*)",accessor,".addr = ",utype,"(",init,");");    
                 s ~= text("  static if (__traits(compiles,",utype,"(",init,")))\n  {\n");                
+				version(log) { s ~= text("    writeln(`assign 1`);\n"); }
                 s ~= text("    ",assign,"\n  }\n");
                 
                 assign = text("*cast(",utype,"*)",accessor,".addr = ",init,";");    
                 s ~= text("  else static if (__traits(compiles, { ",assign," }))\n  {\n");                
+				version(log) { s ~= text("    writeln(`assign 2`);\n"); }
                 s ~= text("    ",assign,"\n  }\n");
                 
                 assign = text("*cast(",utype,"*)",accessor,".addr = cast(",utype,")(",init,");");    
                 s ~= text("  else\n  {\n");                
+				version(log) { s ~= text("    writeln(`assign 3`);\n"); }
                 s ~= text("    ",assign,"\n  }\n}\n");
                         
                 return s;
@@ -294,7 +296,7 @@ void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
     {
         if (t >= start && t <= stop)
         {
-            debug { writeln("dupeSearch: keep alive - ", T.stringof); }
+            version(log) { writeln("dupeSearch: keep alive - ", T.stringof); }
             keepAlive = true;
         }
     }
@@ -302,29 +304,25 @@ void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
     {
         if (t.ptr >= start && t.ptr <= stop)
         {
-            debug { writeln("dupSearch: dup string"); }
+            version(log) { writeln("dupSearch: dup string"); }
             cast(Unqual!T)t = t.idup;
         }
     }
     else static if (isArray!T)
     {
+		if (t.length > 0)
+        {
+            version(log) { writeln("dupSearch: duping array ", T.stringof); }
+            auto newMem = new void[]((ArrayElement!T).sizeof * t.length);            
+            memcpy(newMem.ptr, t.ptr, (ArrayElement!T).sizeof * t.length);               
+            void* p0 = &t;                    
+            void** ptrAddr = cast(void**)(cast(size_t)p0 + 4);
+            *ptrAddr = newMem.ptr;
+        }
+	
         static if (needsDup!(ArrayElement!T))
         {
-            debug { writeln("dupSearch: check array elements ", T.stringof); }
-            
-            
-            /**
-            if (t.length > 0 && false)
-            {
-                debug { writeln("dupSearch: duping array ", T.stringof); }
-                auto newMem = new void[]((ArrayElement!T).sizeof * t.length);            
-                memcpy(newMem.ptr, t.ptr, (ArrayElement!T).sizeof * t.length);
-                
-                void* p0 = &t;                    
-                void** ptrAddr = cast(void**)(cast(size_t)p0 + 4);
-                *ptrAddr = newMem.ptr;
-            }
-            */
+            version(log) { writeln("dupSearch: check array elements ", T.stringof); }                                                
             
             foreach(ref e; t)
                 dupSearch(e, start, stop, keepAlive);
@@ -334,7 +332,7 @@ void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
     {
         if (cast(void*)t >= start && cast(void*)t <= stop)
         {
-            debug { writeln("dupSearch: dup pointer ", T.stringof); }
+            version(log) { writeln("dupSearch: dup pointer ", T.stringof); }
             auto newMem = new void[]((PointerTarget!T).sizeof);
             memcpy(newMem.ptr, t, (PointerTarget!T).sizeof);
             t = cast(T)newMem.ptr;
@@ -346,7 +344,7 @@ void dupSearch(T)(ref T t, void* start, void* stop, ref bool keepAlive)
     }
     else static if (isAggregateType!T)
     {
-        debug { writeln("dupSearch: aggregate ", T.stringof); }
+        version(log) { writeln("dupSearch: aggregate ", T.stringof); }
 
         size_t offset;
         void* baseAddr = cast(void*)&t;
