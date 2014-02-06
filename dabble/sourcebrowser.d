@@ -468,19 +468,15 @@ void buildSourceBrowser(string dmdPath = "")
     if (!files.empty) 
     {        
         auto list = files.map!( x => x.name )().join(" ");
-        auto res = system("dmd -c -o- -D -Dfbrowser.hml -X -Xfstdlib.json " ~ list);
+        auto res = system("dmd -c -o- -D -Dfbrowser.html -X -Xfstdlib.json " ~ list);
+		if (exists("browser.html"))
+            std.file.remove("browser.html");    
         auto text = readText("stdlib.json");
 
         auto obj = parseJSON(text);
         auto modList = obj.array;
         foreach(mod; modList)
             browser.insert(parse(mod.object));
-    }
-        
-    auto html = filter!q{endsWith(a.name, ".html")}(dirEntries("./", SpanMode.shallow));
-    foreach(file; html)    
-        if (exists(file))
-            remove(file);    
-    
+    }                   
     writeln(`{"status":"ready"}`, "\u0006"); stdout.flush();
 }

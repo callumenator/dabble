@@ -135,13 +135,13 @@ $(document).ready(function () {
     /**
     * Start repl
     */
-	engine = require('child_process').spawn('../repl', ['--noConsole']);	
-	var repl_buffer = "";
-	engine.stdout.on('data', function (data) { 
-		repl_buffer += data.toString();	
-		if (data.slice(-1)[0] != 10) return;			
-		filterMessages(repl_buffer); 
-		repl_buffer = "";
+	var repl_buffer = {data:""};
+	engine = require('child_process').spawn('../repl', ['--noConsole']);		
+	engine.stdout.on('data', function (data) { 		
+		var messages = messageProtocol(data, repl_buffer);		
+		if (messages.length == 0) return;					
+		for(var i = 0; m = messages[i], i < messages.length; i++) 
+			handleMessage(m);							
 	});	
     send("version");
     
@@ -149,8 +149,8 @@ $(document).ready(function () {
     /**
     * Start browser
     */
-	browser = require('child_process').spawn('../browser', ['c:/users/cal/d/dmd2/src/phobos/std']);	        
 	var browser_buffer = {data:""};
+	browser = require('child_process').spawn('../browser', ['c:/users/cal/d/dmd2/src/phobos/std']);	        	
 	browser.stdout.on('data', function (data) {	
 		var messages = messageProtocol(data, browser_buffer);		
 		if (messages.length == 0) return;			
@@ -167,10 +167,12 @@ $(document).ready(function () {
 function messageProtocol(incomming, buffer) {	
 	buffer.data += incomming.toString();		
 	if (incomming.slice(-1)[0] != 10 && incomming.slice(-2)[0] != 6) return [];
-	var parts = buffer.data.split(/\u0006/g);	
+	var str = buffer.data.replace(/(\r\r\n|\r\n|\n|\r)/g, "<br>");       
+	str = str.replace(/\u0009/g, "   ");
+	var parts = str.split(/\u0006/g);	
 	var jsonArray = [];
 	for(var i = 0; p = parts[i], i < parts.length; i++) {
-		if (p.trim().length == 0) continue;
+		if (p.replace(/<br>/g,'').trim().length == 0) continue;
 		try {
 			var json = JSON.parse(p);
 			jsonArray.push(json);
@@ -206,34 +208,6 @@ function clear() {
 	send("version");
 }
 
-/**
-* Filter responses from the repl engine
-*/
-function filterMessages(str)
-{	
-	str = str.replace(/(\r\r\n|\r\n|\n|\r)/g, "<br>");       
-	str = str.replace(/\u0009/g, "   ");
-	
-	//console.log("Diag: ", str, new Buffer(str));
-	
-	var parts = str.split(/\u0006/g);	
-	for(var i = 0; p = parts[i], i < parts.length; i++) {		
-		if (p.replace(/<br>/g,'').trim().length == 0) 
-			continue;
-		
-		var msg = null;
-		try { 
-			msg = JSON.parse(p); 
-		} catch(error) {			
-		}
-		
-		if (msg !== null && typeof msg === "object" && !Array.isArray(msg))
-			handleMessage(msg);
-		else
-			updateResult(p, true);	
-	}		
-}
-
 
 /** 
 * Handle json messages
@@ -246,7 +220,8 @@ function handleMessage(json)
 			multiline = true;
 			break;
 		case "repl-result":
-			filterMessages(json.summary, function(text) { updateResult(text, true); }, handleMessage);
+			// need to handle inner messages
+			updateResult(json.summary, true);
 			break;
 		case "meta":
 			if (json.cmd == "version")
