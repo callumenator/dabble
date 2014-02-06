@@ -46,17 +46,17 @@ void wait()
         inBuffer.clear;
         
         if (input == "exit")
-            break loop;            
+            break loop;            		
         else if (input.startsWith("suggest-names:"))
         {        
-            writeln("[", browser.suggestNames(input.findSplitAfter("suggest-names:")[1]).map!(x=>`"` ~ x ~ `"`).join(","), "]");
+            writeln(`{"result":[`, browser.suggestNames(input.findSplitAfter("suggest-names:")[1]).map!(x=>`"` ~ x ~ `"`).join(","), `]}`, "\u0006");			
             stdout.flush();
         }    
         else if (input.startsWith("search-names:"))        
         {
             auto r = browser.suggest(input.findSplitAfter("search-names:")[1])
                             .map!(x => `{"name":"` ~ escape(x.name) ~ `","uuid":"` ~ x.uuid ~ `"}`);        
-            write("[", r.join(","), "]");
+            writeln(`{"result":[`, r.join(","), `]}`, "\u0006");
             stdout.flush();
         }
         else if (input.startsWith("get-uuid:"))        
@@ -64,9 +64,13 @@ void wait()
             auto uuid = input.findSplitAfter("get-uuid:")[1];
             if (uuid in symbolDictionary)
             {
-                write(symbolDictionary[uuid].toJSON());
+                writeln(`{"result":`, symbolDictionary[uuid].toJSON(), "}\u0006");
                 stdout.flush();
             }
+			else
+			{
+				// This is an error
+			}
         }
     }
 }
@@ -172,7 +176,7 @@ struct Symbol
 
             return code;
         } catch(Exception e) {
-            writeln(e.msg);
+            stderr.writeln(e.msg);
         }
         assert(false);
     }
@@ -426,7 +430,7 @@ Symbol parse(JSONValue[string] obj, string parent = "", string file = "")
                 else
                     sym.fParams ~= pm;
             } catch (Exception e) {
-                writeln(e.msg);
+                stderr.writeln(e.msg);
             }
         }
     }
@@ -457,7 +461,7 @@ Symbol parse(JSONValue[string] obj, string parent = "", string file = "")
 
 void buildSourceBrowser(string dmdPath = "")
 {
-    writeln("generating"); stdout.flush();
+    writeln(`{"status":"generating"}`, "\u0006"); stdout.flush();
 
     auto files = filter!q{endsWith(a.name, ".d")}(dirEntries(dmdPath, SpanMode.shallow));
 
@@ -478,5 +482,5 @@ void buildSourceBrowser(string dmdPath = "")
         if (exists(file))
             remove(file);    
     
-    writeln("ready"); stdout.flush();
+    writeln(`{"status":"ready"}`, "\u0006"); stdout.flush();
 }

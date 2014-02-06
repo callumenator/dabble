@@ -136,29 +136,51 @@ $(document).ready(function () {
     * Start repl
     */
 	engine = require('child_process').spawn('../repl', ['--noConsole']);	
-	engine.stdout.on('data', function (data) { filterMessages(data.toString()); });	
+	var repl_buffer = "";
+	engine.stdout.on('data', function (data) { 
+		repl_buffer += data.toString();	
+		if (data.slice(-1)[0] != 10) return;			
+		filterMessages(repl_buffer); 
+		repl_buffer = "";
+	});	
     send("version");
     
 
     /**
     * Start browser
     */
-	browser = require('child_process').spawn('../browser', ['c:/users/cal/d/dmd2/src/phobos/std']);	    
-    browser.stdout.on('data', function (data) {
-        if (browserAction !== null) {
-            try {
-                var json = JSON.parse(data.toString());
-                browserAction(json);
-            } catch (error) {
-				$("#ajax-loader").css("visibility", "hidden");
-                console.log("Browser stdout error converting to JSON: ", error);
-            }
-        } else {
-            browserStatus = data.toString();
-        }
+	browser = require('child_process').spawn('../browser', ['c:/users/cal/d/dmd2/src/phobos/std']);	        
+	var browser_buffer = {data:""};
+	browser.stdout.on('data', function (data) {	
+		var messages = messageProtocol(data, browser_buffer);		
+		if (messages.length == 0) return;			
+		for(var i = 0; m = messages[i], i < messages.length; i++) {
+			if (m.hasOwnProperty("status"))
+				browserStatus = m.status;
+			else if (browserAction !== null)		
+				browserAction(m.result);					
+		}
     });
-
 });
+
+
+function messageProtocol(incomming, buffer) {	
+	buffer.data += incomming.toString();		
+	if (incomming.slice(-1)[0] != 10 && incomming.slice(-2)[0] != 6) return [];
+	var parts = buffer.data.split(/\u0006/g);	
+	var jsonArray = [];
+	for(var i = 0; p = parts[i], i < parts.length; i++) {
+		if (p.trim().length == 0) continue;
+		try {
+			var json = JSON.parse(p);
+			jsonArray.push(json);
+		} catch(err) {
+			console.log("Message proto: json parse error: ", err);
+		}
+	}
+	buffer.data = "";
+	return jsonArray;
+}
 
 
 /**
@@ -368,12 +390,13 @@ function panelClick(name) {
 
 
 function expandPanel(uuid, parent) {    
-    browserAction = function(json) {        
+    browserAction = function(json) {      		
         $(parent).append(symbolToHTML(json));        
         parent.dataset.expanded = "true";
     };     
     browser.stdin.write(new Buffer('get-uuid:' + uuid + "\n"));        
 }
+
 
 function collapsePanel(name, parent) {
     parent.removeChild(parent.firstChild.nextSibling); 
@@ -382,29 +405,10 @@ function collapsePanel(name, parent) {
 
 function symbolToHTML(symbol) {  
   return "<div class='libPanel libPanelLevel2'>" +
-    symbol.parent + 
-    "<br>" +   
-    symbol.pretty +  
-    "<br>" + 
-    symbol.comment.replace(/\n/g, '<br>') +  
-    /*"<div class='libPanelSrcButton' onclick='showSource(\""+symbol.uuid+"\")'>source</div>" +*/ 
-    "</div>";    
+    symbol.parent + "<br>" + symbol.pretty + "<br>" + 
+    symbol.comment.replace(/\n/g, '<br>') + "</div>";    
 }
 
-function showSource(uuid) {
-    var parent = event.target;
-            
-    post('/getSymbolSourceByUUID', uuid, function(xhr) {
-            
-        var html = xhr.responseText,             
-            div = document.createElement("div");                  
-                        
-         console.log(xhr.responseText);
-            
-        parent.appendChild(div);
-        div.innerHTML = html;          
-    });
-}
 
 function clearSuggestions() {
     $("#suggestionsPane").html("");    
