@@ -468,7 +468,7 @@ void buildSourceBrowser(string dmdPath = "")
     if (!files.empty) 
     {        
         auto list = files.map!( x => x.name )().join(" ");
-        auto res = system("dmd -c -o- -D -X -Xfstdlib.json " ~ list);
+        auto res = system("dmd -c -o- -D -Dfbrowser.hml -X -Xfstdlib.json " ~ list);
         auto text = readText("stdlib.json");
 
         auto obj = parseJSON(text);
