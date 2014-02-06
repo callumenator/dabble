@@ -5,6 +5,31 @@ var historyBuffer = [];
 var maxHistory = 200;
 var lineIndex = 0; // for moving through the history
 var lineWidgetCount = 0;
+var activeSliderPane = "";
+
+/**
+* Init global settings
+*/
+var globalSettings = {
+	phobosPath: phobosPath()
+};
+
+
+/**
+* Restore settings from localStorage if present
+*/
+if (localStorage.hasOwnProperty("globalSettings")) 
+	globalSettings = JSON.parse(localStorage.globalSettings);	
+
+
+/**
+* On close, store settings
+*/
+require('nw.gui').Window.get().on('close', function() {	
+	localStorage.globalSettings = JSON.stringify(globalSettings);
+	this.close(true);
+});
+
 
 /**
 * Trim string proto
@@ -54,7 +79,11 @@ shortcut.add("Ctrl+Shift+J",function() {
 });    
 
 shortcut.add("Ctrl+H",function() { 
-    toggleSearchPaneVisibility();
+    toggleSliderPane('docsearch-pane');
+});    
+
+shortcut.add("Ctrl+O",function() { 
+    toggleSliderPane('settings-pane');
 });    
 
 
@@ -153,7 +182,7 @@ $(document).ready(function () {
     * Start browser
     */
 	var browser_buffer = {data:""};
-	browser = require('child_process').spawn('../browser', ['c:/users/cal/d/dmd2/src/phobos/std']);	        	
+	browser = require('child_process').spawn('../browser', [globalSettings.phobosPath]);	        	
 	browser.stdout.on('data', function (data) {	
 		var messages = messageProtocol(data, browser_buffer);		
 		if (messages.length == 0) return;			
@@ -312,14 +341,15 @@ function send(text) {
 }
 
 
-/**
-* Show the doc search pane
-*/
-function toggleSearchPaneVisibility() {
-
-    var sp = document.getElementById('libPane'), 
-        cp = document.getElementById('code-pane');    
-    
+function toggleSliderPane(id, silent) {
+	
+	if (silent === undefined && activeSliderPane != "" && activeSliderPane != id) {
+		toggleSliderPane(activeSliderPane, true);
+	}	
+		
+	var sp = document.getElementById(id), 
+		cp = document.getElementById('code-pane');    
+	   	
     if (sp.style.display == "")
         sp.style.display = "none";
         
@@ -327,6 +357,7 @@ function toggleSearchPaneVisibility() {
         sp.style.display = "none";
         cp.style.width = "99%"; 
         editor.focus();   
+		activeSliderPane = "";	
     } else if (sp.style.display == "none") {                
         cp.style.width = "40%";        
         setTimeout(function() {
@@ -334,7 +365,8 @@ function toggleSearchPaneVisibility() {
             sp.style.width = "58%";
             $("#search-box").focus();
         }, 200);                                  
-    }
+		activeSliderPane = id;	
+    }	
 }
 
 
@@ -405,3 +437,18 @@ function scrollToBottom(jqEl) {
 	jqEl.scrollTop(jqEl[0].scrollHeight);
 }
 
+function phobosPath() {
+	var os = require('os');
+	if (os.type() == "Windows_NT") {
+		var path = process.env.path.split(";").filter( function(e) { return e.indexOf("dmd") != -1; })[0];
+		path = path.slice(0, path.indexOf("dmd2")) + "dmd2\\src\\phobos\\std\\";
+		if (require('fs').existsSync(path))
+			return path;		
+	} else if (os.type() == "Linux") {
+		
+	}
+}
+
+function initSettingsEditor() {
+//<li>Phobos path: <input type="text" onkeyup="function()"></li>
+}
