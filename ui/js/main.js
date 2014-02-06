@@ -1,6 +1,4 @@
 
-window.onkeydown = function() { return handleWindowEvent(event); };
-
 var editor, history, engine, browser;
 var browserAction = null, browserStatus = '';
 var historyBuffer = [];
