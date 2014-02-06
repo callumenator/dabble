@@ -66,6 +66,8 @@ $(document).ready(function () {
 	windowResize();
     $(window).resize(windowResize);              
 	
+	$("#repl-status").html("Initializing...");
+	
     require('fs').watch('../../ui/css/style.css', function (event, name) {
         var queryString = '?reload=' + new Date().getTime();
         $('link[rel="stylesheet"]').each(function () {
@@ -80,7 +82,8 @@ $(document).ready(function () {
         lineWrapping: true,
         smartIndent: false,
         extraKeys: { "Ctrl-Down": "autocomplete" }
-    });
+    });	
+	editor.setOption("readOnly", true); // disable until repl is started
 
     history = CodeMirror.fromTextArea(document.getElementById("history"), {
         mode: "text/x-d",
@@ -224,10 +227,14 @@ function handleMessage(json)
 			updateResult(json.summary, true);
 			break;
 		case "meta":
-			if (json.cmd == "version")
+			if (json.cmd == "version") {
 				updateResult(json.summary, false);
-			else
+				$("#repl-status").html("");
+				editor.setOption("readOnly", false);
+				editor.focus();
+			} else {
 				updateResult(json.summary, true);	
+			}
 			break;			
 		default: 
 			if (json.hasOwnProperty("summary")) 
@@ -241,6 +248,7 @@ function handleMessage(json)
 	else
 		$("#repl-status").html("");
 }
+
 
 /**
 * Got a result from the repl
@@ -304,6 +312,9 @@ function send(text) {
 }
 
 
+/**
+* Show the doc search pane
+*/
 function toggleSearchPaneVisibility() {
 
     var sp = document.getElementById('libPane'), 
