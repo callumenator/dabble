@@ -55,6 +55,11 @@ shortcut.add("Ctrl+Shift+J",function() {
     require('nw.gui').Window.get().showDevTools();
 });    
 
+shortcut.add("Ctrl+H",function() { 
+    toggleSearchPaneVisibility();
+});    
+
+
 /**
 * On-load setup
 */
@@ -91,21 +96,16 @@ $(document).ready(function () {
     history.setOption("theme", "dabble");
 
     editor.options.onKeyEvent = function (cm, e) {
-
         // If currently auto-completing, do nothing
         if (e.ctrlKey == true) return;
         if (editor.state.completionActive) return;
         if (!e || !(e instanceof KeyboardEvent)) return;
 
         if (e.type == 'keydown' && e.shiftKey == false && e.keyCode == 13) {            
-            var text = editor.getValue();
-            preparseInput(text);
-            e.preventDefault();
+            replInput();	
+			e.preventDefault();
             return true;
-        } else if (e.type == 'keydown' &&
-                   editor.lineCount() == 1 &&
-                   (e.keyCode == 38 || e.keyCode == 40)) {
-
+        } else if (e.type == 'keydown' && editor.lineCount() == 1 && (e.keyCode == 38 || e.keyCode == 40)) {
             var line = "";
             if (e.keyCode == 38) line = retrieveHistory('up');
             else line = retrieveHistory('down');
@@ -138,6 +138,7 @@ $(document).ready(function () {
     * Start repl
     */
 	engine = require('child_process').spawn('../repl', ['--noConsole']);	
+	engine.stdout.on('data', function (data) { filterMessages(data.toString()); });	
     send("version");
     
 
@@ -163,71 +164,38 @@ $(document).ready(function () {
 
 
 /**
-* Shortcuts
+* Take input text, handle it
 */
-function handleWindowEvent(e) {
-    if (event.ctrlKey == true) {
-        if (event.keyCode == 70) {
-            toggleSearchPaneVisibility();
-            return false;
-        }
-    }
-    return true;
+function replInput() {
+	var text = editor.getValue();           		
+	if (text.trim() == "clear") clear();				
+	else {
+		appendHistory(text);        
+		updateResult(text, false);
+		send(text);
+	}
+	editor.setValue("");                
 }
 
 
 /**
-* 
+* Clear history and send request for version/title string.
 */
-function preparseInput(text) {    
-	console.log(text);
-    if (text.trim() == "clear") {
-        history.setValue("");
-        send("version");
-    } else {
-        updateHistory(text);        
-        send(text);
-    }
-    editor.setValue("");    
+function clear() {
+	history.setValue("");
+	send("version");
 }
 
-
 /**
-* History lookup
+* Filter responses from the repl engine
 */
-function retrieveHistory(dir) {
-    if (dir == 'up') {
-        if (lineIndex > 0)
-            lineIndex--;
-    } else if (dir == 'down') {
-        if (lineIndex < historyBuffer.length - 1)
-            lineIndex++;
-    }
-    return historyBuffer[lineIndex];
-}
-
-
-/**
-* Got a result from the repl
-*/
-function updateResult(data, lwidget) {	
-    if (lwidget) {       
-        var id = "lineWidget" + (lineWidgetCount++).toString();
-        $("body").append("<div class='resultWidget' id='" + id + "'>" + data, + "</div>");
-        history.addLineWidget(history.lineCount() - 1, $("#" + id)[0]);
-    } else {
-        cmAppend(history, data);
-    }
-    scrollToBottom($("#code-pane > div:first-child"));
-}
-
-
-/**
-* Filter-out json messages from REPL
-*/
-function filterMessages(str, textCallback, msgCallback)
-{
+function filterMessages(str)
+{	
 	str = str.replace(/(\r\r\n|\r\n|\n|\r)/g, "<br>");       
+	str = str.replace(/\u0009/g, "   ");
+	
+	//console.log("Diag: ", str, new Buffer(str));
+	
 	var parts = str.split(/\u0006/g);	
 	for(var i = 0; p = parts[i], i < parts.length; i++) {		
 		if (p.replace(/<br>/g,'').trim().length == 0) 
@@ -236,13 +204,14 @@ function filterMessages(str, textCallback, msgCallback)
 		var msg = null;
 		try { 
 			msg = JSON.parse(p); 
-		} catch(error) {}
+		} catch(error) {			
+		}
 		
 		if (msg !== null && typeof msg === "object" && !Array.isArray(msg))
-			msgCallback(msg);
+			handleMessage(msg);
 		else
-			textCallback(p);		
-	}	
+			updateResult(p, true);	
+	}		
 }
 
 
@@ -278,6 +247,24 @@ function handleMessage(json)
 		$("#repl-status").html("");
 }
 
+/**
+* Got a result from the repl
+*/
+function updateResult(data, lwidget) {	
+    if (lwidget) {       
+        var id = "lineWidget" + (lineWidgetCount++).toString();
+        $("body").append("<div class='resultWidget' id='" + id + "'>" + data, + "</div>");
+        history.addLineWidget(history.lineCount() - 1, $("#" + id)[0]);
+    } else {
+        cmAppend(history, data);
+    }
+    scrollToBottom($("#code-pane > div:first-child"));
+}
+
+
+/**
+* Append text to codemirror text.
+*/
 function cmAppend(cm, text) {
     text = text.replace(/(\r\r\n|\r\n|\r)/g, "\n");
     text = text.split("\n").filter(function (el) { return el.length; }).join("\n")    
@@ -285,14 +272,12 @@ function cmAppend(cm, text) {
     cm.replaceRange(text, CodeMirror.Pos(cm.lastLine()));            
 }
 
+
 /**
-* Add last input to history
+* Append text to history
 */
-function updateHistory(text) {
-    if (text.length == 0) return;
-    cmAppend(history, text);
-	scrollToBottom($("#code-pane > div:first-child"));
-    if (historyBuffer.length > 1 && historyBuffer[historyBuffer.length-1] == text) return;
+function appendHistory(text) {    
+    if (text.length == 0 || (historyBuffer.length > 1 && historyBuffer[historyBuffer.length-1] == text)) return;
     historyBuffer.push(text);
     if (historyBuffer.length > maxHistory)
         for(var i = 0; i < 10; i++)
@@ -302,18 +287,27 @@ function updateHistory(text) {
 
 
 /**
+* History lookup
+*/
+function retrieveHistory(dir) {
+    if (dir == 'up') {
+        if (lineIndex > 0)
+            lineIndex--;
+    } else if (dir == 'down') {
+        if (lineIndex < historyBuffer.length - 1)
+            lineIndex++;
+    }
+    return historyBuffer[lineIndex];
+}
+
+
+/**
 * Send input to the repl
 */
-function send(text) {   
-	engine.stdout.removeAllListeners('data');    
-    engine.stdout.on('data', function (data) { 			
-			filterMessages(data.toString(), 
-						  function(text) { updateResult(text, true); },
-						  handleMessage					
-			);
-		});   	
+function send(text) {   	    
     engine.stdin.write(new Buffer(text + "\n"));
 }
+
 
 function toggleSearchPaneVisibility() {
 
