@@ -1,11 +1,204 @@
-@font-face { 
-	font-family: 'OpenSans';
-    src: url('../fonts/OpenSans-Regular-webfont.woff') format('woff');         
+html, body {
+	height: 100%;	
+	width: 100%;
+	margin: 0;
+	padding: 0;
+	overflow: hidden;
 }
 
-@font-face { 
-	font-family: 'DroidSansMono';
-    src: url('../fonts/DroidSansMono-webfont.woff') format('woff');         
+body {
+	font-family: DroidSansMono;
+	background-color: #1d1e1c;  	
+	font-size: 12px; 		
+	color: white;		
+	position: relative;
+}
+
+#header {
+	position: absolute;
+	top: 0px; 
+	height: 30px;
+	width: 100%;	
+	background-color: black;
+	border-bottom: 1px solid rgb(60,60,60);
+	z-index: 999;
+}
+
+#title {
+	margin-right: 5px; 
+	font-family: OpenSans;
+	font-weight: bold;	
+	float: right;
+	font-size: 20px;	
+	height: 100%;		
+}
+
+#footer {
+	position: absolute;
+	bottom: 0px; 
+	height: 30px;
+	width: 100%;
+	background-color: black;
+	border-top: 1px solid rgb(60,60,60);
+	z-index: 999;
+}
+
+#repl-status {		
+	padding-left: 5px;
+	height: 100%;
+	color: white;
+	font-size: 15px;			
+}
+
+#logo {	
+	height: 100%;		
+	float: right;
+}
+
+#content {
+	position: absolute;
+	top: 30px;
+	bottom: 30px; 	
+	width: 100%;	
+}
+
+#code-pane {  	
+	display: inline-block;	
+	width: 100%;
+	height: 100%;			
+	transition: all .1s ease-in-out;	
+}
+
+#code-pane > div:first-child {
+	max-height: 75%;
+	overflow-y: auto;
+}
+
+#code-pane > div:nth-child(2) {
+	height: 20%;
+	overflow-y: auto;
+}
+
+#code {  
+  width: 100%;  
+}
+
+/* Repl input panel */
+#code + .CodeMirror {
+	background-color: rgb(55,55,55);		
+	border-left: 20px solid rgb(0,80,80);
+	padding-left: 5px;
+}
+
+.slider-pane {		
+	top: 0px;	
+	right: 0px;		
+	height: 100%;		
+	position: absolute;
+	visibility: hidden;	
+	overflow: hidden;
+	transition: all .1s ease-in-out;
+	border-left: 1px solid rgb(60,60,60);
+}
+
+.pane-header {
+	position: absolute;
+	top: 0px;	
+	right: 10px; 
+	left: 10px;	
+}
+
+.pane-header > h3 {
+	border-bottom: 1px solid lightgrey;
+}
+
+.pane-content {
+	position: absolute;
+	bottom: 0px; 	
+	left: 10px; 	
+	right: 10px;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.docsearch-pane-header {
+	height: 100px;		
+}
+
+.docsearch-pane-content {
+	top: 100px;
+}
+
+.settings-pane-header {
+	height: 10px;			
+}
+
+.settings-pane-content {
+	top: 50px;
+}
+
+.doc-panel { 
+	cursor: pointer;
+	vertical-align: middle;
+	white-space: nowrap;  
+	font-size: 12px;
+	margin-top: 3px;
+	margin-bottom: 3px;	
+	border-radius:0px;
+	background-color: #333333;
+	padding-left: 5px;
+	padding-top: 5px;
+	padding-bottom: 0px;     	
+	user-select: none;	
+	width: 100%;
+    overflow-x: hidden;  
+    text-overflow: ellipsis;
+}
+
+.doc-panel-expanded {
+    background-color: black;
+    margin-left: -5px;
+    margin-right: 0px;
+    width: 100%;
+    overflow-x: auto;
+}
+
+#ajax-loader {		
+	vertical-align: top;
+	visibility: hidden;
+}
+
+#search-box {
+	width: 80%;
+	border-radius: 5px;
+	padding: 5px;  
+	border: 0px;
+	font: inherit;  
+	color: black;	
+	background-color: rgb(240,240,240);
+	border: 1px solid lightgrey;
+}
+
+#settings-pane table {
+	table-layout: fixed;
+	width: 95%;
+}
+
+#settings-pane table tr td:first-child {
+	font-size: 1.2em;
+	padding-right: 10px;
+	text-align: right;
+	width: 25%;
+}
+
+#settings-pane table input {
+	width: 100%;
+	border-radius: 5px;
+	padding: 5px;  
+	border: 0px;
+	font: inherit;  
+	color: black;	
+	background-color: rgb(240,240,240);	
 }
 
 .CodeMirror {	
@@ -18,184 +211,7 @@
 .CodeMirror-scroll {
 	overflow-y: hidden;
 	overflow-x: hidden;
-}          
-
-html {
-	height: 98%; 
-	width: 100%;
-}
-
-body {
-	font-family: DroidSansMono;
-	background-color: #1d1e1c;  	
-	color: white;
-	font-size: 12px; 
-	width: 100%;
-	height: 100%;          
-	margin: 0 auto;     
-	overflow-y: hidden;
-	overflow-x: hidden;
-}
-
-#content {	
-	overflow: hidden;	
-	position: relative;
-}
-
-#footer {
-	font-size: 15px;
-	height: 45px;	
-	background-color: black;
-}
-
-#repl-status {
-	height: 100%;
-	padding: 5px 10px;
-	color: white;
-	font-size: 13px;		
-}
-
-input {
-    outline: none;
-    transition: all 0.25s ease-in-out;
-    -webkit-transition: all 0.25s ease-in-out;
-}
-
-#code-pane {  		
-	height: 100%;
-	width: 100%;
-	vertical-align: middle;
-	display: inline-block;
-	margin-left: 0px;  	
-	padding-right: 5px; 
-	border-right: 1px solid grey;
-  
-	transition: all .2s ease-in-out;
-	-webkit-transition: all .2s ease-in-out;   
-}
-
-#code-pane > div:first-child {
-	max-height: 80%;
-	overflow-y: auto;
-}
-
-#code-pane > div:nth-child(2) {
-	height: 20%;
-	overflow-y: auto;
-}
-
-/** 
-* Repl input panel 
-*/
-#code + .CodeMirror {
-	background-color: rgb(55,55,55);		
-	border-left: 20px solid rgb(0,80,80);
-	padding-left: 5px;
-}
-
-.slider-pane {              
-  display: none;      
-  height:100%;     
-  overflow-y: hidden;
-  position: absolute;
-  right: 0px;
-  top: 0px;
-}
-
-#suggestionsPane {
-  margin-top: 10px;
-  overflow: auto;        
-  height:100%; 
-}
-
-.libPanel { 
-	cursor: pointer;
-	vertical-align: middle;
-	white-space: nowrap;  
-	font-size: 12px;
-	margin-top: 3px;
-	margin-bottom: 3px;
-	border-radius: 5px; 
-	/* border: 1px solid #616260; */
-	border-radius:0px;
-	background-color: #333333;
-	padding-left: 5px;
-	padding-top: 5px;
-	padding-bottom: 0px;
-     	
-	-webkit-user-select: none;
-	user-select: none;
-}
-
-.libPanelLevel1 {    
-    width: 100%;
-    overflow-x: hidden;  
-    text-overflow: ellipsis;
-}
-
-.libPanelLevel2 {
-    background-color: black;
-    margin-left: -5px;
-    margin-right: 0px;
-    width: 100%;
-    overflow-x: auto;
-}
-
-
-
-#code {
-  display: inline-block;
-  width: 90%;
-  background-color: yellow;
-}
-    
-#titleOuter {  	
-	font-family: 'Fauna One', serif;
-	text-align: right;
-	color: white;
-	font-size:2em;  
-	margin-bottom: 20px;
-}
-
-#titleInner {
-  margin-bottom: -5px;
-}
-
-#titleText {
-}
-
-#logo {
-	display: none;
-	width: 20px;	
-}
-
-
-#docsearch-pane div {
-	width: 100%;
-}
-
-#docsearch-pane > div > input {
-	width: 80%;
-	vertical-align: top;
-}
-
-#ajax-loader {		
-	vertical-align: top;
-	visibility: hidden;
-}
-
-#search-box {
-	width: 100%;
-	border-radius: 5px;
-	padding: 5px;  
-	border: 0px;
-	font: inherit;  
-	color: black;	
-	background-color: rgb(240,240,240);
-	border: 1px solid lightgrey;
-	/*box-shadow: 0 0 15px rgba(0, 250, 220, 1);  */
-}
-
+}    
 
 .cm-s-dabble.CodeMirror             { background: #1d1e1c; color: #A4A49D; }
 .cm-s-dabble .CodeMirror-selected   { background: #253B76 !important;}
@@ -294,3 +310,14 @@ input {
     margin: 5px 0px;
     /*background-color: rgb(40,40,40);*/
 }
+
+@font-face { 
+	font-family: 'OpenSans';
+    src: url('../fonts/OpenSans-Regular-webfont.woff') format('woff');         
+}
+
+@font-face { 
+	font-family: 'DroidSansMono';
+    src: url('../fonts/DroidSansMono-webfont.woff') format('woff');         
+}
+

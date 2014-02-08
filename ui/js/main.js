@@ -2,7 +2,7 @@
 var editor, history, engine, browser;
 var browserAction = null, browserStatus = '';
 var historyBuffer = [];
-var maxHistory = 200;
+var maxHistory = 200; 
 var lineIndex = 0; // for moving through the history
 var lineWidgetCount = 0;
 var activeSliderPane = "";
@@ -18,8 +18,8 @@ var globalSettings = {
 /**
 * Restore settings from localStorage if present
 */
-if (localStorage.hasOwnProperty("globalSettings")) 
-	globalSettings = JSON.parse(localStorage.globalSettings);	
+if (localStorage.hasOwnProperty("globalSettings"))		
+	globalSettings = JSON.parse(localStorage.globalSettings);		
 
 
 /**
@@ -69,22 +69,34 @@ CodeMirror.commands.autocomplete = function(cm) {
 
 
 function windowResize() {
-	$('#content').height(window.innerHeight - $("#header").height() - $("#footer").height());
+	$('body > table > tbody > tr > td > div').height(
+		window.innerHeight - 
+		$("body > table > thead > tr > th").height() - 
+		$("body > table > tfoot > tr > td").height());
 	scrollToBottom($("#code-pane > div:first-child"));
 }
 
-
+/* Devtools shortcut */
 shortcut.add("Ctrl+Shift+J",function() { 
     require('nw.gui').Window.get().showDevTools();
 });    
 
-shortcut.add("Ctrl+H",function() { 
-    toggleSliderPane('docsearch-pane');
+/* Fullscreen toggle shortcut */
+shortcut.add("Ctrl+M",function() { 
+    require('nw.gui').Window.get().toggleFullscreen();
 });    
 
-shortcut.add("Ctrl+O",function() { 
-    toggleSliderPane('settings-pane');
+/* Doc search toggle shortcut */
+shortcut.add("Ctrl+H",function() { 
+    togglePane('docsearch-pane');
 });    
+
+/* Options toggle shortcut */
+shortcut.add("Ctrl+O",function() { 
+    togglePane('settings-pane');
+});    
+
+
 
 
 /**
@@ -92,10 +104,13 @@ shortcut.add("Ctrl+O",function() {
 */
 $(document).ready(function () {
 	
-	windowResize();
-    $(window).resize(windowResize);              
+	//windowResize();
+    //$(window).resize(windowResize);              
 	
 	$("#repl-status").html("Initializing...");
+	
+	initPanes();	
+	initSettingsEditor();
 	
     require('fs').watch('../../ui/css/style.css', function (event, name) {
         var queryString = '?reload=' + new Date().getTime();
@@ -341,35 +356,6 @@ function send(text) {
 }
 
 
-function toggleSliderPane(id, silent) {
-	
-	if (silent === undefined && activeSliderPane != "" && activeSliderPane != id) {
-		toggleSliderPane(activeSliderPane, true);
-	}	
-		
-	var sp = document.getElementById(id), 
-		cp = document.getElementById('code-pane');    
-	   	
-    if (sp.style.display == "")
-        sp.style.display = "none";
-        
-    if (sp.style.display == "inline-block") {       
-        sp.style.display = "none";
-        cp.style.width = "99%"; 
-        editor.focus();   
-		activeSliderPane = "";	
-    } else if (sp.style.display == "none") {                
-        cp.style.width = "40%";        
-        setTimeout(function() {
-            sp.style.display = "inline-block";
-            sp.style.width = "58%";
-            $("#search-box").focus();
-        }, 200);                                  
-		activeSliderPane = id;	
-    }	
-}
-
-
 function searchInput() {
     var prefix = $("#search-box").val();
 	
@@ -392,7 +378,7 @@ function searchInput() {
 function listToHTML(list) {
     var html = "";
     list.forEach( function(e) {
-        html+="<div class='libPanel libPanelLevel1' data-expanded='false' onclick='panelClick(\""+e.uuid+"\")'>"+e.name+"</div>";
+        html+="<div class='doc-panel' data-expanded='false' onclick='panelClick(\""+e.uuid+"\")'>"+e.name+"</div>";
     });
     return html;
 }
@@ -422,7 +408,7 @@ function collapsePanel(name, parent) {
 }
 
 function symbolToHTML(symbol) {  
-  return "<div class='libPanel libPanelLevel2'>" +
+  return "<div class='doc-panel doc-panel-expanded'>" +
     symbol.parent + "<br>" + symbol.pretty + "<br>" + 
     symbol.comment.replace(/\n/g, '<br>') + "</div>";    
 }
@@ -449,6 +435,54 @@ function phobosPath() {
 	}
 }
 
-function initSettingsEditor() {
-//<li>Phobos path: <input type="text" onkeyup="function()"></li>
+
+// Set up sliding panes
+function initPanes() {
+	$(".slider-pane").each(function(i,e) {						
+		e.setAttribute("data-shown", "false");	
+	});
 }
+
+// Toggle visibility of given pane
+function togglePane(id) {
+	($("#"+id).attr("data-shown") == "false") ? showPane(id) : hidePane(id);
+}
+
+// Slide-in the given pane
+function showPane(id) {			
+	hidePane();
+	var cp = document.getElementById('code-pane'),
+		sp = document.getElementById(id);
+	cp.style.width = "40%";    
+	sp.style.width = "58%";
+	sp.style.visibility = "visible";
+	sp.setAttribute("data-shown", "true");	
+	if (sp.getAttribute("data-onshow")) eval(sp.getAttribute("data-onshow"));					
+}
+
+// Hide active pane
+function hidePane() {
+	var active = $(".slider-pane[data-shown='true']");
+	if (active.length == 0) return;		
+	var cp = document.getElementById('code-pane'),
+		sp = active[0];
+	sp.style.width = "0%";	
+	sp.style.visibility = "hidden";
+	cp.style.width = "99%";     
+    editor.focus();   
+	active[0].setAttribute("data-shown", "false");
+	if (active.attr("data-onhide")) eval(active.attr("data-onhide"));	
+}
+
+function initSettingsEditor() {		
+	$("#settings-list").append("<tr><td>Phobos path:</td><td><input data-key='phobosPath' value="+globalSettings.phobosPath+" type='text'></td</tr>");
+}
+
+function settingsPaneHide() {
+	console.log($("#settings-pane").data("tempSettings"));
+	$("#settings-list tr td input").each(function(i,e) {
+		console.log("set");
+		globalSettings[e.getAttribute("data-key")] = e.value;
+	});
+}
+
