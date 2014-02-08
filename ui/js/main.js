@@ -67,15 +67,6 @@ CodeMirror.commands.autocomplete = function(cm) {
     });
 }
 
-
-function windowResize() {
-	$('body > table > tbody > tr > td > div').height(
-		window.innerHeight - 
-		$("body > table > thead > tr > th").height() - 
-		$("body > table > tfoot > tr > td").height());
-	scrollToBottom($("#code-pane > div:first-child"));
-}
-
 /* Devtools shortcut */
 shortcut.add("Ctrl+Shift+J",function() { 
     require('nw.gui').Window.get().showDevTools();
@@ -96,22 +87,40 @@ shortcut.add("Ctrl+O",function() {
     togglePane('settings-pane');
 });    
 
-
-
-
-/**
-* On-load setup
-*/
+/* On-load setup */
 $(document).ready(function () {
-	
-	//windowResize();
-    //$(window).resize(windowResize);              
-	
+		
 	$("#repl-status").html("Initializing...");
 	
 	initPanes();	
 	initSettingsEditor();
-	
+	monitorStylesheet();
+	initCodemirrors();
+    
+	// Replace this with DCD version
+    (function () {
+        CodeMirror.dHint = function (editor, callback, options) {
+            var cursor = editor.getCursor();
+            var tk = editor.getTokenAt(cursor);
+            browserAction = function (json) {
+                if (json.length == 0) return;
+                callback({
+					list: json,
+                    from: CodeMirror.Pos(cursor.line, tk.start),
+                    to: CodeMirror.Pos(cursor.line, tk.end)
+                });                
+            };
+            browser.stdin.write(new Buffer('suggest-names:' + tk.string.toLowerCase() + '\n'));
+        };
+    }());
+
+    initRepl();
+	initBrowser();
+        
+});
+
+/* Monitor stylesheet for changes */
+function monitorStylesheet() {
     require('fs').watch('../../ui/css/style.css', function (event, name) {
         var queryString = '?reload=' + new Date().getTime();
         $('link[rel="stylesheet"]').each(function () {
@@ -119,8 +128,11 @@ $(document).ready(function () {
         });
 		setTimeout(windowResize, 500);
     });
+}
 
-    editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+/* Initialize codemirror editors. */
+function initCodemirrors() {
+	editor = CodeMirror.fromTextArea(document.getElementById("code"), {
         mode: "text/x-d",
         viewportMargin: Infinity,
         lineWrapping: true,
@@ -139,49 +151,29 @@ $(document).ready(function () {
 
     editor.setOption("theme", "dabble");
     history.setOption("theme", "dabble");
-
-    editor.options.onKeyEvent = function (cm, e) {
-        // If currently auto-completing, do nothing
-        if (e.ctrlKey == true) return;
-        if (editor.state.completionActive) return;
-        if (!e || !(e instanceof KeyboardEvent)) return;
-
-        if (e.type == 'keydown' && e.shiftKey == false && e.keyCode == 13) {            
+	
+	editor.options.onKeyEvent = function (cm, e) {
+		if (!e || !(e instanceof KeyboardEvent)) return;
+        // If currently auto-completing, do nothing		
+        if (e.ctrlKey == true || editor.state.completionActive) return;
+        
+        if (e.type == 'keydown' && e.shiftKey == false && e.keyCode == 13) { // enter key press
             replInput();	
 			e.preventDefault();
             return true;
-        } else if (e.type == 'keydown' && editor.lineCount() == 1 && (e.keyCode == 38 || e.keyCode == 40)) {
+        } else if (e.type == 'keydown' && editor.lineCount() == 1 && (e.keyCode == 38 || e.keyCode == 40)) { // arrow up/down
             var line = "";
-            if (e.keyCode == 38) line = retrieveHistory('up');
-            else line = retrieveHistory('down');
+            e.keyCode == 38 ? line = retrieveHistory('up') : line = retrieveHistory('down');
             if (typeof line != "undefined") {
                 editor.setValue(line);				
 				setTimeout( function() { editor.setCursor(editor.lineCount(), 0); }, 50);								
 			}
         }
     };
+}
 
-
-    (function () {
-        CodeMirror.dHint = function (editor, callback, options) {
-            var cursor = editor.getCursor();
-            var tk = editor.getTokenAt(cursor);
-            browserAction = function (json) {
-                if (json.length == 0) return;
-                callback({
-					list: json,
-                    from: CodeMirror.Pos(cursor.line, tk.start),
-                    to: CodeMirror.Pos(cursor.line, tk.end)
-                });                
-            };
-            browser.stdin.write(new Buffer('suggest-names:' + tk.string.toLowerCase() + '\n'));
-        };
-    } ());
-
-
-    /**
-    * Start repl
-    */
+/* Start repl. */
+function initRepl() {
 	var repl_buffer = {data:""};
 	engine = require('child_process').spawn('../repl', ['--noConsole']);		
 	engine.stdout.on('data', function (data) { 		
@@ -191,11 +183,10 @@ $(document).ready(function () {
 			handleMessage(m);							
 	});	
     send("version");
-    
+}
 
-    /**
-    * Start browser
-    */
+/* Start browser. */
+function initBrowser() {
 	var browser_buffer = {data:""};
 	browser = require('child_process').spawn('../browser', [globalSettings.phobosPath]);	        	
 	browser.stdout.on('data', function (data) {	
@@ -208,9 +199,10 @@ $(document).ready(function () {
 				browserAction(m.result);					
 		}
     });
-});
+}
 
 
+/* Handle child process messages */
 function messageProtocol(incomming, buffer) {	
 	buffer.data += incomming.toString();		
 	if (incomming.slice(-1)[0] != 10 && incomming.slice(-2)[0] != 6) return [];
@@ -230,7 +222,6 @@ function messageProtocol(incomming, buffer) {
 	buffer.data = "";
 	return jsonArray;
 }
-
 
 /**
 * Take input text, handle it
