@@ -1078,7 +1078,7 @@ private string replPath()
     import std.string : join;
 	import std.file : thisExePath;
 	import std.path : dirName, dirSeparator;
-	return dirName(thisExePath()).splitter(dirSeparator).array()[0..$-1].join(dirSeparator);		
+	return (dirName(thisExePath()).splitter(dirSeparator).array()[0..$-1] ~ "dabble").join(dirSeparator);		
 }
 
 
