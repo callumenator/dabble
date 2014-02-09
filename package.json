@@ -32,20 +32,16 @@
             },
             
 			"importPaths": ["."], 
-			
-            "sourcePaths" : [
-                "dabble"              
-            ],						
-            
-			"mainSourceFile": "dabble/main.d",            
+			            
+			"mainSourceFile": "src/main.d",            
             
             "excludedSourceFiles": [
-                "dabble/sourcebrowser.d",
-				"dabble/DCD/client.d",
-				"dabble/DCD/server.d",
-				"dabble/DCD/dscanner/main.d",
-				"dabble/DCD/dscanner/analysis/*",
-				"dabble/DCD/msgpack-d/example/*"
+                "src/sourcebrowser.d",
+				"src/DCD/client.d",
+				"src/DCD/server.d",
+				"src/DCD/dscanner/main.d",
+				"src/DCD/dscanner/analysis/*",
+				"src/DCD/msgpack-d/example/*"
             ]                        
         },
  		{
@@ -62,18 +58,18 @@
 			},
 			
 			"sourcePaths" : [
-                "dabble/DCD"              
+                "src/DCD"              
             ],
 			
-			"sourceFiles": ["dabble/sourcebrowser.d"],						
- 			"mainSourceFile": "dabble/sourcebrowser.d",
+			"sourceFiles": ["src/sourcebrowser.d"],						
+ 			"mainSourceFile": "src/sourcebrowser.d",
 			
 			"excludedSourceFiles": [                
-				"dabble/DCD/client.d",
-				"dabble/DCD/server.d",
-				"dabble/DCD/dscanner/main.d",
-				"dabble/DCD/dscanner/analysis/*",
-				"dabble/DCD/msgpack-d/example/*"
+				"src/DCD/client.d",
+				"src/DCD/server.d",
+				"src/DCD/dscanner/main.d",
+				"src/DCD/dscanner/analysis/*",
+				"src/DCD/msgpack-d/example/*"
             ]
  		}
  	]        

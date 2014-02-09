@@ -739,7 +739,7 @@ bool buildUserModules(out DMDMessage[] errors, bool init = false)
     {
         rebuildLib = true;        
         auto f = File(context.paths.tempPath ~ "defs.d", "w");		
-        f.write("module defs;\n" ~ readText(replPath() ~ "/dabble/defs.d").findSplitAfter("module dabble.defs;")[1]);
+        f.write("module defs;\n" ~ readText(replPath() ~ "/src/defs.d").findSplitAfter("module dabble.defs;")[1]);
         f.close();		
 		
 		auto command = ["cd", context.paths.tempPath, cmdJoin, "dmd -c -release -noboundscheck -O defs.d"].join(" ");		
@@ -1076,9 +1076,11 @@ private auto timeIt(E)(string stage, lazy E expr)
 private string replPath()
 {
     import std.string : join;
-	import std.file : thisExePath;
+	import std.file : thisExePath, exists;
 	import std.path : dirName, dirSeparator;
-	return (dirName(thisExePath()).splitter(dirSeparator).array()[0..$-1] ~ "dabble").join(dirSeparator);		
+	auto basePath = dirName(thisExePath()).splitter(dirSeparator).array()[0..$-1].join(dirSeparator);			
+	auto dir = basePath ~ dirSeparator ~ "dabble";
+	return exists(dir) ? dir : basePath;			
 }
 
 
