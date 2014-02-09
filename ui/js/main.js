@@ -144,7 +144,7 @@ $(document).ready(function () {
 * Monitor stylesheet for changes .
 */
 function monitorStylesheet() {
-    require('fs').watch('../dabble/ui/css/style.css', function (event, name) {
+    require('fs').watch('../../dabble/ui/css/style.css', function (event, name) {
         var queryString = '?reload=' + new Date().getTime();
         $('link[rel="stylesheet"]').each(function () {
             this.href = this.href.replace(/\?.*|$/, queryString);
