@@ -202,7 +202,7 @@ function initCodemirrors() {
 */
 function initRepl() {
 	var repl_buffer = {data:""};
-	engine = require('child_process').spawn('repl', ['--noConsole']);		
+	engine = require('child_process').spawn('../repl', ['--noConsole']);		
 	engine.stdout.on('data', function (data) { 		
 		var messages = messageProtocol(data, repl_buffer);		
 		if (messages.length == 0) return;					
@@ -217,7 +217,7 @@ function initRepl() {
 */
 function initBrowser() {
 	var browser_buffer = {data:""};
-	browser = require('child_process').spawn('browser', [globalSettings.phobosPath]);	        	
+	browser = require('child_process').spawn('../browser', [globalSettings.phobosPath]);	        	
 	browser.stdout.on('data', function (data) {	
 		console.log('From browser: ', data.toString());
 		var messages = messageProtocol(data, browser_buffer);		
