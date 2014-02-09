@@ -55,8 +55,26 @@
             "platforms": ["windows","posix"],                 
             "targetName":"browser",            			
 			"importPaths": ["."], 
-			"sourceFiles": ["dabble/sourcebrowser.d"],			
- 			"mainSourceFile": "dabble/sourcebrowser.d"
+			
+			"buildTypes": {
+				"debug": { "buildOptions": ["debugInfo"] },
+				"release": { "buildOptions": ["releaseMode"] }
+			},
+			
+			"sourcePaths" : [
+                "dabble/DCD"              
+            ],
+			
+			"sourceFiles": ["dabble/sourcebrowser.d"],						
+ 			"mainSourceFile": "dabble/sourcebrowser.d",
+			
+			"excludedSourceFiles": [                
+				"dabble/DCD/client.d",
+				"dabble/DCD/server.d",
+				"dabble/DCD/dscanner/main.d",
+				"dabble/DCD/dscanner/analysis/*",
+				"dabble/DCD/msgpack-d/example/*"
+            ]
  		}
  	]        
 }

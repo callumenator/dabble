@@ -27,19 +27,16 @@
 			<div><textarea id="history"></textarea></div>			
 			<div><textarea id="code" class="editor"></textarea></div>											
 		</div>
-		
-				
-		<div class="slider-pane" id="docsearch-pane" data-onshow='$("#search-box").focus()'>		
+						
+		<div class="slider-pane" id="docsearch-pane" data-onshow='setTimeout(function() { $("#search-box").focus(); }, 20)'>		
 			<div class="pane-header docsearch-pane-header">
 				<h3>Search Documentation</h3>
 				<div>
-				<input id="search-box" onkeyup="searchInput()" size="30" spellcheck="false" type="text">
-				<img id="ajax-loader" src="../images/loader.gif" />				
+					<input id="search-box" onkeyup="searchInput()" size="30" spellcheck="false" type="text">
+					<img id="ajax-loader" src="../images/loader.gif" />				
 				</div>										
 			</div>		
-			<div class="pane-content docsearch-pane-content">
-				<div id="suggestionsPane"></div>						
-			</div>											
+			<div class="pane-content docsearch-pane-content"><div id="suggestionsPane"></div></div>											
 		</div>
 		
 		<div class="slider-pane" id="settings-pane" data-onhide='settingsPaneHide()'>		
@@ -57,6 +54,6 @@
 		<span id="repl-status"></span>
 		<img id="logo" src="../images/dlogosmall.png" />		
 	</div>
-   	
+		
 </body>
 </html>

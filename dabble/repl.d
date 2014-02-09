@@ -21,11 +21,11 @@ import std.typecons : Tuple, tuple;
 
 import
 	dabble.meta,
-    dabble.parser,
-    dabble.sharedlib,
+    dabble.parser,    
     dabble.util,
     dabble.defs,
-    dabble.grammars;
+    dabble.grammars,
+	dabble.sharedlib;
 
 protected:    
 SharedLib[] keepAlive;

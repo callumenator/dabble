@@ -1,4 +1,12 @@
+/**
+Written in the D programming language.
 
+Provides documentation search and autocomplete functionality.
+
+Copyright: Copyright Callum Anderson 2013
+License:   $(WEB boost.org/LICENSE_1_0.txt, Boost License 1.0).
+Authors:   Callum Anderson
+**/
 module sourcebrowser;
 
 import
@@ -15,9 +23,18 @@ import
     std.array,
     std.uuid,
     std.conv;
+	
+import 
+	autocomplete, 
+	messages, 
+	modulecache, 
+	formatter;
 
+enum cterminator = '\x06';
+enum sterminator = "\x06";	
 TrieNode browser;
 Symbol[string] symbolDictionary;
+
 
 void main(string[] args) 
 {
@@ -25,8 +42,7 @@ void main(string[] args)
     {
         writeln("First argument should be path to phobos");
         return;
-    }
-        
+    }        
     buildSourceBrowser(args[1]);
     wait();
 }
@@ -36,27 +52,23 @@ void main(string[] args)
 * Wait for stdin input
 */
 void wait()
-{    
-    char[] inBuffer;
-    
+{        	
     loop: while(true) 
-    {
-        stdin.readln(inBuffer);
-        string input = strip(inBuffer.to!string());
-        inBuffer.clear;
-        
+    {		
+        auto input = readln(cterminator).strip().findSplitBefore(sterminator)[0];
+				
         if (input == "exit")
             break loop;            		
         else if (input.startsWith("suggest-names:"))
         {        
-            writeln(`{"result":[`, browser.suggestNames(input.findSplitAfter("suggest-names:")[1]).map!(x=>`"` ~ x ~ `"`).join(","), `]}`, "\u0006");			
+            writeln(`{"result":[`, browser.suggestNames(input.findSplitAfter("suggest-names:")[1]).map!(x=>`"` ~ x ~ `"`).join(","), `]}`, sterminator);			
             stdout.flush();
         }    
         else if (input.startsWith("search-names:"))        
         {
             auto r = browser.suggest(input.findSplitAfter("search-names:")[1])
                             .map!(x => `{"name":"` ~ escape(x.name) ~ `","uuid":"` ~ x.uuid ~ `"}`);        
-            writeln(`{"result":[`, r.join(","), `]}`, "\u0006");
+            writeln(`{"result":[`, r.join(","), `]}`, sterminator);
             stdout.flush();
         }
         else if (input.startsWith("get-uuid:"))        
@@ -64,17 +76,84 @@ void wait()
             auto uuid = input.findSplitAfter("get-uuid:")[1];
             if (uuid in symbolDictionary)
             {
-                writeln(`{"result":`, symbolDictionary[uuid].toJSON(), "}\u0006");
+                writeln(`{"result":`, symbolDictionary[uuid].toJSON(), "}", sterminator);
                 stdout.flush();
             }
 			else
 			{
-				// This is an error
+				// This is an error (provided uuid was not in symbol dictionary)
 			}
         }
+		else if (input.startsWith("autocomplete:"))
+		{					
+			AutocompleteRequest request;
+			auto parts = input.findSplitAfter("autocomplete:")[1].findSplitAfter(" ");			
+			auto cpos = parts[0].findSplitAfter("-c")[1].to!(int);
+			auto code = parts[1].to!string();
+		
+			writeln(`{"autocomplete":`, code, `}`, sterminator);
+			continue;
+			/**
+			auto sourceCode = uninitializedArray!(ubyte[])(to!size_t(f.size));
+			f.rawRead(sourceCode);
+			f.close();
+
+			request.fileName = fileName;
+			request.sourceCode = sourceCode;
+			request.cursorPosition = cursorPos;
+
+			AutocompleteResponse response = complete(request);
+			sendJSON(response);
+			**/
+		}        
     }
 }
 
+
+void sendJSON(AutocompleteResponse response) 
+{
+	if (response.completionType == "identifiers") 
+	{
+		string json = "[";
+		foreach(i, c, k; zip(iota(response.completions.length), response.completions, response.completionKinds)) 
+		{
+			json ~= `{"completion":"` ~ c ~ `", "kind":"` ~ translateKind(k) ~ `"}`;
+			if (i < response.completions.length - 1)
+				json ~= ",";
+		}
+		writeln(`{"type":"completion", "result":`, json, "]}", sterminator);
+	} 
+	else if (response.completionType == "calltips") 
+	{
+		string json = "[";
+		foreach(i, c; zip(iota(response.completions.length), response.completions)) {
+			json ~= `"` ~ c ~ `"`;
+			if (i < response.completions.length - 1)
+				json ~= ",";
+		}
+		writeln(`{"type":"calltip", "result":`, json, "]}", sterminator);		
+	}
+}
+
+string translateKind(dchar kind) {
+	final switch(kind) {
+		case 'c': return "class";
+		case 'i': return "interface";
+		case 's': return "struct";
+		case 'u': return "union";
+		case 'v': return "variable";
+		case 'm': return "member";
+		case 'k': return "keyword";
+		case 'f': return "function";
+		case 'g': return "enum";
+		case 'e': return "enum member";
+		case 'P': return "package";
+		case 'M': return "module";
+		case 'a': return "array";
+		case 'A': return "associative array";
+		case 'l': return "alias";
+	}
+}
 
 
 void inc(ref string s) { s ~= " "; }
@@ -461,7 +540,7 @@ Symbol parse(JSONValue[string] obj, string parent = "", string file = "")
 
 void buildSourceBrowser(string dmdPath = "")
 {
-    writeln(`{"status":"generating"}`, "\u0006"); stdout.flush();
+    writeln(`{"status":"generating"}`, sterminator); stdout.flush();
 
     auto files = filter!q{endsWith(a.name, ".d")}(dirEntries(dmdPath, SpanMode.shallow));
 
@@ -478,5 +557,5 @@ void buildSourceBrowser(string dmdPath = "")
         foreach(mod; modList)
             browser.insert(parse(mod.object));
     }                   
-    writeln(`{"status":"ready"}`, "\u0006"); stdout.flush();
+    writeln(`{"status":"ready"}`, sterminator); stdout.flush();
 }

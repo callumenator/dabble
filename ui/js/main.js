@@ -5,10 +5,16 @@ var historyBuffer = [];
 var maxHistory = 200; 
 var lineIndex = 0; // for moving through the history
 var lineWidgetCount = 0;
-var activeSliderPane = "";
+var autocompleteCode = "";
 
-/**
-* Init global settings
+var autocomplete = {
+    callback: null,
+    token: null, 
+    cursor: 0
+};
+
+/** 
+* Init global settings. 
 */
 var globalSettings = {
 	phobosPath: phobosPath()
@@ -16,14 +22,14 @@ var globalSettings = {
 
 
 /**
-* Restore settings from localStorage if present
+* Restore settings from localStorage if present. 
 */
 if (localStorage.hasOwnProperty("globalSettings"))		
 	globalSettings = JSON.parse(localStorage.globalSettings);		
 
 
 /**
-* On close, store settings
+* On close, store settings. 
 */
 require('nw.gui').Window.get().on('close', function() {	
 	localStorage.globalSettings = JSON.stringify(globalSettings);
@@ -31,8 +37,8 @@ require('nw.gui').Window.get().on('close', function() {
 });
 
 
-/**
-* Trim string proto
+/** 
+* Trim string proto. 
 */
 if (typeof(String.prototype.trim) === "undefined") {
     String.prototype.trim = function() {
@@ -41,8 +47,8 @@ if (typeof(String.prototype.trim) === "undefined") {
 }
 
 
-/**
-* Uniq array proto
+/** 
+* Uniq array proto. 
 */
 Array.prototype.getUnique = function(selector){
    var u = {}, a = [];
@@ -57,37 +63,52 @@ Array.prototype.getUnique = function(selector){
 }
 
 
-/**
-* Autocomplete
+/** 
+* Autocomplete. 
 */
 CodeMirror.commands.autocomplete = function(cm) {
-    CodeMirror.showHint(cm, CodeMirror.dHint, {
+    CodeMirror.showHint(cm, dcdHint, {
         async: true,
         completeSingle: false
     });
 }
 
-/* Devtools shortcut */
+
+/**
+* Devtools shortcut 
+*/
 shortcut.add("Ctrl+Shift+J",function() { 
     require('nw.gui').Window.get().showDevTools();
 });    
 
-/* Fullscreen toggle shortcut */
+
+/**
+* Fullscreen toggle shortcut 
+*/
 shortcut.add("Ctrl+M",function() { 
     require('nw.gui').Window.get().toggleFullscreen();
 });    
 
-/* Doc search toggle shortcut */
+
+/**
+* Doc search toggle shortcut 
+*/
 shortcut.add("Ctrl+H",function() { 
     togglePane('docsearch-pane');
 });    
 
-/* Options toggle shortcut */
+
+/** 
+* Options toggle shortcut 
+*/
 shortcut.add("Ctrl+O",function() { 
     togglePane('settings-pane');
 });    
 
-/* On-load setup */
+
+/**
+* On-load setup 
+*/
 $(document).ready(function () {
 		
 	$("#repl-status").html("Initializing...");
@@ -110,7 +131,7 @@ $(document).ready(function () {
                     to: CodeMirror.Pos(cursor.line, tk.end)
                 });                
             };
-            browser.stdin.write(new Buffer('suggest-names:' + tk.string.toLowerCase() + '\n'));
+            browser.stdin.write(new Buffer('suggest-names:' + tk.string.toLowerCase() + '\u0006'));
         };
     }());
 
@@ -119,7 +140,9 @@ $(document).ready(function () {
         
 });
 
-/* Monitor stylesheet for changes */
+/** 
+* Monitor stylesheet for changes .
+*/
 function monitorStylesheet() {
     require('fs').watch('../../ui/css/style.css', function (event, name) {
         var queryString = '?reload=' + new Date().getTime();
@@ -130,14 +153,16 @@ function monitorStylesheet() {
     });
 }
 
-/* Initialize codemirror editors. */
+/** 
+* Initialize codemirror editors. 
+*/
 function initCodemirrors() {
 	editor = CodeMirror.fromTextArea(document.getElementById("code"), {
         mode: "text/x-d",
         viewportMargin: Infinity,
         lineWrapping: true,
         smartIndent: false,
-        extraKeys: { "Ctrl-Down": "autocomplete" }
+        extraKeys: { "Ctrl-Space": "autocomplete" }
     });	
 	editor.setOption("readOnly", true); // disable until repl is started
 
@@ -148,9 +173,9 @@ function initCodemirrors() {
         lineNumbers: true,
         lineWrapping: true
     });
-
+	
     editor.setOption("theme", "dabble");
-    history.setOption("theme", "dabble");
+    history.setOption("theme", "dabble");	
 	
 	editor.options.onKeyEvent = function (cm, e) {
 		if (!e || !(e instanceof KeyboardEvent)) return;
@@ -172,7 +197,9 @@ function initCodemirrors() {
     };
 }
 
-/* Start repl. */
+/** 
+* Start repl. 
+*/
 function initRepl() {
 	var repl_buffer = {data:""};
 	engine = require('child_process').spawn('../repl', ['--noConsole']);		
@@ -185,11 +212,14 @@ function initRepl() {
     send("version");
 }
 
-/* Start browser. */
+/**
+* Start browser. 
+*/
 function initBrowser() {
 	var browser_buffer = {data:""};
 	browser = require('child_process').spawn('../browser', [globalSettings.phobosPath]);	        	
 	browser.stdout.on('data', function (data) {	
+		console.log('From browser: ', data.toString());
 		var messages = messageProtocol(data, browser_buffer);		
 		if (messages.length == 0) return;			
 		for(var i = 0; m = messages[i], i < messages.length; i++) {
@@ -202,12 +232,14 @@ function initBrowser() {
 }
 
 
-/* Handle child process messages */
+/**
+* Handle child process messages.
+*/
 function messageProtocol(incomming, buffer) {	
 	buffer.data += incomming.toString();		
 	if (incomming.slice(-1)[0] != 10 && incomming.slice(-2)[0] != 6) return [];
-	var str = buffer.data.replace(/(\r\r\n|\r\n|\n|\r)/g, "<br>");       
-	str = str.replace(/\u0009/g, "   ");
+	var str = buffer.data.replace(/(\r\r\n|\r\n|\n|\r)/g, "\\n");       	
+	str = str.replace(/(")/g, "\"");       	
 	var parts = str.split(/\u0006/g);	
 	var jsonArray = [];
 	for(var i = 0; p = parts[i], i < parts.length; i++) {
@@ -223,8 +255,9 @@ function messageProtocol(incomming, buffer) {
 	return jsonArray;
 }
 
+
 /**
-* Take input text, handle it
+* Take input text, handle it. 
 */
 function replInput() {
 	var text = editor.getValue();           		
@@ -238,8 +271,8 @@ function replInput() {
 }
 
 
-/**
-* Clear history and send request for version/title string.
+/** 
+* Clear history and send request for version/title string. 
 */
 function clear() {
 	history.setValue("");
@@ -248,7 +281,7 @@ function clear() {
 
 
 /** 
-* Handle json messages
+* Handle json messages. 
 */ 
 function handleMessage(json)
 {
@@ -267,6 +300,8 @@ function handleMessage(json)
 				$("#repl-status").html("");
 				editor.setOption("readOnly", false);
 				editor.focus();
+			} else if (json.cmd == "history") {
+				autocompleteCode = json.summary;
 			} else {
 				updateResult(json.summary, true);	
 			}
@@ -285,8 +320,8 @@ function handleMessage(json)
 }
 
 
-/**
-* Got a result from the repl
+/** 
+* Got a result from the repl. 
 */
 function updateResult(data, lwidget) {	
     if (lwidget) {       
@@ -300,8 +335,8 @@ function updateResult(data, lwidget) {
 }
 
 
-/**
-* Append text to codemirror text.
+/** 
+* Append text to codemirror text. 
 */
 function cmAppend(cm, text) {
     text = text.replace(/(\r\r\n|\r\n|\r)/g, "\n");
@@ -311,8 +346,8 @@ function cmAppend(cm, text) {
 }
 
 
-/**
-* Append text to history
+/** 
+* Append text to history. 
 */
 function appendHistory(text) {    
     if (text.length == 0 || (historyBuffer.length > 1 && historyBuffer[historyBuffer.length-1] == text)) return;
@@ -324,8 +359,8 @@ function appendHistory(text) {
 }
 
 
-/**
-* History lookup
+/** 
+* History lookup. 
 */
 function retrieveHistory(dir) {
     if (dir == 'up') {
@@ -339,8 +374,8 @@ function retrieveHistory(dir) {
 }
 
 
-/**
-* Send input to the repl
+/** 
+* Send input to the repl. 
 */
 function send(text) {   	    
     engine.stdin.write(new Buffer(text + "\n"));
@@ -348,8 +383,7 @@ function send(text) {
 
 
 function searchInput() {
-    var prefix = $("#search-box").val();
-	
+    var prefix = $("#search-box").val();	
     if (prefix.length == 0) {
 		$("#ajax-loader").css("visibility", "hidden");	
         clearSuggestions();
@@ -363,7 +397,7 @@ function searchInput() {
 			$("#suggestionsPane").html(listToHTML(json));                    
     };
 	$("#ajax-loader").css("visibility", "visible");
-    browser.stdin.write(new Buffer('search-names:' + prefix.toLowerCase() + "\n"));   
+    browser.stdin.write(new Buffer('search-names:' + prefix.toLowerCase() + "\u0006"));   
 }
 
 function listToHTML(list) {
@@ -383,7 +417,6 @@ function panelClick(name) {
 		collapsePanel(name, el);
 }
 
-
 function expandPanel(uuid, parent) {    
     browserAction = function(json) {      		
         $(parent).append(symbolToHTML(json));        
@@ -391,7 +424,6 @@ function expandPanel(uuid, parent) {
     };     
     browser.stdin.write(new Buffer('get-uuid:' + uuid + "\n"));        
 }
-
 
 function collapsePanel(name, parent) {
     parent.removeChild(parent.firstChild.nextSibling); 
@@ -404,7 +436,6 @@ function symbolToHTML(symbol) {
     symbol.comment.replace(/\n/g, '<br>') + "</div>";    
 }
 
-
 function clearSuggestions() {
     $("#suggestionsPane").html("");    
 }
@@ -414,6 +445,7 @@ function scrollToBottom(jqEl) {
 	jqEl.scrollTop(jqEl[0].scrollHeight);
 }
 
+/* Try to auto-detect the phobos lib path. */
 function phobosPath() {
 	var os = require('os');
 	if (os.type() == "Windows_NT") {
@@ -427,31 +459,43 @@ function phobosPath() {
 }
 
 
-// Set up sliding panes
+/** 
+* Set up sliding panes. 
+*/
 function initPanes() {
 	$(".slider-pane").each(function(i,e) {						
 		e.setAttribute("data-shown", "false");	
 	});
 }
 
-// Toggle visibility of given pane
+
+/** 
+* Toggle visibility of given pane. 
+*/
 function togglePane(id) {
 	($("#"+id).attr("data-shown") == "false") ? showPane(id) : hidePane(id);
 }
 
-// Slide-in the given pane
+
+/**  
+* Slide-in the given pane. 
+*/
 function showPane(id) {			
 	hidePane();
 	var cp = document.getElementById('code-pane'),
 		sp = document.getElementById(id);
-	cp.style.width = "40%";    
-	sp.style.width = "58%";
+	cp.style.width = "39%";    
+	sp.style.width = "59%";
 	sp.style.visibility = "visible";
 	sp.setAttribute("data-shown", "true");	
-	if (sp.getAttribute("data-onshow")) eval(sp.getAttribute("data-onshow"));					
+	if (sp.getAttribute("data-onshow")) 		
+		eval(sp.getAttribute("data-onshow"));						
 }
 
-// Hide active pane
+
+/** 
+* Hide active pane. 
+*/
 function hidePane() {
 	var active = $(".slider-pane[data-shown='true']");
 	if (active.length == 0) return;		
@@ -462,13 +506,22 @@ function hidePane() {
 	cp.style.width = "99%";     
     editor.focus();   
 	active[0].setAttribute("data-shown", "false");
-	if (active.attr("data-onhide")) eval(active.attr("data-onhide"));	
+	if (active.attr("data-onhide")) 
+		eval(active.attr("data-onhide"));	
 }
 
+
+/**
+* Create the settings edit fields.
+*/
 function initSettingsEditor() {		
 	$("#settings-list").append("<tr><td>Phobos path:</td><td><input data-key='phobosPath' value="+globalSettings.phobosPath+" type='text'></td</tr>");
 }
 
+
+/**
+* Called when settings pane gets hidden, used to store modified settings.
+*/
 function settingsPaneHide() {
 	console.log($("#settings-pane").data("tempSettings"));
 	$("#settings-list tr td input").each(function(i,e) {
@@ -477,3 +530,113 @@ function settingsPaneHide() {
 	});
 }
 
+
+/********** Autocomplete stuff ***********/
+
+	function dcdResponse(str) {      
+        
+        var type = "", jsonPart = "";
+        if (str.indexOf("completionInfo") == 0) {
+            type = "complete";
+            jsonPart = (str.split("completionInfo"))[1];
+        } else if (str.indexOf("calltipInfo") == 0) {
+            type = "tip";
+            jsonPart = (str.split("calltipInfo"))[1];
+        }
+        
+        var sort_map = {
+            'variable': 0,
+            'function': 1,            
+            'struct': 4,
+            'class': 5,
+            'keyword': 6
+        }
+        
+        function dcd_sort(a,b) {
+            if (a.kind == b.kind) 
+				return a.completion.localeCompare(b.completion);
+            else 
+				return sort_map[a.kind] - sort_map[b.kind]            
+        }
+           
+        if (jsonPart != "") {                
+            var json = JSON.parse(jsonPart);           
+            json.sort(dcd_sort);            
+            var completions = [];
+                    
+            for(var i = 0; i < json.length; i++) {            
+                if (type == "complete") {
+                    completions.push(
+                    {
+                        text:json[i].completion,            
+                        render: (function(index) {
+                            return function(element, self, data) {                                                                     
+                                var hint = document.createElement("div"),                                                                    
+									html = "", 
+									image = '../images/blank.png';                                                
+                                switch (json[index].kind) {
+                                    case 'class':    image = 'c.png'; break;                                    
+                                    case 'struct':   image = 's.png'; break;
+                                    case 'variable': image = 'v.png'; break;
+                                    case 'function': image = 'f.png'; break;
+                                    case 'keyword':  image = 'k.png'; break;
+                                    default: break;
+                                }
+                                               
+                                if (image != "")
+                                    html += "<img class='hint-icon' height='10px' src='../images/" + image + "'>";                                
+                                                
+                                html += "<div class='hint-text hint-type-" + json[index].kind + "'>" + json[index].completion + "</div>";
+                                hint.innerHTML = html;
+                                element.appendChild(hint);
+                            };
+                        })(i)                                    
+                    });      
+                    
+                } else if (type == "tip") {
+                    completions.push({
+                        text:'', 
+                        displayText:json[i] 
+                    });                
+                }
+            }
+                            
+            if (autocomplete.token.string == ".") {
+                var from = autocomplete.token.start + 1, to = autocomplete.token.start + 1;                            
+            } else {
+                var from = autocomplete.token.start, to = autocomplete.token.end;                            
+            }
+            
+            var completionsObject = {
+                list: completions,
+                from: CodeMirror.Pos(autocomplete.cursor.line, from), 
+                to: CodeMirror.Pos(autocomplete.cursor.line, to)
+            };
+                                                  
+            autocomplete.callback(completionsObject);
+        }                
+    };
+
+    function dcdHint(cm, callback, options) {           
+		cm = editor;	
+        var cursor = cm.getCursor(), 
+			tk = cm.getTokenAt(cursor);     
+        
+		console.log("Hinting: token - ", tk);
+		
+        var offset = 0;
+        cm.doc.eachLine(0, cursor.line, function(handle) { offset += handle.text.length + 1; } );    
+        offset += cursor.ch;    
+            
+		autocomplete = {
+            callback: callback,
+            token: tk, 
+            cursor: cursor
+        };
+        
+		//browser.stdin.write(new Buffer("-c" + offset.toString() + " " + (homeDir + "_temp").replace(/\\/g, "/") + "\n")); 
+		
+        //require("fs").writeFile(homeDir + "_temp", cm.getValue(), function(err) {                             
+        //        browser.stdin.write(new Buffer("-c" + offset.toString() + " " + (homeDir + "_temp").replace(/\\/g, "/") + "\n")); 
+        //    });                                
+    };

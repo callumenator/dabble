@@ -75,6 +75,13 @@ bool handleMetaCommand(ref string inBuffer, ref string codeBuffer)
 			jsonstr = json("id","meta","cmd","version","summary",title());
 			break;
         }
+		case "history": // return raw code, history of d code in this session
+        {
+			summary = context.rawCode.toString();
+			import std.regex;
+			jsonstr = json("id","meta","cmd","history","summary",summary.replaceAll(regex(`"`), `\"`));
+			break;
+        }
         case "print": with(context.share)
         {
             if (args.length == 0 || canFind(args, "all")) // print all vars

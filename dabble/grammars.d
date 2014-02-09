@@ -89,6 +89,7 @@ MetaParser:
                  / MetaUse MetaArgs
                  / MetaClear MetaArgs?
                  / MetaVersion
+				 / MetaHistory
 
     MetaPrint    <- 'print'
     MetaType     <- 'type'
@@ -99,6 +100,7 @@ MetaParser:
     MetaDebugOff <~ ('debug' wx 'off')
     MetaClear    <- 'clear'
     MetaVersion  <- 'version'
+	MetaHistory  <- 'history'
 
     MetaArgs <- (wxd Seq(MetaArg, ','))
     MetaArg  <- ~((!(endOfLine / ',') .)*)
