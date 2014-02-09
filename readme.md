@@ -1,3 +1,6 @@
+
+##These notes are not ready yet.
+
 # Dabble
 
 A repl for the D programming language (Windows and Linux).
