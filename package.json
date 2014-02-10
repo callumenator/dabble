@@ -30,13 +30,11 @@
             "dependencies": {  
                 "pegged":"~master"    
             },
-            
-			"importPaths": ["."], 
-			            
-			"mainSourceFile": "src/main.d",            
+            			           
+			"mainSourceFile": "src/dabble/main.d",            
             
             "excludedSourceFiles": [
-                "src/sourcebrowser.d",
+                "src/dabble/sourcebrowser.d",
 				"src/DCD/client.d",
 				"src/DCD/server.d",
 				"src/DCD/dscanner/main.d",
@@ -49,8 +47,7 @@
  			"targetType": "executable",            
             "targetPath":"./bin",
             "platforms": ["windows","posix"],                 
-            "targetName":"browser",            			
-			"importPaths": ["."], 
+            "targetName":"browser",            						
 			
 			"buildTypes": {
 				"debug": { "buildOptions": ["debugInfo"] },
@@ -61,8 +58,8 @@
                 "src/DCD"              
             ],
 			
-			"sourceFiles": ["src/sourcebrowser.d"],						
- 			"mainSourceFile": "src/sourcebrowser.d",
+			"sourceFiles": ["src/dabble/sourcebrowser.d"],						
+ 			"mainSourceFile": "src/dabble/sourcebrowser.d",
 			
 			"excludedSourceFiles": [                
 				"src/DCD/client.d",
