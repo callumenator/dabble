@@ -144,7 +144,7 @@ $(document).ready(function () {
 * Monitor stylesheet for changes .
 */
 function monitorStylesheet() {
-    require('fs').watch('../../dabble/ui/css/style.css', function (event, name) {
+    require('fs').watch('../dabble/ui/css/style.css', function (event, name) {
         var queryString = '?reload=' + new Date().getTime();
         $('link[rel="stylesheet"]').each(function () {
             this.href = this.href.replace(/\?.*|$/, queryString);
@@ -202,7 +202,7 @@ function initCodemirrors() {
 */
 function initRepl() {
 	var repl_buffer = {data:""};
-	engine = require('child_process').spawn('../repl', ['--noConsole']);		
+	engine = require('child_process').spawn('../dabble/bin/repl', ['--noConsole']);		
 	engine.stdout.on('data', function (data) { 		
 		console.log('From repl: ', data.toString());
 		var messages = messageProtocol(data, repl_buffer);		
@@ -218,7 +218,7 @@ function initRepl() {
 */
 function initBrowser() {
 	var browser_buffer = {data:""};
-	browser = require('child_process').spawn('../browser', [globalSettings.phobosPath]);	        	
+	browser = require('child_process').spawn('../dabble/bin/browser', [globalSettings.phobosPath]);	        	
 	browser.stdout.on('data', function (data) {	
 		console.log('From browser: ', data.toString());
 		var messages = messageProtocol(data, browser_buffer);		
