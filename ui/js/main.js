@@ -293,7 +293,7 @@ function handleMessage(json)
 {
 	var multiline = false;	
 	var summary = json.hasOwnProperty("summary") ? json.summary : "";
-	summary = summary.replace(/\n/g, "<br>");	
+	//summary = summary.replace(/\n/g, "<br>");	
 	switch (json.id) {
 		case "parse-multiline":
 			multiline = true;
@@ -334,7 +334,7 @@ function handleMessage(json)
 function updateResult(data, lwidget) {	
     if (lwidget) {       
         var id = "lineWidget" + (lineWidgetCount++).toString();
-        $("body").append("<div class='resultWidget' id='" + id + "'>" + data, + "</div>");
+        $("body").append("<div class='resultWidget' id='" + id + "'><pre>" + data, + "</pre></div>");
         history.addLineWidget(history.lineCount() - 1, $("#" + id)[0]);
     } else {
         cmAppend(history, data);
