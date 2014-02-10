@@ -204,6 +204,7 @@ function initRepl() {
 	var repl_buffer = {data:""};
 	engine = require('child_process').spawn('../repl', ['--noConsole']);		
 	engine.stdout.on('data', function (data) { 		
+		console.log('From repl: ', data.toString());
 		var messages = messageProtocol(data, repl_buffer);		
 		if (messages.length == 0) return;					
 		for(var i = 0; m = messages[i], i < messages.length; i++) 

@@ -127,14 +127,11 @@ void loop()
 		else		
 		{
 			if (r[1] == Stage.call)
-			{
-				import std.regex;
-				enum reg = regex(`"`, "g");		
-
+			{				
 				if (consoleSession)								
 					r[0].send;
 				else	
-					json("id", "repl-result", "summary", r[0].replace(reg, `\"`)).send;
+					json("id", "repl-result", "summary", r[0].escapeJSON()).send;
 			}
 			
 			if (consoleSession)
@@ -152,6 +149,15 @@ void loop()
 }
 
 
+string escapeJSON(string s) 
+{
+	import std.regex;
+	enum quote = regex("\"");		
+	enum newline = regex("\n");		
+	return s.replaceAll(quote, `\"`).replaceAll(newline, `\n`);
+}
+
+
 /**
 * Free any shared libs that were kept alive.
 */
@@ -161,7 +167,7 @@ void onExit()
 
     while(!keepAlive.empty)
     {
-        debug { writeln("Free'ing lib: ", keepAlive.front.filename); }
+        //debug { writeln("Free'ing lib: ", keepAlive.front.filename); }
         keepAlive.front.free();
         keepAlive.popFront();
     }
@@ -430,7 +436,7 @@ Tuple!(string, Stage) evaluate(string code)
     if (context.debugLevel & Debug.parseOnly)
     {
 		auto summary = "Parse only:" ~ newl ~ parsedCode;
-		consoleSession ? summary.send : json("id", "parse-parseOnly", "summary", parsedCode).send;
+		consoleSession ? summary.send : json("id", "parse-parseOnly", "summary", parsedCode.escapeJSON()).send;
 		return tuple("", Stage.parse);
     }
 
@@ -451,7 +457,7 @@ Tuple!(string, Stage) evaluate(string code)
 	if (!callResult)
     {
 		auto summary = "Internal error: " ~ replResult;
-		consoleSession ? summary.send : json("id", "call-internal-error", "summary", replResult).send;
+		consoleSession ? summary.send : json("id", "call-internal-error", "summary", replResult.escapeJSON()).send;
 		return tuple("", Stage.call);
     }
 
@@ -486,8 +492,8 @@ bool parse(string code, out string parsedCode)
     /** Handlers for the parser **/
         void newVariable(string name, string type, string init, string source)
         {
-            if (context.share.vars.canFind!((a,b) => (a.name == b))(name))          
-                return; // let compiler deal with redefinition            
+			// let compiler deal with redefinition            
+            version(none) { if (context.share.vars.canFind!((a,b) => (a.name == b))(name)) }            
             context.rawCode.append(source, false);
             context.share.vars ~= Var(name, type, init);
             dupSearchList ~= name;
@@ -521,7 +527,7 @@ bool parse(string code, out string parsedCode)
 		auto summary = text("Parser error", parser.errors.length > 1 ? "s:" :":", newl, niceErrors.join(newl));
 		consoleSession ? summary.send : 
 			json("id", "parse-error", "summary", summary, "errors", 
-				parser.errors.map!(t => tuple("source",lines[t[0]-1],"column",t[1],"error",t[2])).array).send;
+				parser.errors.map!(t => tuple("source",lines[t[0]-1].escapeJSON(),"column",t[1],"error",t[2].escapeJSON())).array).send;
 		return false;
 	}
 
@@ -672,7 +678,7 @@ bool build(string code)
 	{		
 		auto summary = errors.map!(e => e.toStr()).join(newl);					
 		consoleSession ? summary.send :
-			json("id", "build-error", "summary", summary, "data", errors.map!(e => e.toTup()).array).send;
+			json("id", "build-error", "summary", summary.escapeJSON(), "data", errors.map!(e => e.toTup()).array).send;
 	}
 	return false;
 }
@@ -951,7 +957,7 @@ struct DMDMessage
 	
 	auto toTup()
 	{
-		return tuple("source", sourceCode, "error", errorMessage);
+		return tuple("source", sourceCode.escapeJSON(), "error", errorMessage.escapeJSON());
 	}
 }
 

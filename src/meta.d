@@ -79,7 +79,7 @@ bool handleMetaCommand(ref string inBuffer, ref string codeBuffer)
         {
 			summary = context.rawCode.toString();
 			import std.regex;
-			jsonstr = json("id","meta","cmd","history","summary",summary.replaceAll(regex(`"`), `\"`));
+			jsonstr = json("id","meta","cmd","history","summary",summary.escapeJSON());
 			break;
         }
         case "print": with(context.share)
@@ -87,18 +87,18 @@ bool handleMetaCommand(ref string inBuffer, ref string codeBuffer)
             if (args.length == 0 || canFind(args, "all")) // print all vars
 			{
 				summary = vars.map!(v => text(v.name, " (", v.displayType, ") = ", printValue(T(v.name,[])))).join("\n");
-				jsonstr = json("id", "meta", "cmd", "print", "summary", summary, "data", 
-							vars.map!(v => tuple("name", v.name, "type", v.displayType, "value", printValue(T(v.name,[])))).array);
+				jsonstr = json("id", "meta", "cmd", "print", "summary", summary.escapeJSON(), "data", 
+							vars.map!(v => tuple("name", v.name, "type", v.displayType.escapeJSON(), "value", printValue(T(v.name,[])).escapeJSON())).array);
 			}
             else if (args.length == 1 && args[0] == "__keepAlive")
 			{
 				summary = "SharedLibs still alive:" ~ .keepAlive.map!(a => a.to!string()).join("\n");
-				jsonstr = json("id", "meta", "cmd", "__keepAlive", "summary", summary, "data", .keepAlive.map!(a => a.to!string()).array);
+				jsonstr = json("id", "meta", "cmd", "__keepAlive", "summary", summary.escapeJSON(), "data", .keepAlive.map!(a => a.to!string()).array);
 			}
             else // print selected symbols
 			{
 				summary = args.map!(a => printValue(parseExpr(a))).join("\n");
-				jsonstr = json("id", "meta", "cmd", "print", "summary", summary, "data", args.map!(a => printValue(parseExpr(a))).array);
+				jsonstr = json("id", "meta", "cmd", "print", "summary", summary.escapeJSON(), "data", args.map!(a => printValue(parseExpr(a)).escapeJSON()).array);
 			}
 			break;
         }
@@ -107,13 +107,13 @@ bool handleMetaCommand(ref string inBuffer, ref string codeBuffer)
             if (args.length == 0 || canFind(args, "all")) // print types of all vars
 			{
 				summary = vars.map!(v => text(v.name, " ") ~ printType(T(v.name,[]))).join("\n");
-				jsonstr = json("id", "meta", "cmd", "type", "summary", summary, "data", 
-							vars.map!(v => tuple("name", v.name, "type", printType(T(v.name,[])))).array);
+				jsonstr = json("id", "meta", "cmd", "type", "summary", summary.escapeJSON(), "data", 
+							vars.map!(v => tuple("name", v.name, "type", printType(T(v.name,[])).escapeJSON())).array);
 			}
             else
 			{
 				summary = args.map!(a => printType(parseExpr(a))).join("\n");
-				jsonstr = json("id", "meta", "cmd", "type", "summary", summary, "data", args.map!(a => printType(parseExpr(a))).array);
+				jsonstr = json("id", "meta", "cmd", "type", "summary", summary.escapeJSON(), "data", args.map!(a => printType(parseExpr(a)).escapeJSON()).array);
 			}
 			break;
         }
@@ -153,7 +153,7 @@ bool handleMetaCommand(ref string inBuffer, ref string codeBuffer)
             }
 
 			summary = msg.join("\n");
-			jsonstr = json("id", "meta", "cmd", "use", "summary", summary, "data", msg);
+			jsonstr = json("id", "meta", "cmd", "use", "summary", summary.escapeJSON(), "data", msg);
 			break;
         }
         case "clear":
