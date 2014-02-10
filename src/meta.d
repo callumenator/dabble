@@ -143,7 +143,6 @@ bool handleMetaCommand(ref string inBuffer, ref string codeBuffer)
             alias ElementType!(typeof(context.userModules)) TupType;
 
 			string[] msg;
-
             foreach(a; args)
             {
                 if (exists(a))

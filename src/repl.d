@@ -149,15 +149,6 @@ void loop()
 }
 
 
-string escapeJSON(string s) 
-{
-	import std.regex;
-	enum quote = regex("\"");		
-	enum newline = regex("\n");		
-	return s.replaceAll(quote, `\"`).replaceAll(newline, `\n`);
-}
-
-
 /**
 * Free any shared libs that were kept alive.
 */
@@ -493,7 +484,7 @@ bool parse(string code, out string parsedCode)
         void newVariable(string name, string type, string init, string source)
         {
 			// let compiler deal with redefinition            
-            version(none) { if (context.share.vars.canFind!((a,b) => (a.name == b))(name)) }            
+            version(none) { if (context.share.vars.canFind!((a,b) => (a.name == b))(name)){} }            
             context.rawCode.append(source, false);
             context.share.vars ~= Var(name, type, init);
             dupSearchList ~= name;
@@ -1056,6 +1047,23 @@ protected string json(T...)(T t)
 		}
 	}
 	return result ~ "}";
+}
+
+
+string escapeJSON(string s) 
+{	
+	import std.regex;
+	string replacer(Captures!(string) m)
+	{
+		final switch(m.hit) // could do this with a hash, but worth it?
+		{
+			case "\"": return `"`;
+			case "\n": return `\n`;
+			case "\\": return `\`;				
+		}
+		assert(false);
+	}
+	return s.replaceAll!(replacer)(regex("\"|\n|\\\\"));
 }
 
 
