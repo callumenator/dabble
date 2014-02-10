@@ -517,7 +517,7 @@ bool parse(string code, out string parsedCode)
 				
 		auto summary = text("Parser error", parser.errors.length > 1 ? "s:" :":", newl, niceErrors.join(newl));
 		consoleSession ? summary.send : 
-			json("id", "parse-error", "summary", summary, "errors", 
+			json("id", "parse-error", "summary", summary.escapeJSON(), "errors", 
 				parser.errors.map!(t => tuple("source",lines[t[0]-1].escapeJSON(),"column",t[1],"error",t[2].escapeJSON())).array).send;
 		return false;
 	}
@@ -1055,15 +1055,21 @@ string escapeJSON(string s)
 	import std.regex;
 	string replacer(Captures!(string) m)
 	{
-		final switch(m.hit) // could do this with a hash, but worth it?
+		final switch(m.hit) 
 		{
-			case "\"": return `"`;
-			case "\n": return `\n`;
-			case "\\": return `\`;				
+			case `"`: return `\"`;			
+			case `\`: return `\\`;
+			case "\b": return ``;			
+			case "\f": return ``;
+			case "\t": return `    `;						
+			case "\r": return `\n`;			
+			case "\n": return `\n`;						
+			case "\r\n": return `\n`;			
+			case "\r\r\n": return `\n`;						
 		}
 		assert(false);
 	}
-	return s.replaceAll!(replacer)(regex("\"|\n|\\\\"));
+	return s.replaceAll!(replacer)(regex("\f|\b|\t|\r\r\n|\r\n|\r|\n|" ~ `\\|"`));
 }
 
 
