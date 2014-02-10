@@ -105,16 +105,15 @@ void loop()
     import std.string : chomp, strip;
 
     assert(context.initalized, "Context not initalized");
-
+	
+	string input, codeBuffer;	        
     if (consoleSession)
 	{
         clearScreen();
 		writeln(title());
 		write(prompt());				
 	}
-    	
-	string input, codeBuffer;	    
-    
+ 	
 	do
     {				
 		input = stdin.readln();
@@ -125,15 +124,10 @@ void loop()
 			consoleSession ? prompt(true).send(false) : json("id", "parse-multiline").send;									
 		}
 		else		
-		{
-			if (r[1] == Stage.call)
-			{				
-				if (consoleSession)								
-					r[0].send;
-				else	
-					json("id", "repl-result", "summary", r[0].escapeJSON()).send;
-			}
-			
+		{					
+			if (r[1] == Stage.call)				
+				consoleSession  ? r[0].send : splitMessages(r[0]);											
+				
 			if (consoleSession)
 				prompt().send(false);
 		}
@@ -146,6 +140,28 @@ void loop()
         }
 		
     } while (strip(input) != "exit");
+}
+
+
+/**
+* Split up repl result into standard result stuff and json messages.
+*/
+void splitMessages(string s) 
+{
+	string outer;
+	string[] inner;	
+	auto r = s.findSplit("\u0006");
+	while(!r[2].empty) 
+	{		
+		outer ~= r[0];
+		r = r[2].findSplit("\u0006");
+		inner ~= r[0];
+		r = r[2].findSplit("\u0006");
+	}
+	outer ~= r[0];	
+	json("id", "repl-result", "summary", outer.escapeJSON()).send;	
+	foreach(i; inner)
+		json("id", "repl-message", "message", i.escapeJSON()).send;	
 }
 
 
@@ -1061,14 +1077,15 @@ string escapeJSON(string s)
 			case `\`: return `\\`;
 			case "\b": return ``;			
 			case "\f": return ``;
-			case "\t": return `    `;						
+			case "\t": return `  `;						
 			case "\r": return `\n`;			
 			case "\n": return `\n`;						
 			case "\r\n": return `\n`;			
-			case "\r\r\n": return `\n`;						
+			case "\r\r\n": return `\n`;			
 		}
 		assert(false);
 	}
+	// to match control chars `|\p{Cc}`
 	return s.replaceAll!(replacer)(regex("\f|\b|\t|\r\r\n|\r\n|\r|\n|" ~ `\\|"`));
 }
 

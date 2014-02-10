@@ -234,24 +234,19 @@ function initBrowser() {
 * Handle child process messages.
 */
 function messageProtocol(incomming, buffer) {	
-
-	/***
-	**** TODO: fix case where part of message is left at end!
-	***/
-
 	buffer.data += incomming.toString();		
 	if (incomming.slice(-1)[0] != 10 && incomming.slice(-2)[0] != 6) return [];	
-	var parts = buffer.data.split(/\u0006/g);	
-	var jsonArray = [];
+	var parts = buffer.data.split(/\u0006/g), 
+		jsonArray = [];	
 	for(var i = 0; p = parts[i], i < parts.length; i++) {
 		p = p.trim();
 		if (p.length == 0) 
-			continue;		
+			continue;				
 		try {
 			var json = JSON.parse(p);
 			jsonArray.push(json);
 		} catch(err) {
-			console.log("Message proto: json parse error: ", err);
+			console.log("Message proto: json parse error: ", err, p);
 		}
 	}
 	buffer.data = "";
@@ -288,32 +283,37 @@ function clear() {
 */ 
 function handleMessage(json)
 {
-	var multiline = false;	
-	var summary = json.hasOwnProperty("summary") ? json.summary : "";
-	//summary = summary.replace(/\n/g, "<br>");	
+	var multiline = false;		
 	switch (json.id) {
 		case "parse-multiline":
 			multiline = true;
 			break;
-		case "repl-result":
-			// need to handle inner messages
-			updateResult(summary, true);
+		case "repl-result":			
+			updateResult(json.summary, true);
+			break;
+		case "repl-message":			
+			try {
+				var jsonMsg = JSON.parse(json.message);
+				console.log(jsonMsg);
+			} catch(err) {
+				console.log("Error parsing repl-message", err);
+			}			
 			break;
 		case "meta":
 			if (json.cmd == "version") {
-				updateResult(summary, false);
+				updateResult(json.summary, false);
 				$("#repl-status").html("");
 				editor.setOption("readOnly", false);
 				editor.focus();
 			} else if (json.cmd == "history") {
 				autocompleteCode = json.summary;
 			} else {
-				updateResult(summary, true);	
+				updateResult(json.summary, true);	
 			}
 			break;			
 		default: 
 			if (json.hasOwnProperty("summary")) 
-				updateResult(summary, true);
+				updateResult(json.summary, true);
 			else 
 				console.log("Unhandled message: ", json);
 		break;
