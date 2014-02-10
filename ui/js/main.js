@@ -148,8 +148,7 @@ function monitorStylesheet() {
         var queryString = '?reload=' + new Date().getTime();
         $('link[rel="stylesheet"]').each(function () {
             this.href = this.href.replace(/\?.*|$/, queryString);
-        });
-		setTimeout(windowResize, 500);
+        });		
     });
 }
 
@@ -203,8 +202,7 @@ function initCodemirrors() {
 function initRepl() {
 	var repl_buffer = {data:""};
 	engine = require('child_process').spawn('../dabble/bin/repl', ['--noConsole']);		
-	engine.stdout.on('data', function (data) { 		
-		console.log('From repl: ', data.toString());
+	engine.stdout.on('data', function (data) { 				
 		var messages = messageProtocol(data, repl_buffer);		
 		if (messages.length == 0) return;					
 		for(var i = 0; m = messages[i], i < messages.length; i++) 
@@ -219,8 +217,7 @@ function initRepl() {
 function initBrowser() {
 	var browser_buffer = {data:""};
 	browser = require('child_process').spawn('../dabble/bin/browser', [globalSettings.phobosPath]);	        	
-	browser.stdout.on('data', function (data) {	
-		console.log('From browser: ', data.toString());
+	browser.stdout.on('data', function (data) {			
 		var messages = messageProtocol(data, browser_buffer);		
 		if (messages.length == 0) return;			
 		for(var i = 0; m = messages[i], i < messages.length; i++) {
@@ -248,8 +245,8 @@ function messageProtocol(incomming, buffer) {
 	var jsonArray = [];
 	for(var i = 0; p = parts[i], i < parts.length; i++) {
 		p = p.trim();
-		if (p.length == 0) continue;
-		console.log("Message part: ", p);
+		if (p.length == 0) 
+			continue;		
 		try {
 			var json = JSON.parse(p);
 			jsonArray.push(json);
@@ -418,7 +415,8 @@ function listToHTML(list) {
 
 function panelClick(name) {   
     var el = event.target;           
-    if (typeof el.dataset.expanded == "undefined") return;   
+    if (typeof el.dataset.expanded == "undefined") 
+		return;   
     if (el.dataset.expanded != "true") 
 		expandPanel(name, el);
     else 
@@ -430,7 +428,7 @@ function expandPanel(uuid, parent) {
         $(parent).append(symbolToHTML(json));        
         parent.dataset.expanded = "true";
     };     
-    browser.stdin.write(new Buffer('get-uuid:' + uuid + "\n"));        
+    browser.stdin.write(new Buffer('get-uuid:' + uuid + "\u0006"));        
 }
 
 function collapsePanel(name, parent) {
@@ -440,8 +438,8 @@ function collapsePanel(name, parent) {
 
 function symbolToHTML(symbol) {  
   return "<div class='doc-panel doc-panel-expanded'>" +
-    symbol.parent + "<br>" + symbol.pretty + "<br>" + 
-    symbol.comment.replace(/\n/g, '<br>') + "</div>";    
+    symbol.parent + "<br>" + symbol.pretty + "<br><pre>" + 
+    symbol.comment.replace(/\\n/g, "\n") + "</pre></div>";    
 }
 
 function clearSuggestions() {

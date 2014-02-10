@@ -163,6 +163,10 @@ body {
     overflow-x: auto;
 }
 
+.doc-panel-expanded > pre {
+	font: inherit;
+}
+
 #ajax-loader {		
 	vertical-align: top;
 	visibility: hidden;

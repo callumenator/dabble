@@ -29,7 +29,7 @@ import
 	messages, 
 	modulecache, 
 	formatter;
-
+	
 enum cterminator = '\x06';
 enum sterminator = "\x06";	
 TrieNode browser;
@@ -48,6 +48,30 @@ void main(string[] args)
 }
 
 
+void buildSourceBrowser(string dmdPath = "")
+{
+    writeln(`{"status":"generating"}`, sterminator); stdout.flush();
+
+    auto files = filter!q{endsWith(a.name, ".d")}(dirEntries(dmdPath, SpanMode.shallow));
+
+    if (!files.empty) 
+    {        
+        auto list = files.map!( x => x.name )().join(" ");
+        auto res = system("dmd -c -o- -D -Dfbrowser.html -X -Xfstdlib.json " ~ list);
+		if (exists("browser.html"))
+            std.file.remove("browser.html");    
+        auto text = readText("stdlib.json");
+
+        auto obj = parseJSON(text);
+        auto modList = obj.array;
+        foreach(mod; modList)
+            browser.insert(parse(mod.object));
+    }                   
+    writeln(`{"status":"ready"}`, sterminator); stdout.flush();
+}
+
+
+
 /**
 * Wait for stdin input
 */
@@ -61,14 +85,20 @@ void wait()
             break loop;            		
         else if (input.startsWith("suggest-names:"))
         {        
-            writeln(`{"result":[`, browser.suggestNames(input.findSplitAfter("suggest-names:")[1]).map!(x=>`"` ~ x ~ `"`).join(","), `]}`, sterminator);			
+			auto prefix = input.findSplitAfter("suggest-names:")[1]; 			
+			auto suggestions = browser.suggestNames(prefix)
+										.map!(x => `"` ~ x ~ `"`)
+										.join(",");										
+            writeln(`{"result":[`, suggestions, `]}`, sterminator);			
             stdout.flush();
         }    
         else if (input.startsWith("search-names:"))        
         {
-            auto r = browser.suggest(input.findSplitAfter("search-names:")[1])
-                            .map!(x => `{"name":"` ~ escape(x.name) ~ `","uuid":"` ~ x.uuid ~ `"}`);        
-            writeln(`{"result":[`, r.join(","), `]}`, sterminator);
+			auto prefix = input.findSplitAfter("search-names:")[1];
+            auto suggestions = browser.suggest(prefix)
+							.map!(x => `{"name":"` ~ escapeJSON(x.name) ~ `","uuid":"` ~ x.uuid ~ `"}`)
+							.join(",");        
+            writeln(`{"result":[`, suggestions, `]}`, sterminator);
             stdout.flush();
         }
         else if (input.startsWith("get-uuid:"))        
@@ -227,92 +257,77 @@ struct Symbol
 {
     string name, kind, parent, file, uuid, comment;
     uint lineStart, lineEnd;
-
-    string type;
-    
+    string type;    
     Symbol[] members;
     Symbol[] tParams, fParams;
 
-    void init() {
+    void init() 
+	{
         uuid = randomUUID().toString();
     }
 
-    @property bool defined() {
+    @property bool defined() 
+	{
         return (name.length > 0 && kind.length > 0);
     }
 
-    string fullName() {
+    string fullName() 
+	{
         return parent ~ "." ~ name;
     }
 
-    string getSource() {
-        enum r = regex(`\s`, "g");
-        try {
-            auto code = readText(file).splitLines()[lineStart-1..lineEnd]
-                                      .join("<br>")
-                                      .escape()
-                                      .replace(r, "&nbsp");
-
-            return code;
-        } catch(Exception e) {
-            stderr.writeln(e.msg);
-        }
+    string getSource() 
+	{        
+        try 		
+            return readText(file).splitLines()[lineStart-1..lineEnd].join("\n").escapeJSON();                                                         
+		catch(Exception e) 		
+            stderr.writeln(e.msg);        
         assert(false);
     }
 
-    string prettyString(bool noRecurse = false) {
-        string str;
-        if (type.length > 0) {
-            if (kind == "function")
-                str = returnType(type) ~ " " ~ name;
-            else
-                str = type ~ " " ~ name;
-        } else {
-            str = name;
-        }
-
+    string prettyString(bool noRecurse = false) 
+	{        	
+		auto str = type.length ? (kind == "function" ? returnType(type) : type) ~ " " ~ name : name;        		       
         if (tParams.length > 0)
             str ~= "(" ~ tParams.map!(a => a.prettyString())().join(", ") ~ ")";
-
         if (fParams.length > 0)
             str ~= "(" ~ fParams.map!(a => a.prettyString())().join(", ") ~ ")";
-
         if (!noRecurse && kind == "struct")
             str ~= "{<br>" ~ members.map!(a => "&nbsp&nbsp" ~ a.prettyString(true))().join("<br>") ~ "}";
-
         return str;
     }
 
-    string toJSON() {
+    string toJSON() 
+	{
         string s;
         s = "{";
-        s ~= `"name":"` ~ escape(name) ~ `"`;
-        s ~= `,"parent":"` ~ escape(parent) ~ `"`;
-        s ~= `,"fullName":"` ~ escape(fullName()) ~ `"`;
-        s ~= `,"uuid":"` ~ uuid ~ `"`;
-        
-        
-        
-        s ~= `,"comment":"` ~ escape(comment) ~ `"`;
-        s ~= `,"pretty":"` ~ escape(prettyString()) ~ `"`;
-        s ~= `,"kind":"` ~ escape(kind) ~ `"`;
-        s ~= `,"type":"` ~ escape(type) ~ `"`;
+        s ~= `"name":"` ~ escapeJSON(name) ~ `"`;
+        s ~= `,"parent":"` ~ escapeJSON(parent) ~ `"`;
+        s ~= `,"fullName":"` ~ escapeJSON(fullName()) ~ `"`;
+        s ~= `,"uuid":"` ~ uuid ~ `"`;                      
+        s ~= `,"comment":"` ~ escapeJSON(comment) ~ `"`;
+        s ~= `,"pretty":"` ~ escapeJSON(prettyString()) ~ `"`;
+        s ~= `,"kind":"` ~ escapeJSON(kind) ~ `"`;
+        s ~= `,"type":"` ~ escapeJSON(type) ~ `"`;
         if (kind == "function")
-            s ~= `,"returntype":"` ~ escape(returnType(type)) ~ `"`;
-                    
+            s ~= `,"returntype":"` ~ escapeJSON(returnType(type)) ~ `"`;                    
         s ~= `,"tparams":[` ~ tParams.map!(a => a.toJSON())().join(",") ~ `]`;
         s ~= `,"fparams":[` ~ fParams.map!(a => a.toJSON())().join(",") ~ `]`;
-        s ~= `,"members":[`;
+        s ~= `,"members":[`;		
+		s ~= members.filter!(m => m.kind != "import").map!(m => m.toJSON()).join(",");
+		s ~= `]}`;
 
-        foreach(i, m; members) {
-            if (m.kind != "import") {
-                s ~= m.toJSON();
-                if (i < members.length - 1)
-                    s ~= ",";
-            }
+		/++
+        foreach(i, m; members) 
+		{
+            if (m.kind == "import") 
+				continue;			
+            
+			s ~= m.toJSON();
+            if (i < members.length - 1)
+                s ~= ",";            
         }
-        s ~= `]}`;
-        
+		++/		        
         return s;
     }
 }
@@ -397,7 +412,7 @@ struct TrieNode
     {
         string[] subtree;
         if (symbol.length > 0)
-            subtree ~= escape(symbol[0].name);
+            subtree ~= escapeJSON(symbol[0].name);
 
         foreach(n; nodes)
             subtree ~= n.getSubTreeNames();
@@ -418,7 +433,7 @@ struct TrieNode
         void doNodes() {
             size_t count = 0;
             foreach(n; nodes) {
-                s ~= `"` ~ escape(n.letter.to!string()) ~ `":` ~ n.toJSON();
+                s ~= `"` ~ escapeJSON(n.letter.to!string()) ~ `":` ~ n.toJSON();
                 if ((count++) < nodes.length - 1)
                     s ~= ",";
             }
@@ -431,7 +446,7 @@ struct TrieNode
         } else {
 
             if (symbol.length > 0) {
-                s ~= `"name":"` ~ escape(symbol[0].name) ~ `",`;
+                s ~= `"name":"` ~ escapeJSON(symbol[0].name) ~ `",`;
                 s ~= `"symbols":[`;
 
                 foreach(i, sym; symbol) {
@@ -538,24 +553,25 @@ Symbol parse(JSONValue[string] obj, string parent = "", string file = "")
     return sym;
 }
 
-void buildSourceBrowser(string dmdPath = "")
-{
-    writeln(`{"status":"generating"}`, sterminator); stdout.flush();
 
-    auto files = filter!q{endsWith(a.name, ".d")}(dirEntries(dmdPath, SpanMode.shallow));
-
-    if (!files.empty) 
-    {        
-        auto list = files.map!( x => x.name )().join(" ");
-        auto res = system("dmd -c -o- -D -Dfbrowser.html -X -Xfstdlib.json " ~ list);
-		if (exists("browser.html"))
-            std.file.remove("browser.html");    
-        auto text = readText("stdlib.json");
-
-        auto obj = parseJSON(text);
-        auto modList = obj.array;
-        foreach(mod; modList)
-            browser.insert(parse(mod.object));
-    }                   
-    writeln(`{"status":"ready"}`, sterminator); stdout.flush();
+string escapeJSON(string s) 
+{	
+	import std.regex;
+	string replacer(Captures!(string) m)
+	{
+		final switch(m.hit) 
+		{
+			case `"`: return `\"`;			
+			case `\`: return `\\`;
+			case "\b": return ``;			
+			case "\f": return ``;
+			case "\t": return `    `;						
+			case "\r": return `\n`;			
+			case "\n": return `\n`;						
+			case "\r\n": return `\n`;			
+			case "\r\r\n": return `\n`;						
+		}
+		assert(false);
+	}
+	return s.replaceAll!(replacer)(regex("\f|\b|\t|\r\r\n|\r\n|\r|\n|" ~ `\\|"`));
 }
