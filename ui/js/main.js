@@ -465,7 +465,9 @@ function phobosPath() {
 		if (require('fs').existsSync(path))
 			return path;		
 	} else if (os.type() == "Linux") {
-		
+		var path = "/usr/include/dlang/dmd/std";		
+		if (require('fs').existsSync(path))
+			return path;		
 	}
 }
 
