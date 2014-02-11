@@ -567,7 +567,7 @@ bool parse(string code, out string parsedCode)
         "{\n" ~
         text(context.vtblFixup, c.prefix.data, source, c.suffix.data,
              "if (__expressionResult.length != 0) writeln(__expressionResult);\n") ~
-        "}\n" ~ genHeader();
+        "}\n" ~ genHeader() ~ delve;
 
     context.rawCode.append(parser.original, false);
 	parsedCode = codeOut;
@@ -763,7 +763,7 @@ bool buildUserModules(out DMDMessage[] errors, bool init = false)
     if (context.userModules.length == 0 && !rebuildLib)
         return true;
 
-    auto allIncludes = context.userModules.map!(a => "-I" ~ a.path)().join(" ");
+    auto allIncludes = context.userModules.map!(a => "-I" ~ a.path).join(" ");
 
     SysTime access, modified;
     foreach(ref m; context.userModules)
@@ -776,9 +776,10 @@ bool buildUserModules(out DMDMessage[] errors, bool init = false)
 
         rebuildLib = true;
 		auto command = ["cd", context.paths.tempPath, cmdJoin, "dmd -c", allIncludes, fullPath].join(" ");		
+		
         if (!attempt(command, fullPath, errors))
             return false;
-
+		
         getTimes(fullPath, access, modified);
         m.modified = modified.stdTime();
     }
