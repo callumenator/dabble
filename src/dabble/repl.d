@@ -644,7 +644,7 @@ bool build(string code)
     {
 		auto summary = "Failed building user modules: errors follow:" ~ newl ~ errors.map!(e => e.toStr()).join(newl);					
 		consoleSession ? summary.send :
-			json("id", "build-error-usermod", "summary", summary, "data", errors.map!(e => e.toTup()).array).send;
+			json("id", "build-error-usermod", "summary", summary.escapeJSON(), "data", errors.map!(e => e.toTup()).array).send;
 	} 
 
     auto dirChange = "cd " ~ escapeShellFileName(context.paths.tempPath);
@@ -664,7 +664,7 @@ bool build(string code)
 	
     if (context.userModules.length)
         cmd ~= context.userModules.map!(a => "-I" ~ a.path)().join(" ");
-
+		
 	// Try to build the full hacked source
 	if (timeIt("build - build", attempt(cmd.join(" "), context.fullName ~ ".d", errors)))
 		return true;
@@ -782,13 +782,13 @@ bool buildUserModules(out DMDMessage[] errors, bool init = false)
         getTimes(fullPath, access, modified);
         m.modified = modified.stdTime();
     }
-
+		
     if (rebuildLib)
     {
-        auto objs = context.userModules.map!(a => stripExtension(a.name) ~ objExt)().join(" ");
+        auto objs = context.userModules.map!(a => stripExtension(a.name) ~ "." ~ objExt).join(" ");
 		auto command = ["cd", context.paths.tempPath, cmdJoin, "dmd -lib -ofextra."~libExt, "defs."~objExt, objs].join(" ");
         if (!attempt(command, "", errors))
-            return false;
+		    return false;		
     }
 
 	return true;
@@ -1110,7 +1110,7 @@ private auto timeIt(E)(string stage, lazy E expr)
 /**
 * Try to find the absolute path of the repl executable
 */
-private string replPath()
+package string replPath()
 {
     import std.string : join;
 	import std.file : thisExePath, exists;

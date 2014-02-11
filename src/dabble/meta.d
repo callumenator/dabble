@@ -138,7 +138,7 @@ bool handleMetaCommand(ref string inBuffer, ref string codeBuffer)
         {
             import std.file : exists;
             import std.range : ElementType;
-            import std.path : dirName, baseName;
+            import std.path : dirName, baseName, dirSeparator;
             import std.datetime : SysTime;
             alias ElementType!(typeof(context.userModules)) TupType;
 
@@ -146,9 +146,21 @@ bool handleMetaCommand(ref string inBuffer, ref string codeBuffer)
             foreach(a; args)
             {
                 if (exists(a))
+				{
                     context.userModules ~= TupType(dirName(a), baseName(a), SysTime(0).stdTime());
-                else
-					msg ~= text("Error: module ", a, " could not be found");
+					continue;
+				}
+				
+				// see if the file exists in dabble src directory (like delve.d does)
+				auto altPath = [replPath(), "src", "dabble", a].join(dirSeparator);
+				if (exists(altPath))
+				{
+					context.userModules ~= TupType(dirName(altPath), baseName(altPath), SysTime(0).stdTime());
+					continue;					
+				}
+                
+				// else fail
+				msg ~= text("Error: module ", a, " could not be found");
             }
 
 			summary = msg.join("\n");

@@ -332,6 +332,8 @@ function handleMessage(json)
 * Got a result from the repl. 
 */
 function updateResult(data, lwidget) {	
+	if (data.trim().length == 0)
+		return;
     if (lwidget) {       
         var id = "lineWidget" + (lineWidgetCount++).toString();
         $("body").append("<div class='resultWidget' id='" + id + "'><pre>" + data, + "</pre></div>");
