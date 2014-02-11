@@ -6,6 +6,7 @@ var maxHistory = 200;
 var lineIndex = 0; // for moving through the history
 var lineWidgetCount = 0;
 var autocompleteCode = "";
+var handlers = {};
 
 var autocomplete = {
     callback: null,
@@ -292,12 +293,14 @@ function handleMessage(json)
 			updateResult(json.summary, true);
 			break;
 		case "repl-message":			
+			var jsonMsg = null;
 			try {
-				var jsonMsg = JSON.parse(json.message);
-				console.log(jsonMsg);
+				jsonMsg = JSON.parse(json.message);				
 			} catch(err) {
 				console.log("Error parsing repl-message", err);
 			}			
+			if (jsonMsg !== null)
+				handleReplMessage(jsonMsg);
 			break;
 		case "meta":
 			if (json.cmd == "version") {
@@ -646,3 +649,32 @@ function settingsPaneHide() {
         //        browser.stdin.write(new Buffer("-c" + offset.toString() + " " + (homeDir + "_temp").replace(/\\/g, "/") + "\n")); 
         //    });                                
     };
+	
+	
+
+	
+/** Handlers **/
+	
+var resultWindow = null;
+
+function handleReplMessage(json) {
+	openResultWindow( function() { resultWindow.window.handle(json); });
+}
+	
+function openResultWindow(onload) {
+    if (resultWindow == null) {
+        resultWindow = require('nw.gui').Window.open('../html/child.html', {
+            position: 'center',         
+            title: "Results",
+            toolbar: true,
+            frame: true,                
+            width: 500,
+            height: 500            
+        });
+        resultWindow.on('closed', function() { resultWindow = null; });            
+        resultWindow.on('loaded', function() { onload(); });		
+    }  else {
+        onload();
+    }                               
+}
+
