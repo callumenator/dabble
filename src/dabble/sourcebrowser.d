@@ -121,7 +121,7 @@ void wait()
 			auto cpos = parts[0].findSplitAfter("-c")[1].to!(int);
 			auto code = parts[1].to!string();
 		
-			writeln(`{"autocomplete":`, code, `}`, sterminator);
+			writeln(`{"autocomplete":"`, code, `"}`, sterminator);
 			continue;
 			/**
 			auto sourceCode = uninitializedArray!(ubyte[])(to!size_t(f.size));

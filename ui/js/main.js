@@ -207,7 +207,7 @@ function initRepl() {
 		var messages = messageProtocol(data, repl_buffer);		
 		if (messages.length == 0) return;					
 		for(var i = 0; m = messages[i], i < messages.length; i++) 
-			handleMessage(m);							
+			handleMessage(m);								
 	});	
     send("version");
 }
@@ -264,7 +264,7 @@ function replInput() {
 	else {
 		appendHistory(text);        
 		updateResult(text, false);
-		send(text);
+		send(text);		
 	}
 	editor.setValue("");                
 }
@@ -290,7 +290,8 @@ function handleMessage(json)
 			multiline = true;
 			break;
 		case "repl-result":			
-			updateResult(json.summary, true);
+			updateResult(json.summary, true);			
+			send("history");
 			break;
 		case "repl-message":			
 			var jsonMsg = null;
@@ -308,7 +309,7 @@ function handleMessage(json)
 				$("#repl-status").html("");
 				editor.setOption("readOnly", false);
 				editor.focus();
-			} else if (json.cmd == "history") {
+			} else if (json.cmd == "history") {				
 				autocompleteCode = json.summary;
 			} else {
 				updateResult(json.summary, true);	
@@ -646,8 +647,9 @@ function settingsPaneHide() {
             token: tk, 
             cursor: cursor
         };
-        
-		//browser.stdin.write(new Buffer("-c" + offset.toString() + " " + (homeDir + "_temp").replace(/\\/g, "/") + "\n")); 
+		
+		var tempCode = autocompleteCode + "\n" + editor.getValue();        
+		browser.stdin.write(new Buffer("-c" + offset.toString() + " " + tempCode + "\u0006")); 
 		
         //require("fs").writeFile(homeDir + "_temp", cm.getValue(), function(err) {                             
         //        browser.stdin.write(new Buffer("-c" + offset.toString() + " " + (homeDir + "_temp").replace(/\\/g, "/") + "\n")); 
