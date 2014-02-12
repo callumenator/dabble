@@ -283,7 +283,7 @@ struct RawCode
     string toString()
     {
         import std.string : join;        
-        return "import std.traits, std.stdio, std.range, std.algorithm, std.conv;\n" ~
+        return "import std.traits, std.stdio, std.range, std.algorithm, std.conv;\n" ~ delve ~ 
                _header.map!( x => x.code )().join("\n") ~ "\nvoid main() {\n" ~
                _body.map!( x => x.code )().join("\n") ~ "\n}";
     }

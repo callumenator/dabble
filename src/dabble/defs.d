@@ -113,10 +113,13 @@ struct Var
             put(c.suffix, accessor, ".valid = true;\n");
             first = false;                
             
+			auto typeLambda = text("auto typeLambda = ()=>(", init, ");");
+			
             init = strip(init);
         
             if (strip(type).length == 0 || !type.match(`\bauto\b`).empty)            
-                type = text("typeof( (() => (", init,"))() )");                            
+                type = text("typeof( (() => (", init,"))() )");     
+				
                                                                     
             string _funcLit()
             {                
@@ -143,21 +146,18 @@ struct Var
 
                 if (strip(init).length == 0)
                     return s ~ "}\n";
-                                 
-                assign = text("*cast(",utype,"*)",accessor,".addr = ",utype,"(",init,");");    
-                s ~= text("  static if (__traits(compiles,",utype,"(",init,")))\n  {\n");                
-				version(log) { s ~= text("    writeln(`assign 1`);\n"); }
-                s ~= text("    ",assign,"\n  }\n");
+                                 										
+                assign = text(typeLambda, " *cast(Unqual!(typeof(typeLambda()))*)", accessor, ".addr = cast(Unqual!(typeof(typeLambda())))(",init,");");    
+                s ~= text("  static if (__traits(compiles,",utype,"(",init,")))\n  {{\n");                				
+                s ~= text("    ",assign,"\n  }}\n");
                 
-                assign = text("*cast(",utype,"*)",accessor,".addr = ",init,";");    
-                s ~= text("  else static if (__traits(compiles, { ",assign," }))\n  {\n");                
-				version(log) { s ~= text("    writeln(`assign 2`);\n"); }
-                s ~= text("    ",assign,"\n  }\n");
+                assign = text(typeLambda, " *cast(Unqual!(typeof(typeLambda()))*)", accessor, ".addr = cast(Unqual!(typeof(typeLambda())))",init,";");    
+                s ~= text("  else static if (__traits(compiles, { ",assign," }))\n  {{\n");                				
+                s ~= text("    ",assign,"\n  }}\n");
                 
-                assign = text("*cast(",utype,"*)",accessor,".addr = cast(",utype,")(",init,");");    
-                s ~= text("  else\n  {\n");                
-				version(log) { s ~= text("    writeln(`assign 3`);\n"); }
-                s ~= text("    ",assign,"\n  }\n}\n");
+                assign = text(typeLambda, " *cast(Unqual!(typeof(typeLambda()))*)", accessor, ".addr = cast(Unqual!(typeof(typeLambda())))(",init,");");    
+                s ~= text("  else\n  {{\n");                				
+                s ~= text("    ",assign,"\n  }}\n}\n");
                         
                 return s;
             }
