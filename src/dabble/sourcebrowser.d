@@ -46,7 +46,7 @@ void main(string[] args)
 * Wait for stdin input
 */
 void wait()
-{        	
+{    		
     loop: while(true) 
     {		
         string input = readln(cterminator).strip().findSplitBefore(sterminator)[0];
@@ -57,7 +57,10 @@ void wait()
 		{			
 			auto path = input.findSplitAfter("phobos-path:")[1].strip();
 			if (exists(path))
-				buildSourceBrowser(path);
+			{
+				buildSourceBrowser(path);				
+				ModuleCache.addImportPaths([path]);
+			}
 			else
 			{
 				writeln(`{"status":"bad path"}`, sterminator);			

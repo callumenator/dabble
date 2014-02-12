@@ -277,17 +277,20 @@ body {
 }
 
 .CodeMirror-hint-active {
-	background: rgba(0,100,100,.7);
+	background: rgba(0,250,250,.4);
 	color: white;
 }
 
 .hint-text {
 	display: inline-block;
-	margin-right: 5px;
+	margin-left: 10px;
+	vertical-align: bottom;
 }
 
 .hint-icon {
-	width: 20px;
+	vertical-align: bottom;
+	height: 15px;
+	width: 20px;	
 }
 
 ::-webkit-scrollbar {

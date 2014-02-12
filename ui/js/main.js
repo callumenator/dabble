@@ -183,6 +183,7 @@ function initCodemirrors() {
 			}
         } else {
 			if (globalSettings.autocompleteOn && editor.getTokenAt(editor.getCursor()).string.length >= globalSettings.autocompleteMinLength) {	
+				console.log("New auto-complete");
 				CodeMirror.showHint(editor, dcdHint, { async: true,	completeSingle: false });
 			}
 		}
@@ -568,13 +569,15 @@ function settingsPaneHide() {
             else 
 				return sort_map[a.kind] - sort_map[b.kind]            
         }
-           
+           				   
         if (json.length) {                                      
             json.sort(dcd_sort);            
             var completions = [];
                     
             for(var i = 0; i < json.length; i++) {            
                 if (type == "completion") {
+					if (json[i].completion == autocomplete.token.string)
+						continue;
                     completions.push(
                     {
                         text:json[i].completion,            
@@ -609,7 +612,7 @@ function settingsPaneHide() {
                     });                
                 }
             }
-                            
+             							
             if (autocomplete.token.string == ".") {
                 var from = autocomplete.token.start + 1, to = autocomplete.token.start + 1;                            
             } else {
@@ -640,6 +643,8 @@ function settingsPaneHide() {
             cursor: cursor
         };
 		
+		console.log("Hinting: token - ", tk);
+		
 		/*
 		console.log("Hinting: offset - ", offset);
 		console.log("Hinting: code at offset - ", tempCode[offset]);
@@ -648,7 +653,7 @@ function settingsPaneHide() {
 		*/	
 		
 		browserAction = function (json) {				
-            if (json.length == 0) return;
+            if (json.length == 0) return;			
 			dcdResponse(json.type, json.result);
         };				
 		browser.stdin.write(new Buffer("autocomplete: -c" + offset.toString() + " " + tempCode + "\u0006"));		        
