@@ -35,9 +35,8 @@ if (localStorage.hasOwnProperty("globalSettings"))
 /**
 * On close, store settings. 
 */
-require('nw.gui').Window.get().on('close', function() {	
-	if (localStorage.hasOwnProperty("globalSettings"))		
-		localStorage.globalSettings = JSON.stringify(globalSettings);
+require('nw.gui').Window.get().on('close', function() {		
+	localStorage.globalSettings = JSON.stringify(globalSettings);
 	this.close(true);
 });
 
@@ -210,18 +209,21 @@ function initRepl() {
 */
 function initBrowser() {
 	var browser_buffer = {data:""};
-	browser = require('child_process').spawn('../dabble/bin/browser', [globalSettings.phobosPath]);	        	
-	browser.stdout.on('data', function (data) {	
-		console.log("Browser: ", data.toString());
+	browser = require('child_process').spawn('../dabble/bin/browser');	        		
+	browser.stdout.on('data', function (data) {					
 		var messages = messageProtocol(data, browser_buffer);		
 		if (messages.length == 0) return;			
 		for(var i = 0; m = messages[i], i < messages.length; i++) {
-			if (m.hasOwnProperty("status"))
+			if (m.hasOwnProperty("status")) {
 				browserStatus = m.status;
+				console.log(browserStatus);
+			}
 			else if (browserAction !== null)		
-				browserAction(m);					
+				browserAction(m);								
 		}
-    });
+    });	
+	if (globalSettings.phobosPath !== undefined && globalSettings.phobosPath != "")
+		browser.stdin.write(new Buffer("phobos-path:" + globalSettings.phobosPath + "\u0006"));
 }
 
 
@@ -382,8 +384,7 @@ function retrieveHistory(dir) {
 /** 
 * Send input to the repl. 
 */
-function send(text) {   	    
-	console.log("Sent: ", text);
+function send(text) {   	    	
     engine.stdin.write(new Buffer(text + "\n"));
 }
 
@@ -515,8 +516,8 @@ function hidePane() {
 	cp.style.width = "99%";     
     editor.focus();   
 	active[0].setAttribute("data-shown", "false");
-	if (active.attr("data-onhide")) 
-		eval(active.attr("data-onhide"));	
+	if (active.attr("data-onhide")) 		
+		eval(active.attr("data-onhide"));		
 }
 
 
@@ -532,11 +533,20 @@ function initSettingsEditor() {
 /**
 * Called when settings pane gets hidden, used to store modified settings.
 */
-function settingsPaneHide() {
-	console.log($("#settings-pane").data("tempSettings"));
+function settingsPaneHide() {	
+	var prevPhobosPath = globalSettings.phobosPath;
+
 	$("#settings-list tr td input").each(function(i,e) {		
 		globalSettings[e.getAttribute("data-key")] = e.value;
 	});
+	
+	// Update phobos path if it has changed
+	if (globalSettings.phobosPath !== undefined && 
+		globalSettings.phobosPath != "" &&
+		globalSettings.phobosPath != prevPhobosPath) {
+		console.log("Sending new path");
+		browser.stdin.write(new Buffer("phobos-path:" + globalSettings.phobosPath + "\u0006"));
+	}
 }
 
 

@@ -37,39 +37,9 @@ Symbol[string] symbolDictionary;
 
 
 void main(string[] args) 
-{
-    if (args.length < 2) 
-    {
-        writeln("First argument should be path to phobos");
-        return;
-    }        
-    buildSourceBrowser(args[1]);
+{ 
     wait();
 }
-
-
-void buildSourceBrowser(string dmdPath = "")
-{
-    writeln(`{"status":"generating"}`, sterminator); stdout.flush();
-
-    auto files = filter!q{endsWith(a.name, ".d")}(dirEntries(dmdPath, SpanMode.shallow));
-
-    if (!files.empty) 
-    {        
-        auto list = files.map!( x => x.name )().join(" ");
-        auto res = system("dmd -c -o- -D -Dfbrowser.html -X -Xfstdlib.json " ~ list);
-		if (exists("browser.html"))
-            std.file.remove("browser.html");    
-        auto text = readText("stdlib.json");
-
-        auto obj = parseJSON(text);
-        auto modList = obj.array;
-        foreach(mod; modList)
-            browser.insert(parse(mod.object));
-    }                   
-    writeln(`{"status":"ready"}`, sterminator); stdout.flush();
-}
-
 
 
 /**
@@ -82,7 +52,18 @@ void wait()
         string input = readln(cterminator).strip().findSplitBefore(sterminator)[0];
 				
         if (input == "exit")
-            break loop;            		
+            break loop;     
+		else if (input.startsWith("phobos-path:"))
+		{			
+			auto path = input.findSplitAfter("phobos-path:")[1].strip();
+			if (exists(path))
+				buildSourceBrowser(path);
+			else
+			{
+				writeln(`{"status":"bad path"}`, sterminator);			
+				stdout.flush();
+			}
+		}
         else if (input.startsWith("suggest-names:"))
         {        
 			auto prefix = input.findSplitAfter("suggest-names:")[1]; 			
@@ -128,6 +109,30 @@ void wait()
 			sendJSON(response);			
 		}        
     }
+}
+
+
+void buildSourceBrowser(string path)
+{	
+    writeln(`{"status":"generating"}`, sterminator); stdout.flush();
+    auto files = filter!q{endsWith(a.name, ".d")}(dirEntries(path, SpanMode.shallow));
+    if (!files.empty) 
+    {        
+        auto list = files.map!( x => x.name )().join(" ");
+        auto res = system("dmd -c -o- -D -Dfbrowser.html -X -Xfstdlib.json " ~ list);
+		if (exists("browser.html"))
+            std.file.remove("browser.html");    
+        auto text = readText("stdlib.json");
+		
+		browser = TrieNode();
+		symbolDictionary.clear;
+
+        auto obj = parseJSON(text);
+        auto modList = obj.array;
+        foreach(mod; modList)
+            browser.insert(parse(mod.object));
+    }                   
+    writeln(`{"status":"ready"}`, sterminator); stdout.flush();
 }
 
 
@@ -181,20 +186,6 @@ string translateKind(dchar kind) {
 
 void inc(ref string s) { s ~= " "; }
 void dec(ref string s) { s = s[1..$]; }
-
-string escape(string s) {
-    return s.escapeQuotes().escapeX();
-}
-
-string escapeQuotes(string s) {
-    enum r = regex(`"`, "g");
-    return replace(s, r, `\"`);
-}
-
-string escapeX(string s) {
-    enum r = regex(`\\x`, "g");
-    return replace(s, r, `\\x`);
-}
 
 string getBetween(char ldelim, char rdelim)(ref string s) {
 
