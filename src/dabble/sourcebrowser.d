@@ -79,7 +79,7 @@ void wait()
 {        	
     loop: while(true) 
     {		
-        auto input = readln(cterminator).strip().findSplitBefore(sterminator)[0];
+        string input = readln(cterminator).strip().findSplitBefore(sterminator)[0];
 				
         if (input == "exit")
             break loop;            		
@@ -115,26 +115,17 @@ void wait()
 			}
         }
 		else if (input.startsWith("autocomplete:"))
-		{					
+		{								
 			AutocompleteRequest request;
-			auto parts = input.findSplitAfter("autocomplete:")[1].findSplitAfter(" ");			
-			auto cpos = parts[0].findSplitAfter("-c")[1].to!(int);
-			auto code = parts[1].to!string();
-		
-			writeln(`{"autocomplete":`, code, `}`, sterminator);
-			continue;
-			/**
-			auto sourceCode = uninitializedArray!(ubyte[])(to!size_t(f.size));
-			f.rawRead(sourceCode);
-			f.close();
-
-			request.fileName = fileName;
+			auto parts = input.findSplitAfter("autocomplete:")[1].strip().findSplitAfter(" ");
+			auto cpos = parts[0].strip().findSplitAfter("-c")[1].to!(int);
+			auto code = parts[1].to!string();													
+			auto sourceCode = cast(ubyte[])(code);						
+			request.fileName = "repl";
 			request.sourceCode = sourceCode;
-			request.cursorPosition = cursorPos;
-
-			AutocompleteResponse response = complete(request);
-			sendJSON(response);
-			**/
+			request.cursorPosition = cpos;
+			AutocompleteResponse response = complete(request);			
+			sendJSON(response);			
 		}        
     }
 }
@@ -143,7 +134,7 @@ void wait()
 void sendJSON(AutocompleteResponse response) 
 {
 	if (response.completionType == "identifiers") 
-	{
+	{		
 		string json = "[";
 		foreach(i, c, k; zip(iota(response.completions.length), response.completions, response.completionKinds)) 
 		{
@@ -152,17 +143,19 @@ void sendJSON(AutocompleteResponse response)
 				json ~= ",";
 		}
 		writeln(`{"type":"completion", "result":`, json, "]}", sterminator);
+		stdout.flush();
 	} 
 	else if (response.completionType == "calltips") 
-	{
+	{		
 		string json = "[";
 		foreach(i, c; zip(iota(response.completions.length), response.completions)) {
 			json ~= `"` ~ c ~ `"`;
 			if (i < response.completions.length - 1)
 				json ~= ",";
 		}
-		writeln(`{"type":"calltip", "result":`, json, "]}", sterminator);		
-	}
+		writeln(`{"type":"calltips", "result":`, json, "]}", sterminator);		
+		stdout.flush();
+	}	
 }
 
 string translateKind(dchar kind) {

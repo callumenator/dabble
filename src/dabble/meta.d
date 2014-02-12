@@ -77,9 +77,8 @@ bool handleMetaCommand(ref string inBuffer, ref string codeBuffer)
         }
 		case "history": // return raw code, history of d code in this session
         {
-			summary = context.rawCode.toString();
-			import std.regex;
-			jsonstr = json("id","meta","cmd","history","summary",summary.escapeJSON());
+			summary = context.rawCode.toString();			
+			jsonstr = json("id", "meta", "cmd", "history", "summary", summary.escapeJSON());
 			break;
         }
         case "print": with(context.share)

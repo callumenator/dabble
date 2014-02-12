@@ -207,7 +207,7 @@ function initRepl() {
 		var messages = messageProtocol(data, repl_buffer);		
 		if (messages.length == 0) return;					
 		for(var i = 0; m = messages[i], i < messages.length; i++) 
-			handleMessage(m);							
+			handleMessage(m);								
 	});	
     send("version");
 }
@@ -218,14 +218,15 @@ function initRepl() {
 function initBrowser() {
 	var browser_buffer = {data:""};
 	browser = require('child_process').spawn('../dabble/bin/browser', [globalSettings.phobosPath]);	        	
-	browser.stdout.on('data', function (data) {			
+	browser.stdout.on('data', function (data) {	
+		console.log("Browser: ", data.toString());
 		var messages = messageProtocol(data, browser_buffer);		
 		if (messages.length == 0) return;			
 		for(var i = 0; m = messages[i], i < messages.length; i++) {
 			if (m.hasOwnProperty("status"))
 				browserStatus = m.status;
 			else if (browserAction !== null)		
-				browserAction(m.result);					
+				browserAction(m);					
 		}
     });
 }
@@ -264,7 +265,7 @@ function replInput() {
 	else {
 		appendHistory(text);        
 		updateResult(text, false);
-		send(text);
+		send(text);		
 	}
 	editor.setValue("");                
 }
@@ -290,7 +291,8 @@ function handleMessage(json)
 			multiline = true;
 			break;
 		case "repl-result":			
-			updateResult(json.summary, true);
+			updateResult(json.summary, true);			
+			send("history");
 			break;
 		case "repl-message":			
 			var jsonMsg = null;
@@ -308,7 +310,7 @@ function handleMessage(json)
 				$("#repl-status").html("");
 				editor.setOption("readOnly", false);
 				editor.focus();
-			} else if (json.cmd == "history") {
+			} else if (json.cmd == "history") {				
 				autocompleteCode = json.summary;
 			} else {
 				updateResult(json.summary, true);	
@@ -404,7 +406,7 @@ function searchInput() {
         if (json.length == 0) 
 			clearSuggestions();
         else 
-			$("#suggestionsPane").html(listToHTML(json));                    
+			$("#suggestionsPane").html(listToHTML(json.result));                    
     };
 	$("#ajax-loader").css("visibility", "visible");
     browser.stdin.write(new Buffer('search-names:' + prefix.toLowerCase() + "\u0006"));   
@@ -430,7 +432,7 @@ function panelClick(name) {
 
 function expandPanel(uuid, parent) {    
     browserAction = function(json) {      		
-        $(parent).append(symbolToHTML(json));        
+        $(parent).append(symbolToHTML(json.result));        
         parent.dataset.expanded = "true";
     };     
     browser.stdin.write(new Buffer('get-uuid:' + uuid + "\u0006"));        
@@ -546,17 +548,8 @@ function settingsPaneHide() {
 
 /********** Autocomplete stuff ***********/
 
-	function dcdResponse(str) {      
-        
-        var type = "", jsonPart = "";
-        if (str.indexOf("completionInfo") == 0) {
-            type = "complete";
-            jsonPart = (str.split("completionInfo"))[1];
-        } else if (str.indexOf("calltipInfo") == 0) {
-            type = "tip";
-            jsonPart = (str.split("calltipInfo"))[1];
-        }
-        
+	function dcdResponse(type, json) {      
+                
         var sort_map = {
             'variable': 0,
             'function': 1,            
@@ -572,13 +565,12 @@ function settingsPaneHide() {
 				return sort_map[a.kind] - sort_map[b.kind]            
         }
            
-        if (jsonPart != "") {                
-            var json = JSON.parse(jsonPart);           
+        if (json.length) {                                      
             json.sort(dcd_sort);            
             var completions = [];
                     
             for(var i = 0; i < json.length; i++) {            
-                if (type == "complete") {
+                if (type == "completion") {
                     completions.push(
                     {
                         text:json[i].completion,            
@@ -606,7 +598,7 @@ function settingsPaneHide() {
                         })(i)                                    
                     });      
                     
-                } else if (type == "tip") {
+                } else if (type == "calltips") {
                     completions.push({
                         text:'', 
                         displayText:json[i] 
@@ -631,27 +623,38 @@ function settingsPaneHide() {
     };
 
     function dcdHint(cm, callback, options) {           
-		cm = editor;	
-        var cursor = cm.getCursor(), 
-			tk = cm.getTokenAt(cursor);     
-        
-		console.log("Hinting: token - ", tk);
+		
+        var cursor = editor.getCursor(), 
+			tk = editor.getTokenAt(cursor);     
+        		
+		var tempCode = autocompleteCode.slice(0, -1) + "\n" + editor.getValue();
 		
         var offset = 0;
-        cm.doc.eachLine(0, cursor.line, function(handle) { offset += handle.text.length + 1; } );    
-        offset += cursor.ch;    
+		var lines = tempCode.split("\n");
+		for (var l = 0; l < lines.length; l++) {
+			offset += lines[l].length;    
+		}
+        offset = tempCode.length - 1;
             
 		autocomplete = {
             callback: callback,
             token: tk, 
             cursor: cursor
         };
-        
-		//browser.stdin.write(new Buffer("-c" + offset.toString() + " " + (homeDir + "_temp").replace(/\\/g, "/") + "\n")); 
 		
-        //require("fs").writeFile(homeDir + "_temp", cm.getValue(), function(err) {                             
-        //        browser.stdin.write(new Buffer("-c" + offset.toString() + " " + (homeDir + "_temp").replace(/\\/g, "/") + "\n")); 
-        //    });                                
+		/*
+		console.log("Hinting: offset - ", offset);
+		console.log("Hinting: code at offset - ", tempCode[offset]);
+		console.log("Hinting: token - ", tk);
+		console.log("Hinting: code - ", tempCode);
+		*/	
+		
+		browserAction = function (json) {				
+                if (json.length == 0) return;
+                dcdResponse(json.type, json.result);
+            };
+				
+		browser.stdin.write(new Buffer("autocomplete: -c" + offset.toString() + " " + tempCode + "\u0006"));		        
     };
 	
 	
