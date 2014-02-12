@@ -18,7 +18,8 @@ void main(char[][] args)
     parseArgs(args[1..$]);
     
     import dabble.testing;
-    testAll();    
+    //testAll();    
+	
     loop();               
 }
 
