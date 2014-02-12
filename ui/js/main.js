@@ -5,6 +5,7 @@ var historyBuffer = [];
 var maxHistory = 200; 
 var lineIndex = 0; // for moving through the history
 var lineWidgetCount = 0;
+var resultWindow = null;
 var autocompleteCode = "";
 var handlers = {};
 
@@ -18,7 +19,9 @@ var autocomplete = {
 * Init global settings. 
 */
 var globalSettings = {
-	phobosPath: phobosPath()
+	phobosPath: phobosPath(),
+	autocompleteOn: true, 
+	autocompleteMinLength: 4
 };
 
 
@@ -33,7 +36,8 @@ if (localStorage.hasOwnProperty("globalSettings"))
 * On close, store settings. 
 */
 require('nw.gui').Window.get().on('close', function() {	
-	localStorage.globalSettings = JSON.stringify(globalSettings);
+	if (localStorage.hasOwnProperty("globalSettings"))		
+		localStorage.globalSettings = JSON.stringify(globalSettings);
 	this.close(true);
 });
 
@@ -67,13 +71,14 @@ Array.prototype.getUnique = function(selector){
 /** 
 * Autocomplete. 
 */
+/**
 CodeMirror.commands.autocomplete = function(cm) {
     CodeMirror.showHint(cm, dcdHint, {
         async: true,
         completeSingle: false
     });
 }
-
+**/
 
 /**
 * Devtools shortcut 
@@ -117,25 +122,7 @@ $(document).ready(function () {
 	initPanes();	
 	initSettingsEditor();
 	monitorStylesheet();
-	initCodemirrors();
-    
-	// Replace this with DCD version
-    (function () {
-        CodeMirror.dHint = function (editor, callback, options) {
-            var cursor = editor.getCursor();
-            var tk = editor.getTokenAt(cursor);
-            browserAction = function (json) {
-                if (json.length == 0) return;
-                callback({
-					list: json,
-                    from: CodeMirror.Pos(cursor.line, tk.start),
-                    to: CodeMirror.Pos(cursor.line, tk.end)
-                });                
-            };
-            browser.stdin.write(new Buffer('suggest-names:' + tk.string.toLowerCase() + '\u0006'));
-        };
-    }());
-
+	initCodemirrors();    
     initRepl();
 	initBrowser();
         
@@ -161,8 +148,7 @@ function initCodemirrors() {
         mode: "text/x-d",
         viewportMargin: Infinity,
         lineWrapping: true,
-        smartIndent: false,
-        extraKeys: { "Ctrl-Space": "autocomplete" }
+        smartIndent: false        
     });	
 	editor.setOption("readOnly", true); // disable until repl is started
 
@@ -178,10 +164,13 @@ function initCodemirrors() {
     history.setOption("theme", "dabble");	
 	
 	editor.options.onKeyEvent = function (cm, e) {
-		if (!e || !(e instanceof KeyboardEvent)) return;
-        // If currently auto-completing, do nothing		
-        if (e.ctrlKey == true || editor.state.completionActive) return;
-        
+	
+		if (!e || !(e instanceof KeyboardEvent)) return;        		
+		var completing = false;
+		if ('completionActive' in editor.state && editor.state.completionActive == true && $(".CodeMirror-hints").length)
+			completing = true;								
+        if (e.ctrlKey == true || completing) return;		
+				        				
         if (e.type == 'keydown' && e.shiftKey == false && e.keyCode == 13) { // enter key press
             replInput();	
 			e.preventDefault();
@@ -193,7 +182,11 @@ function initCodemirrors() {
                 editor.setValue(line);				
 				setTimeout( function() { editor.setCursor(editor.lineCount(), 0); }, 50);								
 			}
-        }
+        } else {
+			if (globalSettings.autocompleteOn && editor.getTokenAt(editor.getCursor()).string.length >= globalSettings.autocompleteMinLength) {	
+				CodeMirror.showHint(editor, dcdHint, { async: true,	completeSingle: false });
+			}
+		}
     };
 }
 
@@ -390,6 +383,7 @@ function retrieveHistory(dir) {
 * Send input to the repl. 
 */
 function send(text) {   	    
+	console.log("Sent: ", text);
     engine.stdin.write(new Buffer(text + "\n"));
 }
 
@@ -531,6 +525,7 @@ function hidePane() {
 */
 function initSettingsEditor() {		
 	$("#settings-list").append("<tr><td>Phobos path:</td><td><input data-key='phobosPath' value="+globalSettings.phobosPath+" type='text'></td</tr>");
+	$("#settings-list").append("<tr><td>Autocomplete min length:</td><td><input data-key='autocompleteMinLength' value="+globalSettings.autocompleteMinLength+" type='text'></td</tr>");
 }
 
 
@@ -539,8 +534,7 @@ function initSettingsEditor() {
 */
 function settingsPaneHide() {
 	console.log($("#settings-pane").data("tempSettings"));
-	$("#settings-list tr td input").each(function(i,e) {
-		console.log("set");
+	$("#settings-list tr td input").each(function(i,e) {		
 		globalSettings[e.getAttribute("data-key")] = e.value;
 	});
 }
@@ -578,7 +572,7 @@ function settingsPaneHide() {
                             return function(element, self, data) {                                                                     
                                 var hint = document.createElement("div"),                                                                    
 									html = "", 
-									image = '../images/blank.png';                                                
+									image = "";                                                
                                 switch (json[index].kind) {
                                     case 'class':    image = 'c.png'; break;                                    
                                     case 'struct':   image = 's.png'; break;
@@ -627,13 +621,7 @@ function settingsPaneHide() {
         var cursor = editor.getCursor(), 
 			tk = editor.getTokenAt(cursor);     
         		
-		var tempCode = autocompleteCode.slice(0, -1) + "\n" + editor.getValue();
-		
-        var offset = 0;
-		var lines = tempCode.split("\n");
-		for (var l = 0; l < lines.length; l++) {
-			offset += lines[l].length;    
-		}
+		var tempCode = autocompleteCode.slice(0, -1) + "\n" + editor.getValue();		       
         offset = tempCode.length - 1;
             
 		autocomplete = {
@@ -650,20 +638,15 @@ function settingsPaneHide() {
 		*/	
 		
 		browserAction = function (json) {				
-                if (json.length == 0) return;
-                dcdResponse(json.type, json.result);
-            };
-				
+            if (json.length == 0) return;
+			dcdResponse(json.type, json.result);
+        };				
 		browser.stdin.write(new Buffer("autocomplete: -c" + offset.toString() + " " + tempCode + "\u0006"));		        
     };
 	
 	
 
 	
-/** Handlers **/
-	
-var resultWindow = null;
-
 function handleReplMessage(json) {
 	openResultWindow( function() { resultWindow.window.handle(json); });
 }

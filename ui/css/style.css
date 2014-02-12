@@ -246,6 +246,7 @@ body {
 .cm-s-dabble .cm-link     { color: #8DA6CE; }
 
 .CodeMirror-hints {
+	width: 200px;
 	position: absolute;
 	z-index: 10;
 	overflow: hidden;
@@ -266,6 +267,7 @@ body {
 	font-family: DroidSansMono;
 	font-size: 1.2em;
 	margin: 0;
+	margin-right: 0px;	
 	padding: 0 4px;        
 	max-width: 100%;
 	overflow: hidden;
@@ -275,10 +277,18 @@ body {
 }
 
 .CodeMirror-hint-active {
-	background: #009933;
+	background: rgba(0,100,100,.7);
 	color: white;
 }
 
+.hint-text {
+	display: inline-block;
+	margin-right: 5px;
+}
+
+.hint-icon {
+	width: 20px;
+}
 
 ::-webkit-scrollbar {
 	width: 10px;
