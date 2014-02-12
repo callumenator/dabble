@@ -679,7 +679,7 @@ bool build(string code)
 			fullBuildErrors.map!(e => e.toStr()).join(newl);
 			
 		consoleSession ? summary.send :
-			json("id", "build-error-internal", "summary", summary, "data", fullBuildErrors.map!(e => e.toTup()).array).send;
+			json("id", "build-error-internal", "summary", summary.escapeJSON(), "data", fullBuildErrors.map!(e => e.toTup()).array).send;
 	}
 	else
 	{		
