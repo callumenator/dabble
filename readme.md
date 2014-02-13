@@ -1,35 +1,56 @@
-
-##These notes are not ready yet.
-
 # Dabble
 
-A repl for the D programming language (Windows and Linux).
+A repl for the D programming language (Windows and Linux). Tested on Win 7, Arch Linux 32 and 64 bit.
 
-### Get started:
+### Note
+
+This repl is not sandboxed in any way - use it at your own risk.
+
+### Getting started:
 
 You will need to have the Digital Mars D compiler installed and on your executable path.
 
 1. Get DUB (currently requires git-head): http://registry.vibed.org/download
 
-2. Get the version of dabble for your platform:
+To get and build the full version (console mode + ui mode):
+
+* 2a) Get the version of dabble for your platform:
+
+   Platforms available: [windows](https://github.com/callumenator/dabble-windows), [linux (32bit)](https://github.com/callumenator/dabble-linux-32), [linux(64 bit)](https://github.com/callumenator/dabble-linux-64)
+   
+   i.e.
+   ```
+   git clone https://github.com/callumenator/dabble-linux-64
+   cd dabble-windows
+   build.bat
+   ```
    
    ```
-   git clone https://github.com/callumenator/dabble --branch linux --single-branch
-   cd dabble
+   git clone https://github.com/callumenator/dabble-windows
+   cd dabble-linux-64
+   ./build.sh
+   ```
+
+* 3a) Run:
+   * ui mode: ```nw/nw``` (on linux you may have to make ```nw``` executable)
+   * console mode: ```dabble/bin/repl```
+
+To get and build the console-mode-only version:
+
+* 2b) Get dabble
+   
+   ```
+   git clone https://github.com/callumenator/dabble
    git submodule update --init --recursive
-   ```
-
-3. Build:
-
-   ```
+   cd dabble
    dub build dabble:repl
-   dub build dabble:browser
    ```
-   
-4. Run:
-   * ui mode: ```./bin/nw/nw```
-   * console mode: ```./bin/repl```
 
+* 3b) Run:
+   
+   ```
+   bin/repl
+   ```
 
 ### How it works
 
@@ -84,7 +105,7 @@ This command is identical to the ```print``` command, however instead of outputt
 
 Delete each of the variables named in the comma separated list. This allows you to re-use those identifiers for new variables. 
 
-##### use
+##### use (currently windows only)
 
 ```use module_filename```
 
