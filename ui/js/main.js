@@ -70,14 +70,13 @@ Array.prototype.getUnique = function(selector){
 /** 
 * Autocomplete. 
 */
-/**
 CodeMirror.commands.autocomplete = function(cm) {
     CodeMirror.showHint(cm, dcdHint, {
         async: true,
         completeSingle: false
     });
 }
-**/
+
 
 /**
 * Devtools shortcut 
@@ -114,29 +113,29 @@ shortcut.add("Ctrl+O",function() {
 /**
 * On-load setup 
 */
-$(document).ready(function () {
-		
-	$("#repl-status").html("Initializing...");
-	
+$(document).ready(function () {		
+	$("#repl-status").html("Initializing...");	
 	initPanes();	
-	initSettingsEditor();
-	monitorStylesheet();
+	initSettingsEditor();	
 	initCodemirrors();    
     initRepl();
 	initBrowser();
-        
+	monitorStylesheet();	
+	reloadStylesheets();
 });
 
 /** 
 * Monitor stylesheet for changes .
 */
 function monitorStylesheet() {
-    require('fs').watch('../dabble/ui/css/style.css', function (event, name) {
-        var queryString = '?reload=' + new Date().getTime();
-        $('link[rel="stylesheet"]').each(function () {
-            this.href = this.href.replace(/\?.*|$/, queryString);
-        });		
-    });
+    require('fs').watch('../dabble/ui/css/style.css', function (event, name) { reloadStylesheets(); });
+}
+
+function reloadStylesheets() {
+	var queryString = '?reload=' + new Date().getTime();
+    $('link[rel="stylesheet"]').each(function () {
+        this.href = this.href.replace(/\?.*|$/, queryString);
+    });		
 }
 
 /** 
