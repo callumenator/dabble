@@ -15,7 +15,9 @@ handlers.html = function(data) {
 
 handlers.plot = function(data) {	
 	
-    result('<div><svg id="chart" style="height:600px" /></div>');                                               
+    result('<svg id="chart"/>');                                               
+	
+	$("#chart").height(window.innerHeight - 20);
     
 	nv.addGraph(function() {
 		var chart = nv.models.lineChart()
