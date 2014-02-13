@@ -182,8 +182,7 @@ function initCodemirrors() {
 				setTimeout( function() { editor.setCursor(editor.lineCount(), 0); }, 50);								
 			}
         } else {
-			if (globalSettings.autocompleteOn && editor.getTokenAt(editor.getCursor()).string.length >= globalSettings.autocompleteMinLength) {	
-				console.log("New auto-complete");
+			if (globalSettings.autocompleteOn && editor.getTokenAt(editor.getCursor()).string.length >= globalSettings.autocompleteMinLength) {					
 				CodeMirror.showHint(editor, dcdHint, { async: true,	completeSingle: false });
 			}
 		}
@@ -216,8 +215,7 @@ function initBrowser() {
 		if (messages.length == 0) return;			
 		for(var i = 0; m = messages[i], i < messages.length; i++) {
 			if (m.hasOwnProperty("status")) {
-				browserStatus = m.status;
-				console.log(browserStatus);
+				browserStatus = m.status;				
 			}
 			else if (browserAction !== null)		
 				browserAction(m);								
@@ -544,8 +542,7 @@ function settingsPaneHide() {
 	// Update phobos path if it has changed
 	if (globalSettings.phobosPath !== undefined && 
 		globalSettings.phobosPath != "" &&
-		globalSettings.phobosPath != prevPhobosPath) {
-		console.log("Sending new path");
+		globalSettings.phobosPath != prevPhobosPath) {		
 		browser.stdin.write(new Buffer("phobos-path:" + globalSettings.phobosPath + "\u0006"));
 	}
 }
@@ -642,9 +639,7 @@ function settingsPaneHide() {
             token: tk, 
             cursor: cursor
         };
-		
-		console.log("Hinting: token - ", tk);
-		
+						
 		/*
 		console.log("Hinting: offset - ", offset);
 		console.log("Hinting: code at offset - ", tempCode[offset]);
