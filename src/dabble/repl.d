@@ -755,9 +755,10 @@ bool buildUserModules(out DMDMessage[] errors, bool init = false)
         f.write("module defs;\n" ~ readText(replPath() ~ "/src/dabble/defs.d").findSplitAfter("module dabble.defs;")[1]);
         f.close();		
 		
-		auto command = ["cd", context.paths.tempPath, cmdJoin, "dmd -c -release -noboundscheck -O defs.d"].join(" ");		
-        if (!attempt(command, context.paths.tempPath ~ "defs.d", errors))
-			return false;
+	auto command = ["cd", context.paths.tempPath, cmdJoin, "dmd -c -release -noboundscheck -O defs.d"];
+	version(Posix) command ~= "-fPIC";
+        if (!attempt(command.join(" "), context.paths.tempPath ~ "defs.d", errors))
+		return false;
     }
 
     if (context.userModules.length == 0 && !rebuildLib)
@@ -775,9 +776,10 @@ bool buildUserModules(out DMDMessage[] errors, bool init = false)
             continue;
 
         rebuildLib = true;
-		auto command = ["cd", context.paths.tempPath, cmdJoin, "dmd -c", allIncludes, fullPath].join(" ");		
+	auto command = ["cd", context.paths.tempPath, cmdJoin, "dmd -c", allIncludes, fullPath];
+	version(Posix) command ~= "-fPIC";
 		
-        if (!attempt(command, fullPath, errors))
+        if (!attempt(command.join(" "), fullPath, errors))
             return false;
 		
         getTimes(fullPath, access, modified);

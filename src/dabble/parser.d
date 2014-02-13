@@ -303,7 +303,7 @@ class DabbleParser : Parser
                     
     override Type parseType()    
     {  
-        static depth = 0, start = 0;
+        static size_t depth = 0, start = 0;
                                 
         if (!suppressMessages && !blockDepth && depth == 0)        
             start = charIndex();       
@@ -322,7 +322,7 @@ class DabbleParser : Parser
     
     override Initializer parseInitializer()    
     {
-        static depth = 0, start = 0;
+        static size_t depth = 0, start = 0;
         
         if (!suppressMessages)
         {    
