@@ -28,17 +28,17 @@ void hideMessages(string, size_t, size_t, string, bool) { }
 	
 class DabbleParser : Parser
 {
-    alias Insert = Tuple!(uint,uint); // index, length
+    alias Insert = Tuple!(size_t, size_t); // index, length
 	Insert[] inserts; // sorted list of inserts
         
     LexerConfig config;         
     string source, original, lastInit;          
 	
-	Tuple!(uint,uint,string)[] errors; // line, col, msg
+	Tuple!(size_t, size_t, string)[] errors; // line, col, msg
     string[] types;        
     string[][] params;        
     bool declCanBeGlobal;                         
-    int blockDepth = 0, declStart = 0, funcLiteralDepth = 0;   
+    size_t blockDepth = 0, declStart = 0, funcLiteralDepth = 0;   
 
     bool delegate(string) redirectVar;
     void delegate(bool,string,string) newDecl;
@@ -78,8 +78,8 @@ class DabbleParser : Parser
     {
         if (!suppressMessages)  
 		{
-			uint column = index < tokens.length ? tokens[index].column : tokens[$ - 1].column;
-            uint line = index < tokens.length ? tokens[index].line : tokens[$ - 1].line;
+			size_t column = index < tokens.length ? tokens[index].column : tokens[$ - 1].column;
+            size_t line = index < tokens.length ? tokens[index].line : tokens[$ - 1].line;
             errors ~= tuple(line, column, message);         
 		}
         super.error(message, shouldAdvance);
@@ -110,9 +110,9 @@ class DabbleParser : Parser
     /**     
     * Insert text into modified text starting at mapped index
     */
-    void insert(uint index, string text, bool after = false) 
+    void insert(size_t index, string text, bool after = false) 
 	{	
-        uint add = 0, pos = 0;		
+        size_t add = 0, pos = 0;		
 		for(; pos < inserts.length; pos++) {
 			if (!after && inserts[pos][0] >= index) break;
             if (after && inserts[pos][0] > index) break;
@@ -148,7 +148,7 @@ class DabbleParser : Parser
         return source[t[0]..t[1]];
     }
     
-    int charIndex()
+    size_t charIndex()
     {        
         return index < tokens.length ? tokens[index].index : original.length;
     }
