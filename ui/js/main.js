@@ -186,8 +186,15 @@ function initCodemirrors() {
 				setTimeout( function() { editor.setCursor(editor.lineCount(), 0); }, 50);								
 			}
         } else {
-			if (globalSettings.autocompleteOn && editor.getTokenAt(editor.getCursor()).string.length >= globalSettings.autocompleteMinLength) {					
-				CodeMirror.showHint(editor, dcdHint, { async: true,	completeSingle: false });
+			if (globalSettings.autocompleteOn) {
+				var completeIt = true;
+				var token = editor.getTokenAt(editor.getCursor());
+				if (token.string.length < globalSettings.autocompleteMinLength)
+					completeIt = false;
+				if (token.string == "." || token.string == "(")
+					completeIt = true;
+				if (completeIt)
+					CodeMirror.showHint(editor, dcdHint, { async: true,	completeSingle: false });
 			}
 		}
     };
@@ -635,9 +642,11 @@ function settingsPaneHide() {
         var cursor = editor.getCursor(), 
 			tk = editor.getTokenAt(cursor);     
         		
-		var tempCode = autocompleteCode.slice(0, -1) + "\n" + editor.getValue();		       
-        offset = tempCode.length - 1;
-            
+		var tempCode = autocompleteCode.slice(0, -1) + "\n" + editor.getValue();		       		
+        offset = tempCode.length;
+		if (tk.string == "(")
+			tempCode += ")"; // try to get calltips		
+				   
 		autocomplete = {
             callback: callback,
             token: tk, 
