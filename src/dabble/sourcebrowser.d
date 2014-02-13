@@ -22,7 +22,8 @@ import
     std.range,
     std.array,
     std.uuid,
-    std.conv;
+    std.conv,
+	std.parallelism;
 	
 import 
 	autocomplete, 
@@ -30,11 +31,17 @@ import
 	modulecache, 
 	formatter;
 	
+enum BrowserStatus {
+	init,
+	building,
+	ready
+}
+	
 enum cterminator = '\x06';
 enum sterminator = "\x06";	
-TrieNode browser;
-Symbol[string] symbolDictionary;
-
+__gshared TrieNode browser;
+__gshared Symbol[string] symbolDictionary;
+__gshared BrowserStatus browserStatus = BrowserStatus.init;
 
 void main(string[] args) 
 { 
@@ -54,11 +61,15 @@ void wait()
         if (input == "exit")
             break loop;     
 		else if (input.startsWith("phobos-path:"))
-		{			
+		{
+			if (browserStatus == BrowserStatus.building)
+				continue;
+				
 			auto path = input.findSplitAfter("phobos-path:")[1].strip();
 			if (exists(path))
-			{
-				buildSourceBrowser(path);				
+			{			
+				auto builder = task!buildSourceBrowser(path);				
+				builder.executeInNewThread();
 				ModuleCache.addImportPaths([path]);
 			}
 			else
@@ -69,6 +80,9 @@ void wait()
 		}
         else if (input.startsWith("suggest-names:"))
         {        
+			if (browserStatus == BrowserStatus.building)
+				continue;
+				
 			auto prefix = input.findSplitAfter("suggest-names:")[1]; 			
 			auto suggestions = browser.suggestNames(prefix)
 										.map!(x => `"` ~ x ~ `"`)
@@ -78,6 +92,9 @@ void wait()
         }    
         else if (input.startsWith("search-names:"))        
         {
+			if (browserStatus == BrowserStatus.building)
+				continue;
+				
 			auto prefix = input.findSplitAfter("search-names:")[1];
             auto suggestions = browser.suggest(prefix)
 							.map!(x => `{"name":"` ~ escapeJSON(x.name) ~ `","uuid":"` ~ x.uuid ~ `"}`)
@@ -87,6 +104,9 @@ void wait()
         }
         else if (input.startsWith("get-uuid:"))        
         {
+			if (browserStatus == BrowserStatus.building)
+				continue;
+				
             auto uuid = input.findSplitAfter("get-uuid:")[1];
             if (uuid in symbolDictionary)
             {
@@ -117,6 +137,7 @@ void wait()
 
 void buildSourceBrowser(string path)
 {	
+	browserStatus = BrowserStatus.building;	
     writeln(`{"status":"generating"}`, sterminator); stdout.flush();
     auto files = filter!q{endsWith(a.name, ".d")}(dirEntries(path, SpanMode.shallow));
     if (!files.empty) 
@@ -136,6 +157,7 @@ void buildSourceBrowser(string path)
             browser.insert(parse(mod.object));
     }                   
     writeln(`{"status":"ready"}`, sterminator); stdout.flush();
+	browserStatus = BrowserStatus.ready;
 }
 
 
