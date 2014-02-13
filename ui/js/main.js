@@ -113,10 +113,8 @@ shortcut.add("Ctrl+O",function() {
 /**
 * On-load setup 
 */
-$(document).ready(function () {
-		
-	$("#repl-status").html("Initializing...");
-	
+$(document).ready(function () {		
+	$("#repl-status").html("Initializing...");	
 	initPanes();	
 	initSettingsEditor();	
 	initCodemirrors();    
@@ -128,7 +126,7 @@ $(document).ready(function () {
 		$(window).trigger("resize");
 		history.refresh();
 		editor.refresh();
-	}, 50);
+	}, 50);	
 });
 
 /** 
