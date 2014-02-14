@@ -26,7 +26,7 @@ struct delve
 	static void html(string data) {     
 		import std.stdio : writeln, stdout;
 		auto str = `{"handler":"html", "data":"` ~ data ~ `"}`;
-		writeln("\u0006", str, "\u0006");
+		writeln(sterm, str, sterm);
 		stdout.flush();
 	}
 
@@ -41,7 +41,7 @@ struct delve
 		auto data = `[` ~ zip(x,y).map!( z => `{"x":` ~ z[0].to!string() ~ `,"y":` ~ z[1].to!string() ~ `}` ).join(`,`) ~ `]`;     
 		auto opts = `[{"key":"` ~ title ~ `","values":` ~ data ~ `,"color":"#0000ff"}]`;    
 		auto fin = `{"handler":"plot", "data":` ~ opts ~ `}`;
-		writeln("\u0006",fin,"\u0006");
+		writeln(sterm,fin,sterm);
 		stdout.flush();
 	}
 }

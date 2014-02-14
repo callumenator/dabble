@@ -31,6 +31,7 @@ protected:
 SharedLib[] keepAlive;
 ReplContext context;
 DabbleParser parser;
+enum sterm = "\u0006";
 
 public:
 bool consoleSession = true;
@@ -150,13 +151,13 @@ void splitMessages(string s)
 {
 	string outer;
 	string[] inner;	
-	auto r = s.findSplit("\u0006");
+	auto r = s.findSplit(sterm);
 	while(!r[2].empty) 
 	{		
 		outer ~= r[0];
-		r = r[2].findSplit("\u0006");
+		r = r[2].findSplit(sterm);
 		inner ~= r[0];
-		r = r[2].findSplit("\u0006");
+		r = r[2].findSplit(sterm);
 	}
 	outer ~= r[0];	
 	json("id", "repl-result", "summary", outer.escapeJSON()).send;	
@@ -1025,9 +1026,9 @@ DMDMessage[] parseDmdErrorFile(string srcFile, string errFile, bool dederef)
 @property void send(string s, bool newline = true)
 {
 	if (newline)
-		consoleSession ? writeln(s) : writeln("\u0006", s, "\u0006");
+		consoleSession ? writeln(s) : writeln(sterm, s, sterm);
 	else
-		consoleSession ? write(s) : write("\u0006", s, "\u0006");
+		consoleSession ? write(s) : write(sterm, s, sterm);
 	stdout.flush();
 }
 
