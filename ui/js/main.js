@@ -213,6 +213,7 @@ function initRepl() {
 			handleMessage(m);								
 	});	
     send("version");
+	send("history");
 }
 
 /**
@@ -282,6 +283,7 @@ function replInput() {
 function clear() {
 	history.setValue("");
 	send("version");
+	send("history");
 }
 
 
