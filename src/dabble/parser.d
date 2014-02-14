@@ -247,6 +247,8 @@ class DabbleParser : Parser
     override Parameters parseParameters()
     {
         auto t = wrap(super.parseParameters());        
+		if (t[0] is null)
+			return null;
         if (t[0].parameters.length)
             params = [t[0].parameters.map!( x => x.name.text )().array()] ~ params;
         return t[0];

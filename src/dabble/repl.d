@@ -962,7 +962,7 @@ struct DMDMessage
 	string toStr()
 	{
 		import std.string: splitLines;
-		return text("< ", sourceCode, " >", newl, errorMessage.splitLines().map!(l => "---" ~ l).join(newl)); 
+		return text("< ", sourceCode, " >", newl, errorMessage.splitLines().map!(l => l).join(newl)); 
 	}
 	
 	auto toTup()
