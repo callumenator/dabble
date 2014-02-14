@@ -529,8 +529,9 @@ bool parse(string code, out string parsedCode)
 			niceErrors ~= e[2];
 			if (e[0] > 0 && lines.length >= e[0]) 
 			{
-				niceErrors ~= lines[e[0]-1];			
-				niceErrors ~= iota(e[1]-1).map!(x => " ").join("") ~ "^";
+				niceErrors ~= lines[e[0]-1];
+				if (e[1] > 0)					
+					niceErrors ~= iota(e[1]-1).map!(x => " ").join("") ~ "^";
 			}			
 		}
 				
