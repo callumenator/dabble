@@ -24,10 +24,33 @@ enum delve = q{
 struct delve 
 {
 	private enum sterm = "\u0006";
+	
+	static string escapeJSON(string s) 
+	{	
+		import std.regex : replaceAll, regex, Captures;
+		string replacer(Captures!(string) m)
+		{
+			final switch(m.hit) 
+			{
+				case `"`: return `\"`;			
+				case `\`: return `\\`;
+				case "\b": return ``;			
+				case "\f": return ``;
+				case "\t": return `  `;						
+				case "\r": return `\n`;			
+				case "\n": return `\n`;						
+				case "\r\n": return `\n`;			
+				case "\r\r\n": return `\n`;			
+			}
+			assert(false);
+		}
+		// to match control chars `|\p{Cc}`
+		return s.replaceAll!(replacer)(regex("\f|\b|\t|\r\r\n|\r\n|\r|\n|" ~ `\\|"`));
+	}
 
 	static void html(string data) {     
 		import std.stdio : writeln, stdout;
-		auto str = `{"handler":"html", "data":"` ~ data ~ `"}`;
+		auto str = `{"handler":"html", "data":"` ~ delve.escapeJSON(data) ~ `"}`;
 		writeln(sterm, str, sterm);
 		stdout.flush();
 	}
@@ -38,7 +61,7 @@ struct delve
 		import std.conv : to;
 		import std.range : zip;
 		import std.string : join;
-		
+		// escape any json when titles are made configurable
 		auto title = "Series 1";
 		auto data = `[` ~ zip(x,y).map!( z => `{"x":` ~ z[0].to!string() ~ `,"y":` ~ z[1].to!string() ~ `}` ).join(`,`) ~ `]`;     
 		auto opts = `[{"key":"` ~ title ~ `","values":` ~ data ~ `,"color":"#0000ff"}]`;    

@@ -206,8 +206,7 @@ function initCodemirrors() {
 function initRepl() {
 	var repl_buffer = {data:""};
 	engine = require('child_process').spawn('../dabble/bin/repl', ['--noConsole']);		
-	engine.stdout.on('data', function (data) { 				
-		console.log("REPL:", data.toString());
+	engine.stdout.on('data', function (data) { 						
 		var messages = messageProtocol(data, repl_buffer);		
 		if (messages.length == 0) return;					
 		for(var i = 0; m = messages[i], i < messages.length; i++) 
