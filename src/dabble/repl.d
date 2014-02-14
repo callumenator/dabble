@@ -527,8 +527,11 @@ bool parse(string code, out string parsedCode)
 		foreach(e; parser.errors)
 		{		
 			niceErrors ~= e[2];
-			niceErrors ~= lines[e[0]-1];
-			niceErrors ~= iota(e[1]-1).map!(x => " ").join("") ~ "^";
+			if (e[0] > 0 && lines.length >= e[0]) 
+			{
+				niceErrors ~= lines[e[0]-1];			
+				niceErrors ~= iota(e[1]-1).map!(x => " ").join("") ~ "^";
+			}			
 		}
 				
 		auto summary = text("Parser error", parser.errors.length > 1 ? "s:" :":", newl, niceErrors.join(newl));
