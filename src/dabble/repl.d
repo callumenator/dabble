@@ -536,10 +536,10 @@ bool parse(string code, out string parsedCode)
 			}			
 		}
 				
-		auto summary = text("Parser error", parser.errors.length > 1 ? "s:" :":", newl, niceErrors.join(newl));
+		auto summary = text("Parser error", parser.errors.length > 1 ? "s:" : ":", newl, niceErrors.join(newl));
 		consoleSession ? summary.send : 
 			json("id", "parse-error", "summary", summary.escapeJSON(), "errors", 
-				parser.errors.map!(t => tuple("source",lines[t[0]-1].escapeJSON(),"column",t[1],"error",t[2].escapeJSON())).array).send;
+				parser.errors.map!(t => tuple("source", t[0] > 0 ? lines[t[0]-1].escapeJSON() : "", "column", t[1], "error", t[2].escapeJSON())).array).send;
 		return false;
 	}
 

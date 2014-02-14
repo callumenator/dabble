@@ -23,6 +23,8 @@ enum delve = q{
 
 struct delve 
 {
+	private enum sterm = "\u0006";
+
 	static void html(string data) {     
 		import std.stdio : writeln, stdout;
 		auto str = `{"handler":"html", "data":"` ~ data ~ `"}`;
