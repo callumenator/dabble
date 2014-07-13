@@ -547,7 +547,13 @@ bool parse(string code, out string parsedCode)
 
     foreach(d; dupSearchList)
     {
-        auto index = context.share.vars.countUntil!( (a,b) => a.name == b )(d);
+        // auto index = context.share.vars.countUntil!( (a,b) => a.name == b )(d);
+        // workaround for countUtil -- bug?
+        int index = -1;
+        foreach(uint i, Var currVar; context.share.vars)
+            if (currVar.name == d) 
+                index = i;
+
         assert(index >= 0, "Parser: undefined var in string dups");
         c.suffix.put("if (!_repl_.vars[" ~ index.to!string() ~ "].func) { "
                         "_REPL.dupSearch(*" ~ d ~ ", _repl_.imageBounds[0], _repl_.imageBounds[1], _repl_.keepAlive); }\n");

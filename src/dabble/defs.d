@@ -382,7 +382,7 @@ struct QualifiedType
     Qualifier qualifier = Qualifier.None;
     alias type this;
 
-    Tuple!(QualifiedType,string) typeOf(Operation[] stack, ref Type*[string] map)
+    auto typeOf(Operation[] stack, ref Type*[string] map)
     {
         import std.algorithm : find;
         import std.array : front, empty;       
