@@ -12,21 +12,15 @@ You will need to have the Digital Mars D compiler installed and on your executab
 
 1. Get DUB (currently requires git-head): http://registry.vibed.org/download
 
-2 Get dabble
+2. Get, build and run dabble:
    
    ```
    git clone https://github.com/callumenator/dabble
    git submodule update --init --recursive
    cd dabble
-   dub build
+   dub run
    ```
-
-3) Run:
    
-   ```
-   bin/repl
-   ```
-
 ### How it works
 
 (The idea for this comes from http://neugierig.org/software/c-repl/).
