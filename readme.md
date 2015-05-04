@@ -12,41 +12,16 @@ You will need to have the Digital Mars D compiler installed and on your executab
 
 1. Get DUB (currently requires git-head): http://registry.vibed.org/download
 
-To get and build the full version (console mode + ui mode):
-
-* 2a) Get the version of dabble for your platform:
-
-   Platforms available: [windows](https://github.com/callumenator/dabble-windows), [linux (32bit)](https://github.com/callumenator/dabble-linux-32), [linux(64 bit)](https://github.com/callumenator/dabble-linux-64)
-   
-   i.e.
-   ```
-   git clone https://github.com/callumenator/dabble-linux-64
-   cd dabble-windows
-   build.bat
-   ```
-   
-   ```
-   git clone https://github.com/callumenator/dabble-windows
-   cd dabble-linux-64
-   ./build.sh
-   ```
-
-* 3a) Run:
-   * ui mode: ```nw/nw``` (on linux you may have to make ```nw``` executable)
-   * console mode: ```dabble/bin/repl```
-
-To get and build the console-mode-only version:
-
-* 2b) Get dabble
+2 Get dabble
    
    ```
    git clone https://github.com/callumenator/dabble
    git submodule update --init --recursive
    cd dabble
-   dub build dabble:repl
+   dub build
    ```
 
-* 3b) Run:
+3) Run:
    
    ```
    bin/repl
