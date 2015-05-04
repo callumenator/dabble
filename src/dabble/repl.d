@@ -753,7 +753,7 @@ bool buildUserModules(out DMDMessage[] errors, bool init = false)
     import std.stdio : File;
     import std.string : join;
     import std.algorithm : findSplitAfter, map;
-    import std.datetime : SysTime, getTimes;
+    import std.datetime : SysTime;
     import std.path : dirSeparator, stripExtension;
     import std.file : getTimes, readText, getcwd, copy;
 

@@ -65,8 +65,18 @@ struct ReplShare
         import std.algorithm : filter; 
         import std.array : array; 
         
-        vars = vars.filter!( x => x.valid )().array();
-        decls = decls.filter!( x => x.valid )().array();    
+		Var[] vtemp;
+		Decl[] dtemp;
+		foreach(v; vars.filter!( x => x.valid ))
+			vtemp ~= v;
+		foreach(d; decls.filter!( x => x.valid ))
+			dtemp ~= d;
+
+		vars = vtemp;
+		decls = dtemp;
+
+        //vars = vars.filter!( x => x.valid )().array();
+        //decls = decls.filter!( x => x.valid )().array();    
     }
  
     void deleteVar(string name)
@@ -74,7 +84,13 @@ struct ReplShare
         import std.algorithm : filter; 
         import std.array : array; 
         
-        vars = vars.filter!( x => x.name == name )().array();
+		Var[] vtemp;
+		foreach(v; vars.filter!( x => x.valid ))
+			vtemp ~= v;
+
+		vars = vtemp;
+
+        //vars = vars.filter!( x => x.name == name )().array();
     }      
 }
 
