@@ -1,0 +1,41 @@
+{
+	"name": "dabble",
+	"description": "A simple REPL for DMD on Win32",
+	"authors": ["cal"],
+	"homepage": "",
+	"license": "Boost v1.0",        
+    
+	"targetType": "executable",                        
+	"targetPath":"./bin",
+	"platforms": ["windows", "posix"],
+
+	"dflags-posix": [
+		"-defaultlib=libphobos2.so", 
+		"-release"
+	],
+
+	"libs-posix": [
+		"dl"
+	],
+						
+	"buildTypes": {
+		"debug": { "buildOptions": ["debugInfo"] },
+		"release": { "buildOptions": ["releaseMode"] }
+	},						
+
+	"dependencies": {  
+		"pegged":"~master"    
+	},
+			           
+	"mainSourceFile": "src/dabble/main.d",            
+
+	"excludedSourceFiles": [
+		"src/dabble/sourcebrowser.d",
+		"src/DCD/client.d",
+		"src/DCD/autocomplete.d",
+		"src/DCD/server.d",
+		"src/DCD/dscanner/main.d",
+		"src/DCD/dscanner/analysis/*",
+		"src/DCD/msgpack-d/example/*"
+	]                        
+}
