@@ -16,8 +16,8 @@ You will need to have the Digital Mars D compiler installed and on your executab
    
    ```
    git clone https://github.com/callumenator/dabble
-   git submodule update --init --recursive
    cd dabble
+   git submodule update --init --recursive
    dub run
    ```
    
